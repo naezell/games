@@ -16,6 +16,12 @@ hire a banker to collect cash, and unlock outfits at the wardrobe.
 Ship goods by reindeer sled for better prices, climb the camp ranks (fireworks and
 bonus cash), and use the minimap in the corner to find wolves, the bear and the trader.
 
+Across the river, found **Ridge Camp**: a Lantern Shop (logs + crystals = lanterns), a
+Market Stall, a Yak Pen whose yaks grow wool, and a Tailor that sells coats, with
+crafter, shepherd and runner workers. The **Town Hall** sells 17 multi-level upgrades
+and 7 decorations, including a Golden Statue (+10% income) and an Aurora Beacon
+(passive income).
+
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
 - Chopping and attacking happen automatically when you walk next to a tree or boar.

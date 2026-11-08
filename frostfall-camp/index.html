@@ -72,7 +72,7 @@
   #boosts:empty { display: none; }
   #boosts span { background: rgba(122, 79, 200, .85); color: var(--white); border-radius: 999px; padding: 4px 10px; font: 800 12px var(--font-body); font-variant-numeric: tabular-nums; }
   #boosts span.storm { background: rgba(70, 110, 160, .9); }
-  #map { width: 120px; height: 88px; border-radius: 12px; border: 2px solid rgba(255,255,255,.75); background: var(--panel); }
+  #map { width: 120px; height: 75px; border-radius: 12px; border: 2px solid rgba(255,255,255,.75); background: var(--panel); }
   #rank { display: flex; align-items: center; gap: 8px; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 5px 10px; font: 15px var(--font-display); letter-spacing: .4px; }
   #rankbar { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
   #rankfill { display: block; height: 100%; width: 0; background: #ffd23a; transition: width .3s; }
@@ -94,6 +94,26 @@
     position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
     border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 3px 8px rgba(0,0,0,.25);
   }
+  #shop { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
+  #shop .sheet { pointer-events: auto; width: min(560px, 100%); max-height: 58vh; overflow: auto; box-sizing: border-box;
+    background: #f7fafc; color: var(--ink); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25);
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px)); }
+  #shop header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  #shop h2 { font: 26px var(--font-display); margin: 0; }
+  #shopx { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  #shop .tabs { display: flex; gap: 8px; margin: 10px 0 4px; }
+  #shop .tabs button { flex: 1; border: 0; border-radius: 10px; padding: 9px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  #shop .tabs button.on { background: var(--ink); color: var(--white); }
+  .urow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid #e3e9f0; }
+  .urow b { font: 800 15px var(--font-body); }
+  .urow small { display: block; color: #5a6878; font: 700 12px var(--font-body); }
+  .pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .pips i { width: 8px; height: 8px; border-radius: 50%; background: #d5dde6; }
+  .pips i.on { background: var(--cash); }
+  .buy { border: 0; border-radius: 10px; padding: 9px 12px; min-width: 88px; font: 17px var(--font-display); background: var(--cash); color: var(--white); cursor: pointer; font-variant-numeric: tabular-nums; }
+  .buy:disabled { background: #c5ced8; cursor: default; }
+  .buy.max { background: #8a96a6; }
+  #shopx:focus-visible, #shop .tabs button:focus-visible, .buy:focus-visible { outline: 3px solid #3f7fc8; outline-offset: 2px; }
   #confirm {
     position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.45);
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -110,11 +130,12 @@
 <body>
 <div id="hud">
   <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
-  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><canvas id="map" width="240" height="176" aria-label="Map of the area"></canvas></div>
+  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><canvas id="map" width="240" height="150" aria-label="Map of the area"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
 <div id="joy" hidden><div id="knob"></div></div>
+<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button></div><div id="shoplist"></div></div></div>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -129,7 +150,9 @@ const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 // ---------------- world layout ----------------
 const CAMP = { x0: -10, x1: 10, z0: -6, z1: 8 };
 const FIELD = { x0: -8, x1: 12, z0: -26, z1: -10 };
-const BOUNDS = { x0: -25, x1: 46, z0: -29, z1: 22 };
+const BOUNDS = { x0: -25, x1: 58, z0: -29, z1: 22 };
+const RIDGE = { x0: 36, x1: 54, z0: -6, z1: 8 };
+const inRidge = p => p.x > RIDGE.x0 && p.x < RIDGE.x1 && p.z > RIDGE.z0 && p.z < RIDGE.z1;
 const RIVER = { x0: 26, x1: 30 }, BRIDGE_Z = 1.5;
 const riverSide = p => p.x > (RIVER.x0 + RIVER.x1) / 2;
 const BRIDGE = { w: new V3(24.4, 0, BRIDGE_Z), e: new V3(31.6, 0, BRIDGE_Z) };
@@ -147,6 +170,8 @@ const GATES = [
 
 // ---------------- state & save ----------------
 const W = { cash: 0, cap: 8, speed: 5 };
+const UP = {};
+const U = id => UP[id] || 0;
 const SAVE_KEY = 'frostfall-camp-v1';
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { saved = null; }
@@ -308,6 +333,17 @@ function drawIcon(c, icon, cx, cy, s) {
     c.strokeStyle = W_; c.lineWidth = 7; c.beginPath(); c.moveTo(-46, 22); c.lineTo(30, 22); c.quadraticCurveTo(50, 22, 46, 4); c.stroke();
     c.beginPath(); c.moveTo(-30, 8); c.lineTo(-30, 22); c.moveTo(16, 8); c.lineTo(16, 22); c.stroke();
     c.beginPath(); c.moveTo(34, -14); c.lineTo(44, -40); c.moveTo(40, -28); c.lineTo(52, -32); c.stroke();
+  } else if (icon === 'lantern') {
+    c.fillStyle = '#ffd23a'; roundRect(c, -22, -26, 44, 56, 8); c.fill();
+    c.strokeStyle = W_; c.lineWidth = 7; c.strokeRect(-26, -30, 52, 64); c.beginPath(); c.arc(0, -36, 12, PI, 0); c.stroke();
+  } else if (icon === 'yak') {
+    c.fillStyle = W_; c.beginPath(); c.ellipse(0, 6, 44, 28, 0, 0, 2 * PI); c.fill();
+    c.lineWidth = 8; c.strokeStyle = W_; c.beginPath(); c.moveTo(-30, -12); c.quadraticCurveTo(-50, -30, -36, -44); c.moveTo(30, -12); c.quadraticCurveTo(50, -30, 36, -44); c.stroke();
+  } else if (icon === 'coat') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-14, -40); c.lineTo(-44, -24); c.lineTo(-36, 0); c.lineTo(-26, -6); c.lineTo(-26, 40); c.lineTo(26, 40); c.lineTo(26, -6); c.lineTo(36, 0); c.lineTo(44, -24); c.lineTo(14, -40); c.lineTo(0, -28); c.closePath(); c.fill();
+  } else if (icon === 'board') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-48, -18); c.lineTo(0, -46); c.lineTo(48, -18); c.closePath(); c.fill();
+    for (const x of [-34, -12, 12, 34]) c.fillRect(x - 5, -14, 10, 44); c.fillRect(-48, 32, 96, 10);
   } else if (icon === 'fire') {
     c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
     c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
@@ -390,8 +426,11 @@ const GEO = {
   cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
   gem: new THREE.OctahedronGeometry(0.2, 0),
   fish: new THREE.SphereGeometry(0.2, 10, 8).scale(1.5, 0.55, 0.75),
+  lantern: new THREE.CylinderGeometry(0.15, 0.19, 0.3, 6),
+  wool: new THREE.DodecahedronGeometry(0.2, 1),
 };
-const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2 };
+const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
   let m;
@@ -400,6 +439,8 @@ function makeItem(t) {
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
   else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
+  else if (t === 'lantern') m = new THREE.Mesh(GEO.lantern, lanternMat);
+  else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
   else m = new THREE.Mesh(GEO.cash, mat(0x45b04f));
   m.castShadow = true;
   return m;
@@ -477,6 +518,7 @@ class CashPile extends Pile {
   constructor(x, z) { super(x, z, 2, 3, 48, 0.6, 0.36, 0.08); this.value = 0; this.icon = zoneMarker(x, z, 'cash', '#7be38a'); }
   addValue(v, from) {
     if (boost.cash > 0) v *= 2;
+    if (UP.statue) v = Math.round(v * 1.1);
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
     for (let i = 0; i < bills && this.free() > 0; i++) this.receive(makeItem('cash'), from.clone().add(new V3(0, i * 0.1, 0)));
@@ -540,6 +582,17 @@ function navStep(obj, target, speed, dt, stop, pass) {
     const a = riverSide(p) ? BRIDGE.e : BRIDGE.w, b = riverSide(p) ? BRIDGE.w : BRIDGE.e;
     const onBridge = Math.abs(p.z - BRIDGE_Z) < 1.2 && p.x > BRIDGE.w.x - 0.3 && p.x < BRIDGE.e.x + 0.3;
     if (onBridge || d2(p, a) < 0.45) stepToward(obj, b, speed, dt, 0.05); else navStep(obj, a, speed, dt, 0.05);
+    return false;
+  }
+  if (ridge.unlocked && inRidge(p) !== inRidge(target)) {
+    let best = null, bd = 1e9;
+    for (const g of RIDGE_GATES) {
+      const a = inRidge(p) ? g.in : g.out, b = inRidge(p) ? g.out : g.in;
+      const d = d2(p, a) + d2(a, b) + d2(b, target);
+      if (d < bd) { bd = d; best = [a, b]; }
+    }
+    const wp = d2(p, best[0]) > 0.45 && d2(p, best[1]) > d2(best[0], best[1]) ? best[0] : best[1];
+    stepToward(obj, wp, speed, dt, 0.05);
     return false;
   }
   if (inside(p) !== inside(target)) {
@@ -626,9 +679,12 @@ for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
     if (Math.random() < 0.62) trees.push(new Tree(x + rand(-0.6, 0.6), z + rand(-0.6, 0.6)));
   }
 }
-for (let x = 33.5; x <= 44; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
-  if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 36) continue;
-  if (Math.random() < 0.55) rocks.push(new Tree(x + rand(-0.8, 0.8), z + rand(-0.8, 0.8), 'rock'));
+for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
+  if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 37) continue;
+  if (x > RIDGE.x0 - 2 && x < RIDGE.x1 + 2 && z > RIDGE.z0 - 2.4 && z < RIDGE.z1 + 2.4) continue;
+  const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8);
+  if (z < -9 && x > 45) { if (Math.random() < 0.6) trees.push(new Tree(px, pz)); }
+  else if (Math.random() < 0.5) rocks.push(new Tree(px, pz, 'rock'));
 }
 // decorative backdrop forest (single draw call)
 {
@@ -780,7 +836,7 @@ class Boar {
 }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 let boarTimer = 0;
-const maxBoars = () => 5 + (padLevel('hunter') + padLevel('tower')) * 2;
+const maxBoars = () => 5 + (padLevel('hunter') + padLevel('tower') + U('boars')) * 2;
 
 // ---------------- stations ----------------
 const stationGroup = (x, z) => { const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); return g; };
@@ -862,7 +918,7 @@ function spawnCustomer() {
 function updateCustomers(dt) {
   const queueing = customers.filter(c => c.state === 'queue').length;
   custTimer -= dt;
-  if (custTimer <= 0 && queueing < 6) { spawnCustomer(); custTimer = Math.max(1.6, 4.2 - served * 0.03); }
+  if (custTimer <= 0 && queueing < 6) { spawnCustomer(); custTimer = Math.max(0.9, Math.max(1.6, 4.2 - served * 0.03) * (1 - 0.18 * U('cust'))); }
   counter.t += dt;
   for (let i = customers.length - 1; i >= 0; i--) {
     const c = customers[i], g = c.p.group;
@@ -879,7 +935,7 @@ function updateCustomers(dt) {
           scene.remove(m); c.incoming--; c.got++; c.bag.visible = true;
           c.bubble.redraw(c.want - c.got);
           if (c.got >= c.want) {
-            counter.cash.addValue(c.want * STEAK_PRICE * (storm.t > 0 ? 2 : 1), g.position.clone().add(new V3(0, 1, 0)));
+            counter.cash.addValue(c.want * (STEAK_PRICE + U('steak')) * (storm.t > 0 ? 2 : 1), g.position.clone().add(new V3(0, 1, 0)));
             served++; questProgress('steak', c.want); c.state = 'leave'; c.bubble.mesh.visible = false;
             for (const o of customers) if (o.state === 'queue' && o.slot > 0) o.slot--;
           }
@@ -951,11 +1007,11 @@ function updateTower(dt) {
   let best = null, bd = 15;
   for (const b of boars.concat(wolves, bear ? [bear] : [])) { const d = d2(b.pos, tower.pos); if (d < bd && b.spawn >= 1) { bd = d; best = b; } }
   if (best) tower.bow.rotation.y = lerpAng(tower.bow.rotation.y, Math.atan2(best.pos.x - tower.pos.x, best.pos.z - tower.pos.z), 0.2);
-  if (best && tower.t > 1.1) {
+  if (best && tower.t > 1.1 * (1 - 0.2 * U('bolts'))) {
     tower.t = 0;
     const bolt = new THREE.Mesh(BOLT_GEO, mat(0x3a2a1a)); const tgt = best;
     const from = new V3(7.5, 3.1, -4.4);
-    fly(bolt, from, () => tgt.pos.clone().add(new V3(0, 0.7, 0)), 0.35, () => { scene.remove(bolt); tgt.hit(1); }, 0.6);
+    fly(bolt, from, () => tgt.pos.clone().add(new V3(0, 0.7, 0)), 0.35, () => { scene.remove(bolt); tgt.hit(U('bolts') >= 3 ? 2 : 1); }, 0.6);
     bolt.lookAt(tgt.pos); bolt.rotateX(PI / 2);
   }
 }
@@ -1001,7 +1057,7 @@ function updateCutter(dt) {
   if (cutter.t > 0.9 && cutter.input.n > 0) {
     cutter.t = 0;
     const m = cutter.input.take(), top = new V3(19, 1.2, 6);
-    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); burst(top, 0x8fe8f8, 4); cutter.cash.addValue(GEM_PRICE, top); });
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); burst(top, 0x8fe8f8, 4); cutter.cash.addValue(GEM_PRICE + 2 * U('gem'), top); });
   }
 }
 
@@ -1051,7 +1107,7 @@ function updateGates(dt) {
     g.grp.position.x = g.center.x + Math.sin(g.shake * 70) * g.shake * 0.25;
   }
 }
-function repairGates() { for (const g of GATES) { g.hp = 8; g.broken = false; } }
+function repairGates() { for (const g of GATES) { g.hp = 8 + 6 * U('gatehp'); g.broken = false; } }
 
 // Fishing dock
 const dock = { built: false, spot: new V3(27.3, 0, -5), bobPos: new V3(29.3, 0.06, -5), active: 0 };
@@ -1117,7 +1173,7 @@ function updateSmoke(dt) {
   if (smoke.t > 1.0 && smoke.input.n > 0) {
     smoke.t = 0;
     const m = smoke.input.take(), top = new V3(19, 1.3, -5);
-    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); smoke.cash.addValue(FISH_PRICE, top); });
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); smoke.cash.addValue(FISH_PRICE + 2 * U('fish'), top); });
   }
 }
 
@@ -1247,7 +1303,7 @@ function updateSprings(dt) {
       if (arr) { gu.state = 'soak'; g.position.y = -0.6; g.rotation.y = Math.atan2(-7 - g.position.x, 15 - g.position.z) + PI; }
     } else if (gu.state === 'soak') {
       gu.t -= dt; g.position.y = -0.6 + Math.sin(performance.now() / 400 + gu.seat) * 0.04; animPerson(gu.p, false, dt);
-      if (gu.t <= 0) { gu.state = 'leave'; springs.cash.addValue(SPA_PRICE, g.position.clone().add(new V3(0, 1.4, 0))); questProgress('guest'); }
+      if (gu.t <= 0) { gu.state = 'leave'; springs.cash.addValue(SPA_PRICE + 4 * U('spa'), g.position.clone().add(new V3(0, 1.4, 0))); questProgress('guest'); }
     } else {
       if (d2(g.position, springs.pos) > 2.4) g.position.y = 0; else g.position.y = Math.min(0, g.position.y + dt * 2);
       const done = stepToward(g, new V3(-7, 0, 25), 3.2, dt, 0.3); animPerson(gu.p, true, dt);
@@ -1287,7 +1343,7 @@ function updateHusky(dt) {
   if (d2(pos, pp) > 22) { pos.copy(pp).add(new V3(1, 0, 1)); }
   if (wolf && d2(wolf.pos, pos) < 7) {
     moving = !navStep(g, wolf.pos, 6.5, dt, 1.0);
-    if (!moving && husky.t > 0.6) { husky.t = 0; wolf.hit(1); sfx('bark'); }
+    if (!moving && husky.t > 0.6) { husky.t = 0; wolf.hit(1 + U('husky')); sfx('bark'); }
   } else if (loot) {
     if (navStep(g, loot.m.position, 6.5, dt, 0.5)) {
       const i = groundItems.indexOf(loot); groundItems.splice(i, 1);
@@ -1529,10 +1585,16 @@ function updateDepot(dt) {
 }
 
 // Camp rank
-const RANKS = [[0, 'Tent Camp'], [300, 'Outpost'], [1000, 'Hamlet'], [2500, 'Village'], [5000, 'Frost Town'], [9000, 'Winter City'], [15000, 'Snow Kingdom']];
+const RANKS = [[0, 'Tent Camp'], [300, 'Outpost'], [1000, 'Hamlet'], [2500, 'Village'], [5000, 'Frost Town'], [9000, 'Winter City'], [15000, 'Snow Kingdom'], [30000, 'Frost Empire'], [60000, 'Aurora Realm'], [120000, 'Legend of the North']];
 let lastRank = -1;
 const rankName = document.getElementById('rankname'), rankFill = document.getElementById('rankfill');
-function campXP() { let xp = 0; for (const p of PADS) { const st = padState[p.id]; for (let l = 0; l < st.level; l++) xp += p.costs[l]; } return xp; }
+function campXP() {
+  let xp = 0;
+  for (const p of PADS) { const st = padState[p.id]; for (let l = 0; l < st.level; l++) xp += p.costs[l]; }
+  for (const u of UPGRADES) for (let l = 0; l < U(u.id); l++) xp += u.costs[l];
+  for (const d of DECOS) if (UP[d.id]) xp += d.cost;
+  return xp;
+}
 function updateRank(celebrate) {
   const xp = campXP();
   let i = 0; while (i + 1 < RANKS.length && xp >= RANKS[i + 1][0]) i++;
@@ -1550,7 +1612,7 @@ function updateRank(celebrate) {
 
 // Minimap
 const mapCv = document.getElementById('map'), mapX = mapCv.getContext('2d');
-const MAP = { x0: -26, x1: 47, z0: -30, z1: 23 };
+const MAP = { x0: -26, x1: 59, z0: -30, z1: 23 };
 const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - MAP.z0) / (MAP.z1 - MAP.z0) * mapCv.height;
 let mapT = 0;
 function drawMap(dt) {
@@ -1563,10 +1625,11 @@ function drawMap(dt) {
   c.fillStyle = 'rgba(80,140,200,0.35)';
   for (const t of trees) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
   c.fillStyle = '#8fe8f8'; for (const t of rocks) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
+  if (ridge.unlocked) { c.fillStyle = '#b9a8c4'; c.fillRect(mx(RIDGE.x0), mz(RIDGE.z0), mx(RIDGE.x1) - mx(RIDGE.x0), mz(RIDGE.z1) - mz(RIDGE.z0)); }
   c.fillStyle = '#c99a6c'; c.fillRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
   c.strokeStyle = '#8a5328'; c.lineWidth = 2; c.strokeRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
   const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
-  for (const st of [grill, counter, sawmill.unlocked && sawmill, cutter.unlocked && cutter, smoke.unlocked && smoke, springs.unlocked && springs, depot.built && depot]) if (st) dot(st.pos.x, st.pos.z, 3, '#5a3a1e');
+  for (const st of [grill, counter, sawmill.unlocked && sawmill, cutter.unlocked && cutter, smoke.unlocked && smoke, springs.unlocked && springs, depot.built && depot, workshop.built && workshop, market.built && market, tailor.built && tailor, pen.built && pen]) if (st) dot(st.pos.x, st.pos.z, 3, '#5a3a1e');
   for (const b of boars) dot(b.pos.x, b.pos.z, 2.5, '#ffffff');
   for (const w of wolves) dot(w.pos.x, w.pos.z, 3, '#e8433a');
   if (bear) dot(bear.pos.x, bear.pos.z, 5, '#e8433a');
@@ -1575,16 +1638,326 @@ function drawMap(dt) {
   c.strokeStyle = '#ffffff'; c.lineWidth = 2; dot(pp.x, pp.z, 5, '#2f78d6'); c.beginPath(); c.arc(mx(pp.x), mz(pp.z), 5, 0, 2 * PI); c.stroke();
 }
 
+// ================= Ridge Camp =================
+const ridge = { unlocked: false };
+const RIDGE_GATES = [
+  { in: new V3(37.2, 0, 1.5), out: new V3(34.8, 0, 1.5) },
+  { in: new V3(45, 0, -4.8), out: new V3(45, 0, -7.2) },
+  { in: new V3(45, 0, 6.8), out: new V3(45, 0, 9.2) },
+];
+function unlockRidge(instant) {
+  if (ridge.unlocked) return;
+  ridge.unlocked = true;
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(RIDGE.x1 - RIDGE.x0, RIDGE.z1 - RIDGE.z0), mat(0xb9a8c4));
+  fl.rotation.x = -PI / 2; fl.position.set((RIDGE.x0 + RIDGE.x1) / 2, 0.012, (RIDGE.z0 + RIDGE.z1) / 2); fl.receiveShadow = true; scene.add(fl);
+  const segs = [[36, -6, 43, -6], [47, -6, 54, -6], [36, 8, 43, 8], [47, 8, 54, 8], [36, -6, 36, 0], [36, 3, 36, 8], [54, -6, 54, 8]];
+  const postGeo = merge([[new THREE.CylinderGeometry(0.15, 0.17, 1.15, 6), 0x7a5bd0, 0, 0.575, 0], [new THREE.ConeGeometry(0.17, 0.25, 6), 0xffffff, 0, 1.27, 0]]);
+  const spots = [];
+  for (const [x0, z0, x1, z1] of segs) {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.34);
+    for (let i = 0; i <= n; i++) spots.push([x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n]);
+    colliders.push({ x0: Math.min(x0, x1) - 0.2, x1: Math.max(x0, x1) + 0.2, z0: Math.min(z0, z1) - 0.2, z1: Math.max(z0, z1) + 0.2 });
+  }
+  const inst = new THREE.InstancedMesh(postGeo, vcMat, spots.length), o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x, 0, z); o.rotation.y = rand(0, 3); o.updateMatrix(); inst.setMatrixAt(i, o.matrix); });
+  inst.castShadow = inst.receiveShadow = true; scene.add(inst);
+  if (!instant) { burst(new V3(45, 0, 1.5), 0x7a5bd0, 24); toast('Ridge Camp founded! Build it up.'); for (let k = 0; k < 4; k++) setTimeout(() => firework(new V3(45 + rand(-5, 5), 0, 1.5 + rand(-4, 4))), k * 300); }
+}
+
+// Lantern workshop: 1 log + 1 gem = 1 lantern
+const workshop = { built: false, pos: new V3(41, 0, -3.2), logs: new Pile(38.3, -4.4, 2, 3, 24, 1.0, 0.42, 0.34), gems: new Pile(38.3, -2.0, 3, 3, 27, 0.6, 0.6, 0.36), out: new Pile(43.8, -3.2, 3, 3, 36, 0.6, 0.6, 0.32), t: 0 };
+function unlockWorkshop(instant) {
+  if (workshop.built) return;
+  workshop.built = true;
+  const g = stationGroup(41, -3.2); workshop.g = g;
+  mesh(new THREE.BoxGeometry(2.2, 1.3, 1.6), 0x5d4a7a, 0, 0.65, 0, g);
+  mesh(new THREE.BoxGeometry(2.4, 0.12, 1.8), 0x3d3050, 0, 1.36, 0, g);
+  workshop.glow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), lanternMat); workshop.glow.position.set(0, 1.7, 0); g.add(workshop.glow);
+  for (const x of [-1, 1]) mesh(new THREE.BoxGeometry(0.15, 1.8, 0.15), 0x3d3050, x, 2.0, -0.7, g);
+  mesh(new THREE.BoxGeometry(2.6, 0.14, 1.1), 0xd84a3a, 0, 2.9, -0.4, g).rotation.x = -0.25;
+  colliders.push({ x0: 39.8, x1: 42.2, z0: -4.1, z1: -2.3 });
+  zoneMarker(38.3, -4.4, 'log', '#f0c98a'); zoneMarker(38.3, -2.0, 'gem', '#8fe8f8'); zoneMarker(43.8, -3.2, 'lantern', '#ffd23a');
+  if (!instant) { popIn(g); burst(workshop.pos, 0xffd23a, 14); toast('Bring logs AND crystals to make lanterns!'); }
+}
+function updateWorkshop(dt) {
+  if (!workshop.built) return;
+  workshop.glow.rotation.y += dt * 2;
+  workshop.glow.visible = workshop.logs.n > 0 && workshop.gems.n > 0;
+  workshop.t += dt;
+  if (workshop.t > 1.5 && workshop.logs.n > 0 && workshop.gems.n > 0 && workshop.out.free() > 0) {
+    workshop.t = 0;
+    const top = new V3(41, 1.6, -3.2), a = workshop.logs.take(), b = workshop.gems.take();
+    workshop.out.pending++;
+    fly(a, a.position.clone(), () => top, 0.25, () => scene.remove(a));
+    fly(b, b.position.clone(), () => top, 0.3, () => {
+      scene.remove(b); workshop.out.pending--; burst(top, 0xffd23a, 5);
+      workshop.out.receive(makeItem('lantern'), top.clone());
+    });
+  }
+}
+
+// Market stall sells lanterns
+const LANTERN_PRICE = 28;
+const market = { built: false, pos: new V3(50, 0, -3.2), input: new Pile(47.4, -3.2, 3, 3, 36, 0.6, 0.6, 0.32), cash: null, t: 0 };
+function unlockMarket(instant) {
+  if (market.built) return;
+  market.built = true;
+  const g = stationGroup(50, -3.2);
+  mesh(new THREE.BoxGeometry(2.2, 0.9, 1.0), 0xb8733d, 0, 0.45, 0, g);
+  for (const x of [-1, 1]) mesh(new THREE.BoxGeometry(0.1, 1.6, 0.1), 0x7d4a26, x, 1.7, 0, g);
+  for (let i = 0; i < 6; i++) mesh(new THREE.BoxGeometry(0.4, 0.08, 1.3), i % 2 ? 0xffffff : 0x3f7fc8, -1 + i * 0.4, 2.5, 0, g);
+  for (let i = 0; i < 3; i++) { const l = makeItem('lantern'); l.position.set(-0.6 + i * 0.6, 2.2, 0.3); g.add(l); }
+  colliders.push({ x0: 48.8, x1: 51.2, z0: -3.8, z1: -2.6 });
+  zoneMarker(47.4, -3.2, 'lantern', '#ffd23a');
+  market.cash = new CashPile(52.6, -3.2);
+  if (!instant) { popIn(g); burst(market.pos, 0x3f7fc8, 14); }
+}
+function updateMarket(dt) {
+  if (!market.built) return;
+  market.t += dt;
+  if (market.t > 1.2 && market.input.n > 0) {
+    market.t = 0; const m = market.input.take(), top = new V3(50, 1.2, -3.2);
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); market.cash.addValue(LANTERN_PRICE + 8 * U('lantern'), top); });
+  }
+}
+
+// Yak pen makes wool
+const pen = { level: 0, pos: new V3(40.5, 0, 4.8), out: new Pile(44.6, 4.8, 3, 3, 30, 0.6, 0.6, 0.36), yaks: [] };
+function addYak(l, instant) {
+  pen.level = l + 1;
+  if (!pen.built) {
+    pen.built = true;
+    const g = stationGroup(40.5, 4.8);
+    const pg = new THREE.CylinderGeometry(0.08, 0.08, 0.7, 5);
+    for (let x = -2.2; x <= 2.21; x += 0.55) { mesh(pg, 0x8a5328, x, 0.35, -1.7, g); mesh(pg, 0x8a5328, x, 0.35, 1.7, g); }
+    for (let z = -1.7; z <= 1.71; z += 0.57) { mesh(pg, 0x8a5328, -2.2, 0.35, z, g); mesh(pg, 0x8a5328, 2.2, 0.35, z, g); }
+    for (const z of [-1.7, 1.7]) mesh(new THREE.BoxGeometry(4.4, 0.08, 0.08), 0x6b3f1f, 0, 0.55, z, g);
+    for (const x of [-2.2, 2.2]) mesh(new THREE.BoxGeometry(0.08, 0.08, 3.4), 0x6b3f1f, x, 0.55, 0, g);
+    const hay = mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.6, 10), 0xe0c060, -1.5, 0.3, -1.1, g); hay.rotation.z = PI / 2;
+    zoneMarker(44.6, 4.8, 'yak', '#f3ead8');
+  }
+  const y = new Yak(40.5 + rand(-1.5, 1.5), 4.8 + rand(-1, 1));
+  pen.yaks.push(y);
+  if (!instant) { burst(y.g.position, 0xf3ead8, 10); toast('A new yak joined the pen!'); }
+}
+class Yak {
+  constructor(x, z) {
+    const g = new THREE.Group(); this.g = g; g.position.set(x, 0, z); scene.add(g);
+    mesh(new THREE.BoxGeometry(0.75, 0.7, 1.2), 0x5a4030, 0, 0.75, 0, g);
+    mesh(new THREE.BoxGeometry(0.85, 0.3, 1.25), 0x6e5240, 0, 0.45, 0, g);
+    mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), 0x4a3426, 0, 0.85, 0.75, g);
+    for (const s of [-1, 1]) { const h = mesh(new THREE.ConeGeometry(0.06, 0.32, 5), 0xf0e6d0, s * 0.25, 1.15, 0.75, g); h.rotation.z = -s * 0.8; }
+    this.legs = [[-0.22, 0.38], [0.22, 0.38], [-0.22, -0.38], [0.22, -0.38]].map(([lx, lz]) => {
+      const p = new THREE.Group(); p.position.set(lx, 0.4, lz); g.add(p); mesh(new THREE.BoxGeometry(0.14, 0.4, 0.14), 0x3a2a1e, 0, -0.2, 0, p); return p;
+    });
+    this.t = rand(3, 8); this.target = null; this.idle = rand(0, 2); this.phase = 0;
+  }
+  update(dt) {
+    this.t -= dt * (1 + 0.35 * U('yak'));
+    if (this.t <= 0) {
+      this.t = rand(8, 11);
+      if (pen.out.free() > 0) pen.out.receive(makeItem('wool'), this.g.position.clone().add(new V3(0, 1.2, 0)));
+    }
+    let moving = false;
+    if (this.idle > 0) this.idle -= dt;
+    else {
+      if (!this.target) this.target = new V3(40.5 + rand(-1.6, 1.6), 0, 4.8 + rand(-1.1, 1.1));
+      moving = true;
+      if (stepToward(this.g, this.target, 0.9, dt, 0.1)) { this.target = null; this.idle = rand(1.5, 4); }
+    }
+    if (moving) this.phase += dt * 7;
+    this.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(this.phase + (i % 2 ? PI : 0)) * 0.4 : 0; });
+  }
+}
+
+// Tailor turns wool into coats
+const COAT_PRICE = 16;
+const tailor = { built: false, pos: new V3(50, 0, 4.8), input: new Pile(47.4, 4.8, 3, 3, 30, 0.6, 0.6, 0.36), cash: null, t: 0 };
+function unlockTailor(instant) {
+  if (tailor.built) return;
+  tailor.built = true;
+  const g = stationGroup(50, 4.8);
+  mesh(new THREE.BoxGeometry(2.2, 1.2, 1.4), 0x3f8f8a, 0, 0.6, 0, g);
+  const roof = mesh(new THREE.ConeGeometry(1.75, 0.9, 4), 0xe0a43a, 0, 1.65, 0, g); roof.rotation.y = PI / 4; roof.scale.z = 0.75;
+  tailor.wheel = mesh(new THREE.TorusGeometry(0.4, 0.06, 6, 16), 0x7d4a26, 0.6, 1.0, 0.75, g);
+  const coat = mesh(new THREE.BoxGeometry(0.5, 0.6, 0.12), 0xd2463c, -0.5, 1.0, 0.75, g); coat.castShadow = false;
+  colliders.push({ x0: 48.8, x1: 51.2, z0: 4.0, z1: 5.6 });
+  zoneMarker(47.4, 4.8, 'wool', '#f3ead8');
+  tailor.cash = new CashPile(52.6, 4.8);
+  if (!instant) { popIn(g); burst(tailor.pos, 0x3f8f8a, 14); }
+}
+function updateTailor(dt) {
+  if (!tailor.built) return;
+  tailor.wheel.rotation.z += dt * (tailor.input.n ? 8 : 0.5);
+  tailor.t += dt;
+  if (tailor.t > 1.2 && tailor.input.n > 0) {
+    tailor.t = 0; const m = tailor.input.take(), top = new V3(50, 1.2, 4.8);
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); tailor.cash.addValue(COAT_PRICE + 5 * U('coat'), top); });
+  }
+}
+
+// ================= Town Hall shop =================
+const hall = { built: false, wasIn: false, zone: new V3(-3.4, 0, 10.4) };
+function unlockHall(instant) {
+  if (hall.built) return;
+  hall.built = true;
+  const g = stationGroup(-3.4, 12.7);
+  mesh(new THREE.BoxGeometry(3.0, 1.8, 1.6), 0xe6dcc8, 0, 0.9, 0, g);
+  for (const x of [-1.2, -0.4, 0.4, 1.2]) mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.8, 8), 0xffffff, x, 0.9, -0.85, g);
+  const roof = mesh(new THREE.ConeGeometry(2.3, 1.1, 4), 0x3f6f9f, 0, 2.35, 0, g); roof.rotation.y = PI / 4; roof.scale.z = 0.6;
+  mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 5), 0x555555, 0, 3.4, 0, g);
+  const fl = mesh(new THREE.BoxGeometry(0.6, 0.35, 0.03), 0xffd23a, 0.3, 3.9, 0, g); fl.castShadow = false;
+  colliders.push({ x0: -4.9, x1: -1.9, z0: 11.9, z1: 13.5 });
+  zoneMarker(-3.4, 10.4, 'board', '#ffd23a');
+  if (!instant) { popIn(g); burst(new V3(-3.4, 0, 12.7), 0xffd23a, 14); toast('Stand on the Town Hall square to shop!'); }
+}
+const UPGRADES = [
+  { id: 'steak', name: 'Tastier Steaks', desc: '+$1 for every steak sold', costs: [150, 400, 900, 2000] },
+  { id: 'axe', name: 'Steel Axe', desc: 'Chop, mine and fight faster', costs: [200, 600, 1500] },
+  { id: 'magnet', name: 'Long Reach', desc: 'Grab dropped loot from farther away', costs: [300, 900] },
+  { id: 'cust', name: 'Bigger Signs', desc: 'Customers arrive faster', costs: [250, 700, 1600] },
+  { id: 'wspeed', name: 'Worker Boots', desc: 'All workers walk 15% faster', costs: [300, 800, 2000] },
+  { id: 'wcap', name: 'Worker Packs', desc: 'All workers carry 2 more', costs: [250, 700, 1800] },
+  { id: 'boars', name: 'Rich Hunting Grounds', desc: 'More boars roam the field', costs: [300, 900] },
+  { id: 'bolts', name: 'Sharper Bolts', desc: 'Watchtower fires faster, double damage at max', costs: [300, 900, 2500], req: () => tower.unlocked },
+  { id: 'gatehp', name: 'Iron Gates', desc: 'Gates hold out against more bites', costs: [300, 900], req: () => gates.built },
+  { id: 'gem', name: 'Diamond Wheel', desc: '+$2 for every cut gem', costs: [400, 1000, 2500], req: () => cutter.unlocked },
+  { id: 'fish', name: 'Smoke Recipe', desc: '+$2 for every smoked fish', costs: [300, 800, 2000], req: () => smoke.unlocked },
+  { id: 'spa', name: 'Luxury Towels', desc: '+$4 for every spa guest', costs: [400, 1000, 2500], req: () => springs.unlocked },
+  { id: 'sled', name: 'Bigger Sled', desc: 'The sled carries 10 more goods', costs: [500, 1500], req: () => depot.built },
+  { id: 'husky', name: 'Husky Training', desc: 'Your husky bites twice as hard', costs: [400], req: () => husky.owned },
+  { id: 'lantern', name: 'Golden Lanterns', desc: '+$8 for every lantern', costs: [800, 2000], req: () => market.built },
+  { id: 'coat', name: 'Fine Wool', desc: '+$5 for every coat', costs: [700, 1800], req: () => tailor.built },
+  { id: 'yak', name: 'Happy Yaks', desc: 'Yaks grow wool 35% faster', costs: [600, 1500], req: () => pen.level > 0 },
+];
+const DECOS = [
+  { id: 'snowman', name: 'Snowman', desc: 'A cheerful snowman in camp', cost: 100 },
+  { id: 'lamps', name: 'Lamp Posts', desc: 'Warm lamps around the camp', cost: 300 },
+  { id: 'flag', name: 'Camp Flag', desc: 'A tall flag by the watchtower', cost: 600 },
+  { id: 'sculpture', name: 'Ice Sculpture', desc: 'A sparkling ice deer by the south gate', cost: 2000 },
+  { id: 'statue', name: 'Golden Statue', desc: 'A statue of you. +10% on all cash earned', cost: 8000 },
+  { id: 'beacon', name: 'Aurora Beacon', desc: 'A crystal pillar that earns $10 every 5s', cost: 25000 },
+  { id: 'castle', name: 'Snow Castle', desc: 'The grandest sight in the north', cost: 60000 },
+];
+function upgradeCost(u) { return u.costs[U(u.id)]; }
+function applyUpgrade(id, instant) {
+  if (id === 'wcap') for (const w of workers) w.c.cap = (w.kind === 'server' ? 8 : 6) + 2 * U('wcap');
+  if (id === 'gatehp') for (const g of GATES) if (!g.broken) g.hp = 8 + 6 * U('gatehp');
+  if (id === 'sled') depot.input.max = 20 + 10 * U('sled');
+  if (DECOS.some(d => d.id === id)) buildDeco(id, instant);
+}
+function buyItem(id) {
+  const u = UPGRADES.find(x => x.id === id), d = DECOS.find(x => x.id === id);
+  const cost = u ? upgradeCost(u) : (UP[id] ? undefined : d.cost);
+  if (cost === undefined || W.cash < cost) return;
+  W.cash -= cost; UP[id] = U(id) + 1; setCash();
+  applyUpgrade(id, false);
+  sfx('buy'); burst(player.g.position, 0x7be38a, 14);
+  toast((u ? u.name : d.name) + (u ? ' level ' + U(id) : '') + '!');
+  save(); renderShop(); updateRank(true);
+}
+const shopEl = document.getElementById('shop'), shopList = document.getElementById('shoplist');
+let shopTab = 'up';
+function renderShop() {
+  if (shopEl.hidden) return;
+  const rows = shopTab === 'up'
+    ? UPGRADES.filter(u => !u.req || u.req()).map(u => {
+      const lvl = U(u.id), cost = u.costs[lvl];
+      const pips = u.costs.map((_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('');
+      return `<div class="urow"><div><b>${u.name}</b><span class="pips">${pips}</span><small>${u.desc}</small></div>` +
+        (cost === undefined ? `<button class="buy max" type="button" disabled>Max</button>` : `<button class="buy" type="button" data-id="${u.id}" data-cost="${cost}">$${fmt(cost)}</button>`) + `</div>`;
+    })
+    : DECOS.map(d => `<div class="urow"><div><b>${d.name}</b><small>${d.desc}</small></div>` +
+      (UP[d.id] ? `<button class="buy max" type="button" disabled>Built</button>` : `<button class="buy" type="button" data-id="${d.id}" data-cost="${d.cost}">$${fmt(d.cost)}</button>`) + `</div>`);
+  shopList.innerHTML = rows.join('') || '<p>Nothing to buy yet.</p>';
+  refreshShopButtons();
+}
+function refreshShopButtons() {
+  if (shopEl.hidden) return;
+  for (const b of shopList.querySelectorAll('button[data-cost]')) b.disabled = W.cash < +b.dataset.cost;
+}
+shopList.addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b && !b.disabled) buyItem(b.dataset.id); });
+for (const t of document.querySelectorAll('#shop .tabs button')) t.addEventListener('click', () => {
+  shopTab = t.dataset.tab; for (const o of document.querySelectorAll('#shop .tabs button')) o.classList.toggle('on', o === t); renderShop();
+});
+document.getElementById('shopx').addEventListener('click', () => { shopEl.hidden = true; });
+function openShop() { shopEl.hidden = false; renderShop(); }
+
+// Decorations
+let beaconT = 0;
+function buildDeco(id, instant) {
+  let g, at;
+  if (id === 'snowman') {
+    g = stationGroup(-9, 7.2); at = g.position;
+    mesh(new THREE.SphereGeometry(0.55, 12, 10), 0xffffff, 0, 0.5, 0, g); mesh(new THREE.SphereGeometry(0.4, 12, 10), 0xffffff, 0, 1.2, 0, g);
+    mesh(new THREE.SphereGeometry(0.28, 12, 10), 0xffffff, 0, 1.75, 0, g);
+    mesh(new THREE.ConeGeometry(0.06, 0.3, 6), 0xff8a2a, 0, 1.75, 0.38, g).rotation.x = PI / 2;
+    mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.35, 10), 0x222222, 0, 2.15, 0, g); mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 12), 0x222222, 0, 1.98, 0, g);
+    mesh(new THREE.TorusGeometry(0.3, 0.06, 6, 12), 0xd2463c, 0, 1.5, 0, g).rotation.x = PI / 2;
+  } else if (id === 'lamps') {
+    at = new V3(0, 0, 1);
+    for (const [x, z] of [[-9.4, -5.4], [9.4, 7.4], [2.9, -5.4], [-9.4, 3.6], [9.4, -2.2], [-3, 7.4]]) {
+      const l = stationGroup(x, z);
+      mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.4, 6), 0x2b3442, 0, 1.2, 0, l);
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a })); b.position.y = 2.5; l.add(b);
+      mesh(new THREE.ConeGeometry(0.28, 0.2, 6), 0x2b3442, 0, 2.72, 0, l);
+      if (!instant) popIn(l);
+    }
+  } else if (id === 'flag') {
+    g = stationGroup(9.3, -5.3); at = g.position;
+    mesh(new THREE.CylinderGeometry(0.06, 0.07, 4.2, 6), 0xd5dde6, 0, 2.1, 0, g);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.85, 6, 1), new THREE.MeshLambertMaterial({ color: 0xd84a3a, side: THREE.DoubleSide }));
+    f.position.set(-0.72, 3.7, 0); g.add(f); decoAnim.push(dt => { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i); p.setZ(i, Math.sin(performance.now() / 250 + x * 3) * 0.12 * (0.7 - x)); } p.needsUpdate = true; });
+  } else if (id === 'sculpture') {
+    g = stationGroup(7.6, 10.8); at = g.position;
+    const ice = new THREE.MeshLambertMaterial({ color: 0xbfeaff, transparent: true, opacity: 0.8, emissive: 0x1d4a66 });
+    mesh(new THREE.BoxGeometry(1.4, 0.4, 1.4), 0xd5dde6, 0, 0.2, 0, g);
+    mesh(new THREE.BoxGeometry(0.5, 0.55, 1.1), ice, 0, 1.15, 0, g); mesh(new THREE.BoxGeometry(0.35, 0.4, 0.45), ice, 0, 1.6, 0.55, g);
+    for (const [x, z] of [[-0.18, 0.4], [0.18, 0.4], [-0.18, -0.4], [0.18, -0.4]]) mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), ice, x, 0.65, z, g);
+    for (const s of [-1, 1]) { mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), ice, s * 0.15, 2.0, 0.5, g); mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), ice, s * 0.28, 2.15, 0.5, g); }
+  } else if (id === 'statue') {
+    g = stationGroup(12, -4); at = g.position;
+    mesh(new THREE.BoxGeometry(1.6, 0.8, 1.6), 0xb3bcc8, 0, 0.4, 0, g);
+    const p = makePerson(0xffd23a, 'axe', 1.3); scene.remove(p.group); g.add(p.group); p.group.position.y = 0.8;
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x4a3300 });
+    p.group.traverse(o => { if (o.isMesh) o.material = gold; });
+    p.armR.rotation.x = -2.4;
+    colliders.push({ x0: 11.2, x1: 12.8, z0: -4.8, z1: -3.2 });
+  } else if (id === 'beacon') {
+    g = stationGroup(12, -7.4); at = g.position;
+    mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.6, 8), 0x8d97a6, 0, 0.3, 0, g);
+    mesh(new THREE.CylinderGeometry(0.25, 0.35, 3.2, 8), 0xd5dde6, 0, 2.2, 0, g);
+    const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.6, 0), new THREE.MeshBasicMaterial({ color: 0x7ff0d0 })); cr.position.y = 4.3; g.add(cr);
+    decoAnim.push(dt => { cr.rotation.y += dt * 1.5; cr.position.y = 4.3 + Math.sin(performance.now() / 500) * 0.15; });
+    colliders.push({ x0: 11.0, x1: 13.0, z0: -8.4, z1: -6.4 });
+  } else if (id === 'castle') {
+    g = stationGroup(-16, 19); at = g.position;
+    const wall = 0xf2f6fb, roof = 0x3f7fc8;
+    mesh(new THREE.BoxGeometry(5, 2.2, 3), wall, 0, 1.1, 0, g);
+    for (const [x, z] of [[-2.6, -1.6], [2.6, -1.6], [-2.6, 1.6], [2.6, 1.6]]) {
+      mesh(new THREE.CylinderGeometry(0.7, 0.8, 3.4, 10), wall, x, 1.7, z, g);
+      mesh(new THREE.ConeGeometry(0.95, 1.4, 10), roof, x, 4.1, z, g);
+    }
+    mesh(new THREE.CylinderGeometry(0.9, 1.0, 4.4, 10), wall, 0, 2.2, 0, g); mesh(new THREE.ConeGeometry(1.2, 1.8, 10), roof, 0, 5.3, 0, g);
+    mesh(new THREE.BoxGeometry(1.0, 1.3, 0.1), 0x5a6878, 0, 0.65, -1.55, g);
+    colliders.push({ x0: -19.4, x1: -12.6, z0: 16.6, z1: 21.4 });
+  }
+  if (g && !instant) popIn(g);
+  if (!instant && at) { burst(at, 0xffd23a, 16); firework(at.clone()); }
+}
+const decoAnim = [];
+
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030 };
-const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash].filter(Boolean);
+const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
+const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
-    this.p = makePerson(WCOL[kind], kind === 'lumber' || kind === 'miner' ? 'axe' : kind === 'hunter' ? 'spear' : null);
+    this.p = makePerson(WCOL[kind], kind === 'lumber' || kind === 'miner' || kind === 'crafter' ? 'axe' : kind === 'hunter' ? 'spear' : null);
     this.g = this.p.group; this.g.position.set(x, 0, z);
-    this.c = new Carrier(this.g, kind === 'server' ? 8 : 6);
+    this.c = new Carrier(this.g, (kind === 'server' ? 8 : 6) + 2 * U('wcap'));
     this.state = 'gather'; this.t = 0; this.idle = 0; this.tree = null;
     workers.push(this);
   }
@@ -1592,18 +1965,22 @@ class Worker {
     const pos = this.g.position; let moving = false;
     const rush = boost.work > 0 ? 1.7 : 1;
     this.t += dt * rush;
-    const go = (target, stop) => { const arr = navStep(this.g, target, 3.6 * rush * (1 - 0.2 * stormK), dt, stop); moving = !arr; return arr; };
+    const go = (target, stop) => { const arr = navStep(this.g, target, 3.6 * rush * (1 + 0.15 * U('wspeed')) * (1 - 0.2 * stormK), dt, stop); moving = !arr; return arr; };
     if (this.state === 'deliver') {
       if (!this.dst) this.dst = this.kind === 'lumber' && springs.unlocked && springs.input.n < sawmill.input.n ? springs.input : null;
-      const dst = this.dst || { lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
-      const type = { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish' }[this.kind];
+      if (this.kind === 'crafter') this.dst = this.want === 'gem' ? workshop.gems : workshop.logs;
+      const dst = this.dst || { shepherd: tailor.input, runner: market.input, lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
+      const type = this.kind === 'crafter' ? this.want : { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish', shepherd: 'wool', runner: 'lantern' }[this.kind];
       if (go(dst.center, 0.7) && this.t > 0.12) {
         this.t = 0;
         if (dst.free() > 0) { const it = this.c.take(type); if (it) dst.receive(it.m, it.pos); }
       }
-      if (this.c.load === 0) { this.state = 'gather'; this.dst = null; }
-    } else if (this.kind === 'lumber' || this.kind === 'miner') {
-      if (!this.tree || this.tree.down) this.tree = nearest((this.kind === 'lumber' ? trees : rocks).filter(t => !t.down), pos);
+      if (this.c.load === 0) { this.state = 'gather'; this.dst = null; this.want = null; this.tree = null; }
+    } else if (this.kind === 'lumber' || this.kind === 'miner' || this.kind === 'crafter') {
+      if (this.kind === 'crafter' && !this.want) this.want = workshop.logs.n + workshop.logs.pending <= workshop.gems.n + workshop.gems.pending ? 'log' : 'gem';
+      const pool = this.kind === 'lumber' ? trees.filter(t => t.pos.x < RIVER.x0) : this.kind === 'miner' ? rocks
+        : this.want === 'log' ? trees.filter(t => t.pos.x > RIVER.x1) : rocks;
+      if (!this.tree || this.tree.down) this.tree = nearest(pool.filter(t => !t.down), pos);
       if (this.tree && go(this.tree.pos, 1.3) && this.t > 0.7) {
         this.t = 0; this.p.swing = 1; this.g.rotation.y = Math.atan2(this.tree.pos.x - pos.x, this.tree.pos.z - pos.z);
         this.tree.hit(this.c);
@@ -1634,9 +2011,10 @@ class Worker {
     } else if (this.kind === 'fisher') {
       if (go(dock.spot, 0.3)) { this.g.rotation.y = lerpAng(this.g.rotation.y, PI / 2, 0.2); tryFish(this.c, this, dt); }
       if (this.c.full()) this.state = 'deliver';
-    } else if (this.kind === 'server') {
-      if (go(grill.output.center, 0.6)) {
-        if (this.t > 0.15 && grill.output.n > 0 && !this.c.full()) { this.t = 0; this.idle = 0; this.c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); }
+    } else if (PICKUP[this.kind]) {
+      const [src, ty] = PICKUP[this.kind]();
+      if (go(src.center, 0.6)) {
+        if (this.t > 0.15 && src.n > 0 && !this.c.full()) { this.t = 0; this.idle = 0; this.c.receive(ty, src.take(), src.slot(src.n)); }
         this.idle += dt;
         if (this.c.full() || (this.c.load > 0 && this.idle > 1.5)) { this.state = 'deliver'; this.idle = 0; }
       }
@@ -1672,6 +2050,15 @@ const PADS = [
   { id: 'wardrobe', label: 'Wardrobe', icon: 'hat', costs: [150, 300, 600, 1200], x: 12.5, z: 3.4, req: () => sawmill.unlocked, apply: unlockWardrobe },
   { id: 'banker', label: 'Hire Banker', icon: 'cash', costs: [500], x: -0.6, z: -1.3, req: () => padLevel('server') > 0, apply: () => new Worker('banker', -0.6, -1.3) },
   { id: 'depot', label: 'Reindeer Sled', icon: 'sled', costs: [450], x: 9, z: 15, req: () => sawmill.unlocked && served >= 10, apply: unlockDepot },
+  { id: 'hall', label: 'Town Hall', icon: 'board', costs: [200], x: -3.4, z: 10.4, req: () => sawmill.unlocked, apply: unlockHall },
+  { id: 'ridge', label: 'Ridge Camp', icon: 'house', costs: [1500], x: 45, z: 1.5, req: () => bridge.unlocked, apply: unlockRidge },
+  { id: 'workshop', label: 'Lantern Shop', icon: 'lantern', costs: [800], x: 41, z: -3.2, req: () => ridge.unlocked, apply: unlockWorkshop },
+  { id: 'market', label: 'Market Stall', icon: 'cart', costs: [600], x: 50, z: -3.2, req: () => workshop.built, apply: unlockMarket },
+  { id: 'pen', label: 'Yak Pen', icon: 'yak', costs: [700, 400, 700, 1100, 1600], x: 40.5, z: 4.8, req: () => ridge.unlocked, apply: addYak },
+  { id: 'tailor', label: 'Tailor', icon: 'coat', costs: [900], x: 50, z: 4.8, req: () => pen.level > 0, apply: unlockTailor },
+  { id: 'crafter', label: 'Hire Crafter', icon: 'person', costs: [600, 1200], x: 40.2, z: 1.2, req: () => workshop.built, apply: () => new Worker('crafter', 40.2, 1.2) },
+  { id: 'shepherd', label: 'Hire Shepherd', icon: 'person', costs: [500, 1000], x: 44.8, z: 1.2, req: () => tailor.built, apply: () => new Worker('shepherd', 44.8, 1.2) },
+  { id: 'runner', label: 'Hire Runner', icon: 'person', costs: [500], x: 49.4, z: 1.2, req: () => market.built, apply: () => new Worker('runner', 49.4, 1.2) },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
 const padState = {};
@@ -1812,6 +2199,25 @@ function playerInteract() {
     else { W.cash += share; setCash(); }
     return;
   }
+  // town hall shop
+  if (hall.built) {
+    const on = inZone(pos, hall.zone.x, hall.zone.z, 1.05);
+    if (on && !hall.wasIn) openShop();
+    if (!on && hall.wasIn) shopEl.hidden = true;
+    hall.wasIn = on;
+  }
+  // ridge camp stations
+  if (workshop.built) {
+    for (const [pile, type] of [[workshop.logs, 'log'], [workshop.gems, 'gem']]) {
+      if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
+    }
+  }
+  for (const [pile, type, ok] of [[workshop.out, 'lantern', workshop.built], [pen.out, 'wool', pen.built]]) {
+    if (ok && inZone(pos, pile.x, pile.z) && pile.n > 0 && !c.full()) { c.receive(type, pile.take(), pile.slot(pile.n)); return; }
+  }
+  for (const [pile, type, ok] of [[market.input, 'lantern', market.built], [tailor.input, 'wool', tailor.built]]) {
+    if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
+  }
   // sled depot takes steaks, gems and fish
   if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
     const it = c.take('steak') || c.take('gem') || c.take('fish');
@@ -1868,17 +2274,17 @@ function updatePlayer(dt) {
   if (player.atk <= 0) {
     const b = nearest(boars.concat(wolves, bear ? [bear] : []), pos, b => b.pos);
     if (b && d2(b.pos, pos) < (b.reach || 1.9)) {
-      player.atk = 0.45; player.p.swing = 1; b.hit(1); sfx('hit');
+      player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
       const t = nearest(trees.concat(rocks).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
-        player.atk = 0.38; player.p.swing = 1; t.hit(player.c);
+        player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
       }
     }
   }
-  pickupGround(player.c, pos, null, 1.4);
+  pickupGround(player.c, pos, null, 1.4 + 0.8 * U('magnet'));
   player.tick += dt;
   for (let n = 0; player.tick > 0.07 && n < 6; n++) { player.tick -= 0.07; playerInteract(); }
   player.tick = Math.min(player.tick, 0.07);
@@ -1914,7 +2320,7 @@ function updateGuide(t) {
   } else if (bridge.unlocked && !cutter.unlocked) {
     target = new V3(19, 0, 6); text = W.cash >= 100 ? 'Build the Gem Cutter' : 'Mine crystals across the river';
   }
-  setGoal(text);
+  setGoal(shopEl.hidden ? text : '');
   guide.visible = !!target;
   if (target) guide.position.set(target.x, 2.6 + Math.abs(Math.sin(t * 4)) * 0.5, target.z);
   guide.rotation.y = t * 2;
@@ -2071,7 +2477,7 @@ function updateDayNight(dt) {
 const cashEl = document.getElementById('cash'), cashV = document.getElementById('cashv');
 function fmt(n) { n = Math.max(0, Math.round(n)); return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
 let bumpT = 0;
-function setCash() { cashV.textContent = fmt(W.cash); cashEl.classList.add('bump'); clearTimeout(bumpT); bumpT = setTimeout(() => cashEl.classList.remove('bump'), 120); }
+function setCash() { if (typeof refreshShopButtons === 'function') refreshShopButtons(); cashV.textContent = fmt(W.cash); cashEl.classList.add('bump'); clearTimeout(bumpT); bumpT = setTimeout(() => cashEl.classList.remove('bump'), 120); }
 
 // ---------------- input ----------------
 const joy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
@@ -2111,7 +2517,7 @@ let resetting = false;
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, up: UP })); } catch (e) {}
 }
 if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
@@ -2122,6 +2528,7 @@ if (saved && saved.pads) {
     for (let l = 0; l < Math.min(s.level, p.costs.length); l++) { p.apply(l, true); padState[p.id].level = l + 1; }
     padState[p.id].paid = s.paid || 0;
   }
+  if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
 }
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false);
 setInterval(save, 3000);
@@ -2140,7 +2547,10 @@ function frame() {
   for (const b of boars.slice()) b.update(dt);
   for (const rk of rocks) rk.update(dt);
   updateGrill(dt); updateSawmill(dt); updateTower(dt); updateCutter(dt); updateRiver(dt); updateDayNight(dt);
-  updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); updateDepot(dt); drawMap(dt); if (bear) bear.update(dt);
+  updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); updateDepot(dt); drawMap(dt);
+  updateWorkshop(dt); updateMarket(dt); updateTailor(dt); for (const y of pen.yaks) y.update(dt);
+  for (const f of decoAnim) f(dt);
+  if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
   for (const w of workers) w.update(dt);
@@ -2172,7 +2582,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem };
 requestAnimationFrame(frame);
 })();
 </script>
