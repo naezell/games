@@ -13,6 +13,8 @@ Finish daily goals for bonus cash, run a Hot Springs that villagers pay to soak 
 (it burns logs), and adopt a husky that fetches loot and chases wolves.
 Watch for snowstorms (steaks sell for double), buy boosts from the traveling trader,
 hire a banker to collect cash, and unlock outfits at the wardrobe.
+Ship goods by reindeer sled for better prices, climb the camp ranks (fireworks and
+bonus cash), and use the minimap in the corner to find wolves, the bear and the trader.
 
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).

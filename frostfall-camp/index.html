@@ -72,6 +72,10 @@
   #boosts:empty { display: none; }
   #boosts span { background: rgba(122, 79, 200, .85); color: var(--white); border-radius: 999px; padding: 4px 10px; font: 800 12px var(--font-body); font-variant-numeric: tabular-nums; }
   #boosts span.storm { background: rgba(70, 110, 160, .9); }
+  #map { width: 120px; height: 88px; border-radius: 12px; border: 2px solid rgba(255,255,255,.75); background: var(--panel); }
+  #rank { display: flex; align-items: center; gap: 8px; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 5px 10px; font: 15px var(--font-display); letter-spacing: .4px; }
+  #rankbar { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+  #rankfill { display: block; height: 100%; width: 0; background: #ffd23a; transition: width .3s; }
   #quests { pointer-events: auto; background: var(--panel); color: var(--white); border-radius: 12px; padding: 7px 10px;
     font: 800 12px/1.35 var(--font-body); max-width: 210px; cursor: pointer; display: grid; gap: 3px; }
   #quests h3 { margin: 0; font: 14px var(--font-display); letter-spacing: .4px; display: flex; justify-content: space-between; gap: 10px; }
@@ -105,8 +109,8 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
-  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
+  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><canvas id="map" width="240" height="176" aria-label="Map of the area"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
@@ -299,6 +303,11 @@ function drawIcon(c, icon, cx, cy, s) {
     c.fillStyle = W_; c.fillRect(-40, -10, 80, 34);
     c.fillStyle = '#e8433a'; c.beginPath(); c.moveTo(-46, -12); c.lineTo(46, -12); c.lineTo(36, -40); c.lineTo(-36, -40); c.closePath(); c.fill();
     c.fillStyle = W_; c.beginPath(); c.arc(-24, 32, 10, 0, 2 * PI); c.arc(24, 32, 10, 0, 2 * PI); c.fill();
+  } else if (icon === 'sled') {
+    c.fillStyle = W_; c.fillRect(-40, -14, 70, 22);
+    c.strokeStyle = W_; c.lineWidth = 7; c.beginPath(); c.moveTo(-46, 22); c.lineTo(30, 22); c.quadraticCurveTo(50, 22, 46, 4); c.stroke();
+    c.beginPath(); c.moveTo(-30, 8); c.lineTo(-30, 22); c.moveTo(16, 8); c.lineTo(16, 22); c.stroke();
+    c.beginPath(); c.moveTo(34, -14); c.lineTo(44, -40); c.moveTo(40, -28); c.lineTo(52, -32); c.stroke();
   } else if (icon === 'fire') {
     c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
     c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
@@ -649,10 +658,27 @@ function burst(pos, color, n = 8) {
 }
 function updatePuffs(dt) {
   for (let i = puffs.length - 1; i >= 0; i--) {
-    const p = puffs[i]; p.life -= dt; p.v.y -= 14 * dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt * 8;
+    const p = puffs[i]; p.life -= dt; p.v.y -= (p.grav ?? 14) * dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt * 8;
     p.m.scale.setScalar(Math.max(0.01, p.life * 1.6));
     if (p.life <= 0 || p.m.position.y < 0) { scene.remove(p.m); puffs.splice(i, 1); }
   }
+}
+const SPARK_GEO = new THREE.BoxGeometry(0.22, 0.22, 0.22);
+const FW_COLORS = [0xffd23a, 0xe8433a, 0x7be38a, 0x8fe8f8, 0xd9b3ff, 0xff9a3c];
+const fwMats = FW_COLORS.map(c => new THREE.MeshBasicMaterial({ color: c }));
+function firework(pos) {
+  const rocket = new THREE.Mesh(SPARK_GEO, fwMats[0]);
+  const top = pos.clone().add(new V3(rand(-2, 2), rand(7, 10), rand(-2, 2)));
+  fly(rocket, pos.clone(), () => top, 0.7, () => {
+    scene.remove(rocket);
+    const mt = fwMats[randi(0, fwMats.length - 1)];
+    for (let i = 0; i < 26; i++) {
+      const m = new THREE.Mesh(SPARK_GEO, mt); m.position.copy(top); scene.add(m);
+      const v = new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(5, 7));
+      puffs.push({ m, v, life: rand(0.8, 1.2), grav: 4 });
+    }
+    sfx('pop');
+  }, 0);
 }
 // falling snow
 const SNOW_N = 700;
@@ -1430,6 +1456,125 @@ function updateTrader(dt) {
   }
 }
 
+// Reindeer sled: ship goods to a faraway town for better prices
+const SHIP_PRICE = { steak: 9, gem: 14, fish: 10 };
+const depot = { built: false, pos: new V3(9, 0, 15), input: new Pile(6.8, 15, 3, 3, 20, 0.62, 0.62, 0.3), types: [], state: 'load', t: 0, idle: 0, cash: null, load: 0 };
+function unlockDepot(instant) {
+  if (depot.built) return;
+  depot.built = true;
+  const g = new THREE.Group(); depot.g = g; g.position.copy(depot.pos); scene.add(g);
+  const sled = new THREE.Group(); g.add(sled); sled.position.z = -0.6;
+  mesh(new THREE.BoxGeometry(1.4, 0.45, 2.0), 0xb8733d, 0, 0.6, 0, sled);
+  mesh(new THREE.BoxGeometry(1.5, 0.12, 2.1), 0xd84a3a, 0, 0.88, 0, sled);
+  for (const x of [-0.6, 0.6]) {
+    mesh(new THREE.BoxGeometry(0.1, 0.08, 2.4), 0xffd23a, x, 0.12, 0.1, sled);
+    mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), 0x5a3a1e, x, 0.3, -0.6, sled); mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), 0x5a3a1e, x, 0.3, 0.6, sled);
+    const tip = mesh(new THREE.BoxGeometry(0.1, 0.08, 0.5), 0xffd23a, x, 0.3, 1.35, sled); tip.rotation.x = -0.7;
+  }
+  depot.cargo = new THREE.Group(); sled.add(depot.cargo);
+  // reindeer
+  const deer = new THREE.Group(); g.add(deer); deer.position.z = 1.9; depot.deer = deer;
+  mesh(new THREE.BoxGeometry(0.55, 0.55, 1.2), 0x8a5a36, 0, 1.0, 0, deer);
+  mesh(new THREE.BoxGeometry(0.4, 0.45, 0.5), 0x8a5a36, 0, 1.45, 0.7, deer);
+  mesh(new THREE.SphereGeometry(0.09, 8, 6), 0xe8433a, 0, 1.4, 0.98, deer);
+  for (const x of [-0.12, 0.12]) {
+    mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), 0xe8d6b0, x * 1.4, 1.85, 0.6, deer);
+    mesh(new THREE.BoxGeometry(0.22, 0.05, 0.05), 0xe8d6b0, x * 2.4, 1.95, 0.6, deer);
+  }
+  depot.legs = [[-0.18, 0.4], [0.18, 0.4], [-0.18, -0.4], [0.18, -0.4]].map(([lx, lz]) => {
+    const p = new THREE.Group(); p.position.set(lx, 0.72, lz); deer.add(p); mesh(new THREE.BoxGeometry(0.12, 0.72, 0.12), 0x6b4428, 0, -0.36, 0, p); return p;
+  });
+  colliders.push({ x0: 8.2, x1: 9.8, z0: 13.6, z1: 17.6, on: () => depot.state === 'load' });
+  zoneMarker(6.8, 15, 'sled', '#ffd23a');
+  depot.cash = new CashPile(11.3, 15);
+  if (!instant) { burst(depot.pos, 0xd84a3a, 14); toast('Load steaks, gems or fish onto the sled. It pays more!'); }
+}
+function depotReceive(type, it) {
+  depot.types.push(type); depot.idle = 0;
+  depot.input.receive(it.m, it.pos);
+}
+function updateDepot(dt) {
+  if (!depot.built) return;
+  const g = depot.g;
+  depot.idle += dt;
+  if (depot.state === 'load') {
+    const n = depot.input.n;
+    if (n >= depot.input.max || (n >= 6 && depot.idle > 5 && d2(player.g.position, depot.input.center) > 1.5)) {
+      depot.load = 0;
+      while (depot.input.n) {
+        const m = depot.input.take(), type = depot.types.pop();
+        depot.load += SHIP_PRICE[type] || 5;
+        const slot = depot.cargo.children.length;
+        fly(m, m.position.clone(), () => g.position.clone().add(new V3(0, 1.1, -0.6)), 0.3, () => { scene.remove(m); if (depot.cargo.children.length < 9) { const c = makeItem(type); c.position.set((slot % 3 - 1) * 0.4, 1.05 + Math.floor(slot / 9) * 0.3, (Math.floor(slot / 3) % 3 - 1) * 0.5); depot.cargo.add(c); } });
+      }
+      depot.state = 'leave'; depot.t = 0;
+      toast('The sled is off to town! Worth $' + depot.load); sfx('bell');
+    }
+  } else if (depot.state === 'leave') {
+    depot.t += dt;
+    if (depot.t > 0.6) g.position.z += dt * Math.min(9, (depot.t - 0.6) * 6);
+    if (g.position.z > 45) { depot.state = 'away'; depot.t = 22; while (depot.cargo.children.length) depot.cargo.remove(depot.cargo.children[0]); }
+  } else if (depot.state === 'away') {
+    depot.t -= dt; if (depot.t <= 0) { depot.state = 'back'; g.rotation.y = PI; }
+  } else if (depot.state === 'back') {
+    g.position.z -= dt * 7;
+    if (g.position.z <= depot.pos.z) {
+      g.position.z = depot.pos.z; g.rotation.y = 0; depot.state = 'load';
+      depot.cash.addValue(depot.load, depot.pos.clone().add(new V3(0, 1.2, 0)));
+      toast('The sled is back with $' + depot.load + '!'); sfx('bell');
+    }
+  }
+  const run = depot.state === 'leave' || depot.state === 'back';
+  depot.legs.forEach((l, i) => { l.rotation.x = run ? Math.sin(performance.now() / 70 + (i % 2 ? PI : 0)) * 0.7 : 0; });
+}
+
+// Camp rank
+const RANKS = [[0, 'Tent Camp'], [300, 'Outpost'], [1000, 'Hamlet'], [2500, 'Village'], [5000, 'Frost Town'], [9000, 'Winter City'], [15000, 'Snow Kingdom']];
+let lastRank = -1;
+const rankName = document.getElementById('rankname'), rankFill = document.getElementById('rankfill');
+function campXP() { let xp = 0; for (const p of PADS) { const st = padState[p.id]; for (let l = 0; l < st.level; l++) xp += p.costs[l]; } return xp; }
+function updateRank(celebrate) {
+  const xp = campXP();
+  let i = 0; while (i + 1 < RANKS.length && xp >= RANKS[i + 1][0]) i++;
+  const lo = RANKS[i][0], hi = RANKS[i + 1] ? RANKS[i + 1][0] : lo;
+  rankName.textContent = RANKS[i][1];
+  rankFill.style.width = (hi > lo ? (xp - lo) / (hi - lo) * 100 : 100) + '%';
+  if (celebrate && lastRank >= 0 && i > lastRank) {
+    const reward = i * 100;
+    W.cash += reward; setCash();
+    toast(`Camp rank up: ${RANKS[i][1]}! +$${reward}`); sfx('buy');
+    for (let k = 0; k < 6; k++) setTimeout(() => firework(player.g.position.clone().add(new V3(rand(-4, 4), 0, rand(-4, 4)))), k * 280);
+  }
+  lastRank = i;
+}
+
+// Minimap
+const mapCv = document.getElementById('map'), mapX = mapCv.getContext('2d');
+const MAP = { x0: -26, x1: 47, z0: -30, z1: 23 };
+const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - MAP.z0) / (MAP.z1 - MAP.z0) * mapCv.height;
+let mapT = 0;
+function drawMap(dt) {
+  mapT -= dt; if (mapT > 0) return; mapT = 0.2;
+  const c = mapX, W_ = mapCv.width, H_ = mapCv.height;
+  c.clearRect(0, 0, W_, H_);
+  c.fillStyle = nightK > 0.5 ? '#2a3a58' : '#e9f0f6'; c.fillRect(0, 0, W_, H_);
+  c.fillStyle = '#4f9fe0'; c.fillRect(mx(RIVER.x0), 0, mx(RIVER.x1) - mx(RIVER.x0), H_);
+  if (bridge.unlocked) { c.fillStyle = '#c9d3dc'; c.fillRect(mx(RIVER.x0 - 1), mz(BRIDGE_Z - 1.2), mx(RIVER.x1 + 1) - mx(RIVER.x0 - 1), mz(BRIDGE_Z + 1.2) - mz(BRIDGE_Z - 1.2)); }
+  c.fillStyle = 'rgba(80,140,200,0.35)';
+  for (const t of trees) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
+  c.fillStyle = '#8fe8f8'; for (const t of rocks) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
+  c.fillStyle = '#c99a6c'; c.fillRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
+  c.strokeStyle = '#8a5328'; c.lineWidth = 2; c.strokeRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
+  const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
+  for (const st of [grill, counter, sawmill.unlocked && sawmill, cutter.unlocked && cutter, smoke.unlocked && smoke, springs.unlocked && springs, depot.built && depot]) if (st) dot(st.pos.x, st.pos.z, 3, '#5a3a1e');
+  for (const b of boars) dot(b.pos.x, b.pos.z, 2.5, '#ffffff');
+  for (const w of wolves) dot(w.pos.x, w.pos.z, 3, '#e8433a');
+  if (bear) dot(bear.pos.x, bear.pos.z, 5, '#e8433a');
+  if (trader.state !== 'away') dot(trader.g.position.x, trader.g.position.z, 3.5, '#7a4fc8');
+  const pp = player.g.position;
+  c.strokeStyle = '#ffffff'; c.lineWidth = 2; dot(pp.x, pp.z, 5, '#2f78d6'); c.beginPath(); c.arc(mx(pp.x), mz(pp.z), 5, 0, 2 * PI); c.stroke();
+}
+
 // ---------------- workers ----------------
 const workers = [];
 const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030 };
@@ -1526,6 +1671,7 @@ const PADS = [
   { id: 'husky', label: 'Adopt Husky', icon: 'dog', costs: [300], x: 0.9, z: 4.6, req: () => gates.built || dayT > CYCLE, apply: adoptHusky },
   { id: 'wardrobe', label: 'Wardrobe', icon: 'hat', costs: [150, 300, 600, 1200], x: 12.5, z: 3.4, req: () => sawmill.unlocked, apply: unlockWardrobe },
   { id: 'banker', label: 'Hire Banker', icon: 'cash', costs: [500], x: -0.6, z: -1.3, req: () => padLevel('server') > 0, apply: () => new Worker('banker', -0.6, -1.3) },
+  { id: 'depot', label: 'Reindeer Sled', icon: 'sled', costs: [450], x: 9, z: 15, req: () => sawmill.unlocked && served >= 10, apply: unlockDepot },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
 const padState = {};
@@ -1561,6 +1707,7 @@ function payPad(p) {
   fly(bill, player.g.position.clone().add(new V3(0, 1.2, 0)), () => new V3(p.x, 0.1, p.z), 0.22, () => scene.remove(bill), 0.8);
   if (st.paid >= cost) {
     st.level++; st.paid = 0; p.lock = true; sfx('buy');
+    setTimeout(() => updateRank(true), 400);
     p.apply(st.level - 1, false);
     burst(new V3(p.x, 0, p.z), 0x7be38a, 16);
     refreshPads(); save();
@@ -1664,6 +1811,11 @@ function playerInteract() {
     if (m) fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); sfx('coin'); });
     else { W.cash += share; setCash(); }
     return;
+  }
+  // sled depot takes steaks, gems and fish
+  if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
+    const it = c.take('steak') || c.take('gem') || c.take('fish');
+    if (it) { depotReceive(it.type, it); sfx('drop'); return; }
   }
   // wardrobe: step in to switch outfits
   if (wardrobe.built) {
@@ -1801,6 +1953,8 @@ function sfx(name) {
     case 'gate': tone(170, 120, 0.12, 'square', 0.06); break;
     case 'bark': tone(520, 380, 0.07, 'square', 0.05); tone(560, 400, 0.07, 'square', 0.05, 0.12); break;
     case 'wind': tone(200, 90, 1.4, 'sawtooth', 0.03); tone(260, 120, 1.2, 'triangle', 0.04, 0.2); break;
+    case 'pop': tone(900, 300, 0.25, 'triangle', 0.06); break;
+    case 'bell': [1568, 1976, 1568].forEach((f, i) => tone(f, f * 0.98, 0.18, 'sine', 0.06, i * 0.1)); break;
     case 'dawn': [392, 523, 659].forEach((f, i) => tone(f, f, 0.3, 'sine', 0.08, i * 0.12)); break;
   }
 }
@@ -1969,7 +2123,7 @@ if (saved && saved.pads) {
     padState[p.id].paid = s.paid || 0;
   }
 }
-refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests();
+refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false);
 setInterval(save, 3000);
 addEventListener('pagehide', save);
 if (document.fonts) document.fonts.ready.then(() => { PADS.forEach(p => p.label3d.redraw()); maxLabel.redraw(); });
@@ -1986,7 +2140,7 @@ function frame() {
   for (const b of boars.slice()) b.update(dt);
   for (const rk of rocks) rk.update(dt);
   updateGrill(dt); updateSawmill(dt); updateTower(dt); updateCutter(dt); updateRiver(dt); updateDayNight(dt);
-  updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); if (bear) bear.update(dt);
+  updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); updateDepot(dt); drawMap(dt); if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
   for (const w of workers) w.update(dt);
@@ -2018,7 +2172,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework };
 requestAnimationFrame(frame);
 })();
 </script>
