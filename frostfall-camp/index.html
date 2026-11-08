@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Frostfall Camp</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single-look game: full-bleed 3D canvas with a chunky toy-like HUD floating over a snowfield. */
+  :root {
+    --snow: #e4edf5;
+    --ink: #1d2a3a;
+    --cash: #3fae4a;
+    --cash-dark: #24742d;
+    --panel: rgba(25, 38, 56, 0.72);
+    --white: #ffffff;
+    --font-display: "Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif;
+    --font-body: "Nunito", "Segoe UI", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--snow); color: var(--ink); font-family: var(--font-body); }
+  body { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  canvas { display: block; }
+  [hidden] { display: none !important; }
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; pointer-events: none;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  }
+  #cash {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 3px solid rgba(255,255,255,0.85); border-radius: 14px;
+    padding: 4px 16px 4px 6px; color: var(--white);
+    font: 28px/1 var(--font-display); letter-spacing: 0.5px; font-variant-numeric: tabular-nums;
+    transition: transform .12s;
+  }
+  #cash.bump { transform: scale(1.12); }
+  .bill {
+    width: 46px; height: 30px; border-radius: 6px; background: var(--cash);
+    border: 3px solid var(--cash-dark); box-sizing: border-box; position: relative;
+  }
+  .bill::after { content: ""; position: absolute; inset: 5px 13px; border-radius: 50%; border: 3px solid var(--cash-dark); }
+  #reset {
+    pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px;
+    background: var(--panel); color: var(--white); font: 15px var(--font-body); font-weight: 800; cursor: pointer;
+  }
+  #reset:focus-visible { outline: 3px solid var(--white); }
+  #goal {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
+    max-width: calc(100% - 32px); box-sizing: border-box;
+    background: var(--panel); color: var(--white); border-radius: 999px; padding: 8px 18px;
+    font: 800 15px var(--font-body); text-align: center; pointer-events: none; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  #joy {
+    position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.7); background: rgba(30,45,65,0.18); pointer-events: none;
+  }
+  #knob {
+    position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
+    border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 3px 8px rgba(0,0,0,.25);
+  }
+  #confirm {
+    position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.45);
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #confirm > div { background: var(--white); color: var(--ink); border-radius: 18px; padding: 20px; max-width: 320px; text-align: center; font-weight: 700; }
+  #confirm h2 { font: 26px var(--font-display); margin: 0 0 8px; }
+  #confirm .row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  #confirm button { border: 0; border-radius: 12px; padding: 10px 18px; font: 800 16px var(--font-body); cursor: pointer; }
+  #yes { background: #d84a3a; color: var(--white); }
+  #no { background: #dfe6ee; color: var(--ink); }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap">
+</head>
+<body>
+<div id="hud">
+  <div id="cash"><span class="bill"></span><span id="cashv">0</span></div>
+  <button id="reset" type="button">Restart</button>
+</div>
+<div id="goal">Drag anywhere to move</div>
+<div id="joy" hidden><div id="knob"></div></div>
+<div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const V3 = THREE.Vector3, PI = Math.PI;
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+
+// ---------------- world layout ----------------
+const CAMP = { x0: -10, x1: 10, z0: -6, z1: 8 };
+const FIELD = { x0: -8, x1: 12, z0: -26, z1: -10 };
+const BOUNDS = { x0: -25, x1: 25, z0: -29, z1: 22 };
+const CAM = new V3(8, 19, 14);
+const LABEL_ROT = Math.atan2(CAM.x, CAM.z);
+const STEAK_PRICE = 5, LOG_PRICE = 2;
+const inside = p => p.x > CAMP.x0 && p.x < CAMP.x1 && p.z > CAMP.z0 && p.z < CAMP.z1;
+const GATES = [
+  { in: new V3(-8.8, 0, 1.5), out: new V3(-11.2, 0, 1.5) },
+  { in: new V3(8.8, 0, 1.5), out: new V3(11.2, 0, 1.5) },
+  { in: new V3(0, 0, -4.8), out: new V3(0, 0, -7.2) },
+  { in: new V3(4, 0, 6.8), out: new V3(4, 0, 9.2) },
+];
+
+// ---------------- state & save ----------------
+const W = { cash: 0, cap: 8, speed: 5 };
+const SAVE_KEY = 'frostfall-camp-v1';
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { saved = null; }
+
+// ---------------- renderer ----------------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdbe7f2);
+scene.fog = new THREE.Fog(0xdbe7f2, 34, 70);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+function fitCamera() {
+  const a = innerWidth / innerHeight;
+  camera.aspect = a; camera.fov = a < 0.8 ? 52 : 40; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', fitCamera); fitCamera();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xc4d4e6, 1.05));
+const sun = new THREE.DirectionalLight(0xfff6e8, 0.62);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 80 });
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+// ---------------- helpers ----------------
+const mats = {};
+const mat = c => mats[c] || (mats[c] = new THREE.MeshLambertMaterial({ color: c }));
+function mesh(geo, color, x = 0, y = 0, z = 0, parent = scene) {
+  const m = new THREE.Mesh(geo, typeof color === 'number' ? mat(color) : color);
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+  if (parent) parent.add(m);
+  return m;
+}
+// merge several primitives into one vertex-colored geometry (one draw call)
+function merge(parts) {
+  const pos = [], nor = [], col = [], c = new THREE.Color();
+  for (const [g0, color, x, y, z, ry = 0] of parts) {
+    const g = g0.index ? g0.toNonIndexed() : g0.clone();
+    if (ry) g.rotateY(ry);
+    g.translate(x, y, z);
+    const p = g.attributes.position.array, n = g.attributes.normal.array;
+    c.set(color);
+    for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+    for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+function roundRect(x, X, Y, w, h, r) {
+  x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r);
+  x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath();
+}
+function groundLabel(size, draw) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.rotation.set(-PI / 2, 0, LABEL_ROT);
+  m.renderOrder = 1;
+  const redraw = (...a) => { const x = cv.getContext('2d'); x.clearRect(0, 0, 256, 256); draw(x, ...a); tex.needsUpdate = true; };
+  redraw();
+  return { mesh: m, redraw };
+}
+function zoneMarker(x, z, icon, tint) {
+  const L = groundLabel(2, c => {
+    c.fillStyle = 'rgba(30,40,58,0.35)'; roundRect(c, 14, 14, 228, 228, 30); c.fill();
+    c.lineWidth = 9; c.strokeStyle = tint; c.setLineDash([24, 14]); roundRect(c, 14, 14, 228, 228, 30); c.stroke();
+    drawIcon(c, icon, 128, 128, 1);
+  });
+  L.mesh.position.set(x, 0.02, z); scene.add(L.mesh);
+  return L.mesh;
+}
+// little hand-drawn pictograms so nothing depends on emoji fonts
+function drawIcon(c, icon, cx, cy, s) {
+  c.save(); c.translate(cx, cy); c.scale(s, s); c.lineJoin = 'round'; c.lineCap = 'round';
+  const W_ = 'rgba(255,255,255,0.92)';
+  if (icon === 'meat') {
+    c.fillStyle = '#e8737b'; c.beginPath(); c.ellipse(-8, 0, 46, 34, -0.3, 0, 2 * PI); c.fill();
+    c.fillStyle = '#fbe3d8'; c.beginPath(); c.ellipse(-14, -4, 14, 10, -0.3, 0, 2 * PI); c.fill();
+    c.strokeStyle = '#fbe3d8'; c.lineWidth = 12; c.beginPath(); c.moveTo(30, 18); c.lineTo(56, 40); c.stroke();
+  } else if (icon === 'steak') {
+    c.fillStyle = '#9a5532'; c.beginPath(); c.ellipse(0, 0, 50, 36, -0.2, 0, 2 * PI); c.fill();
+    c.strokeStyle = '#5b2c16'; c.lineWidth = 7;
+    for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(i * 16 - 16, -24); c.lineTo(i * 16 + 16, 24); c.stroke(); }
+  } else if (icon === 'log') {
+    c.fillStyle = '#b5652f'; c.fillRect(-50, -20, 90, 40);
+    c.fillStyle = '#f0c98a'; c.beginPath(); c.ellipse(42, 0, 14, 20, 0, 0, 2 * PI); c.fill();
+    c.strokeStyle = '#c48a4a'; c.lineWidth = 4; c.beginPath(); c.ellipse(42, 0, 6, 10, 0, 0, 2 * PI); c.stroke();
+  } else if (icon === 'cash') {
+    c.fillStyle = '#3fae4a'; roundRect(c, -52, -30, 104, 60, 10); c.fill();
+    c.strokeStyle = '#24742d'; c.lineWidth = 7; c.beginPath(); c.ellipse(0, 0, 16, 18, 0, 0, 2 * PI); c.stroke();
+  } else if (icon === 'person') {
+    c.fillStyle = W_; c.beginPath(); c.arc(0, -22, 18, 0, 2 * PI); c.fill();
+    c.beginPath(); c.moveTo(-30, 34); c.quadraticCurveTo(-30, 2, 0, 2); c.quadraticCurveTo(30, 2, 30, 34); c.fill();
+  } else if (icon === 'saw') {
+    c.fillStyle = W_; c.beginPath();
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 2 * PI, r = i % 2 ? 30 : 40; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    c.fill(); c.fillStyle = 'rgba(30,40,58,0.8)'; c.beginPath(); c.arc(0, 0, 9, 0, 2 * PI); c.fill();
+  } else if (icon === 'pack') {
+    c.fillStyle = W_; roundRect(c, -28, -26, 56, 62, 12); c.fill();
+    c.strokeStyle = W_; c.lineWidth = 8; c.beginPath(); c.arc(0, -28, 14, PI, 0); c.stroke();
+    c.fillStyle = 'rgba(30,40,58,0.8)'; c.fillRect(-18, 2, 36, 6);
+  } else if (icon === 'boot') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-20, -36); c.lineTo(8, -36); c.lineTo(8, 8); c.lineTo(38, 18);
+    c.lineTo(38, 34); c.lineTo(-20, 34); c.closePath(); c.fill();
+  } else if (icon === 'tower') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-30, 38); c.lineTo(-16, -14); c.lineTo(16, -14); c.lineTo(30, 38); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-28, -14); c.lineTo(0, -40); c.lineTo(28, -14); c.closePath(); c.fill();
+  } else if (icon === 'fire') {
+    c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
+    c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
+  }
+  c.restore();
+}
+
+// ---------------- ground & camp ----------------
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0xf3f7fb));
+ground.rotation.x = -PI / 2; ground.receiveShadow = true; scene.add(ground);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(CAMP.x1 - CAMP.x0, CAMP.z1 - CAMP.z0), mat(0xc99a6c));
+floor.rotation.x = -PI / 2; floor.position.set(0, 0.012, (CAMP.z0 + CAMP.z1) / 2); floor.receiveShadow = true; scene.add(floor);
+// trodden path to customers
+const path = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 16), mat(0xe2e9f0));
+path.rotation.x = -PI / 2; path.position.set(4, 0.006, 16); path.receiveShadow = true; scene.add(path);
+
+const colliders = [];   // {x0,x1,z0,z1,on}
+const circles = [];     // {x,z,r,on}
+const FENCE_SEGS = [
+  [-10, -6, -2.5, -6], [2.5, -6, 10, -6],
+  [-10, 8, 2, 8], [6, 8, 10, 8],
+  [-10, -6, -10, 0], [-10, 3, -10, 8],
+  [10, -6, 10, 0], [10, 3, 10, 8],
+];
+{
+  const postGeo = merge([
+    [new THREE.CylinderGeometry(0.15, 0.17, 1.15, 6), 0xc96f35, 0, 0.575, 0],
+    [new THREE.ConeGeometry(0.17, 0.25, 6), 0xffffff, 0, 1.27, 0],
+  ]);
+  const spots = [];
+  for (const [x0, z0, x1, z1] of FENCE_SEGS) {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.34);
+    for (let i = 0; i <= n; i++) spots.push([x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n]);
+    colliders.push({ x0: Math.min(x0, x1) - 0.2, x1: Math.max(x0, x1) + 0.2, z0: Math.min(z0, z1) - 0.2, z1: Math.max(z0, z1) + 0.2 });
+  }
+  const inst = new THREE.InstancedMesh(postGeo, vcMat, spots.length);
+  const o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x, 0, z); o.rotation.y = rand(0, 3); o.scale.y = rand(0.92, 1.08); o.updateMatrix(); inst.setMatrixAt(i, o.matrix); });
+  inst.castShadow = inst.receiveShadow = true; scene.add(inst);
+}
+
+// ---------------- items ----------------
+const GEO = {
+  log: new THREE.CylinderGeometry(0.17, 0.17, 0.95, 10),
+  meat: new THREE.CylinderGeometry(0.25, 0.3, 0.15, 10),
+  steak: new THREE.CylinderGeometry(0.26, 0.28, 0.12, 10),
+  cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
+};
+const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08 };
+function makeItem(t) {
+  let m;
+  if (t === 'log') { m = new THREE.Mesh(GEO.log, [mat(0xa75a2a), mat(0xf0c98a), mat(0xf0c98a)]); m.rotation.z = PI / 2; }
+  else if (t === 'meat') m = new THREE.Mesh(GEO.meat, mat(0xe2666f));
+  else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
+  else m = new THREE.Mesh(GEO.cash, mat(0x45b04f));
+  m.castShadow = true;
+  return m;
+}
+
+// ---------------- flying items ----------------
+const flyers = [];
+function fly(m, from, targetFn, dur, onDone, arc = 1.1) {
+  if (m.parent !== scene) scene.add(m);
+  m.position.copy(from);
+  flyers.push({ m, from: from.clone(), targetFn, t: 0, dur, onDone, arc });
+}
+function updateFlyers(dt) {
+  for (let i = flyers.length - 1; i >= 0; i--) {
+    const f = flyers[i]; f.t += dt;
+    const k = Math.min(1, f.t / f.dur), to = f.targetFn();
+    f.m.position.lerpVectors(f.from, to, k);
+    f.m.position.y += Math.sin(k * PI) * f.arc;
+    if (k >= 1) { flyers.splice(i, 1); f.onDone && f.onDone(); }
+  }
+}
+
+// ---------------- carriers (stack on back) ----------------
+class Carrier {
+  constructor(group, cap) {
+    this.group = group; this.cap = cap; this.items = []; this.pending = 0;
+    this.stack = new THREE.Group(); this.stack.position.set(0, 0.95, -0.42); group.add(this.stack);
+  }
+  get load() { return this.items.length + this.pending; }
+  full() { return this.load >= this.cap; }
+  count(t) { let n = 0; for (const it of this.items) if (it.type === t) n++; return n; }
+  height() { let y = 0; for (const it of this.items) y += H[it.type]; return y; }
+  topWorld() { this.group.updateMatrixWorld(); return this.stack.localToWorld(new V3(0, this.height() + 0.1, 0)); }
+  receive(type, m, from) {
+    this.pending++;
+    fly(m, from, () => this.topWorld(), 0.28, () => {
+      this.pending--; this.items.push({ type, m });
+      this.stack.add(m); this.restack();
+    });
+  }
+  take(type) {
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      if (type && this.items[i].type !== type) continue;
+      const it = this.items.splice(i, 1)[0], wp = new V3();
+      it.m.getWorldPosition(wp); this.stack.remove(it.m); this.restack();
+      return { type: it.type, m: it.m, pos: wp };
+    }
+    return null;
+  }
+  restack() { let y = 0; for (const it of this.items) { it.m.position.set(0, y + H[it.type] / 2, 0); y += H[it.type]; } }
+}
+
+// ---------------- piles on the ground ----------------
+class Pile {
+  constructor(x, z, cols, rows, max, sx = 0.6, sz = 0.6, dy = 0.17) {
+    Object.assign(this, { x, z, cols, rows, max, sx, sz, dy }); this.items = []; this.pending = 0;
+    this.center = new V3(x, 0, z);
+  }
+  get n() { return this.items.length; }
+  free() { return this.max - this.items.length - this.pending; }
+  slot(i) {
+    const per = this.cols * this.rows, layer = Math.floor(i / per), k = i % per;
+    return new V3(this.x + (k % this.cols - (this.cols - 1) / 2) * this.sx, 0.08 + layer * this.dy,
+      this.z + (Math.floor(k / this.cols) - (this.rows - 1) / 2) * this.sz);
+  }
+  receive(m, from, cb) {
+    const idx = this.items.length + this.pending; this.pending++;
+    fly(m, from, () => this.slot(idx), 0.28, () => {
+      this.pending--; m.position.copy(this.slot(this.items.length)); this.items.push(m); cb && cb();
+    });
+  }
+  take() { return this.items.pop(); }
+}
+class CashPile extends Pile {
+  constructor(x, z) { super(x, z, 2, 3, 48, 0.6, 0.36, 0.08); this.value = 0; this.icon = zoneMarker(x, z, 'cash', '#7be38a'); }
+  addValue(v, from) {
+    this.value += v;
+    const bills = Math.max(1, Math.round(v / 5));
+    for (let i = 0; i < bills && this.free() > 0; i++) this.receive(makeItem('cash'), from.clone().add(new V3(0, i * 0.1, 0)));
+  }
+}
+
+// ---------------- people ----------------
+const PG = {
+  leg: new THREE.BoxGeometry(0.2, 0.46, 0.22),
+  body: new THREE.CylinderGeometry(0.33, 0.42, 0.78, 10),
+  trim: new THREE.TorusGeometry(0.29, 0.085, 6, 14),
+  head: new THREE.SphereGeometry(0.26, 14, 10),
+  hood: new THREE.SphereGeometry(0.33, 14, 10),
+  eye: new THREE.SphereGeometry(0.04, 6, 6),
+  arm: new THREE.BoxGeometry(0.16, 0.5, 0.18),
+  handle: new THREE.CylinderGeometry(0.035, 0.035, 0.75, 6),
+  axe: new THREE.BoxGeometry(0.05, 0.22, 0.26),
+  spear: new THREE.ConeGeometry(0.07, 0.22, 6),
+};
+function makePerson(color, tool, s = 1) {
+  const g = new THREE.Group();
+  const legL = mesh(PG.leg, 0x2b3442, -0.13, 0.23, 0, g), legR = mesh(PG.leg, 0x2b3442, 0.13, 0.23, 0, g);
+  mesh(PG.body, color, 0, 0.82, 0, g);
+  mesh(PG.trim, 0xf6f6f6, 0, 1.2, 0, g).rotation.x = PI / 2;
+  const hood = mesh(PG.hood, color, 0, 1.46, -0.07, g); hood.scale.set(1, 1, 0.95);
+  mesh(PG.head, 0xf2c6a0, 0, 1.43, 0.06, g);
+  mesh(PG.eye, 0x1a1a1a, -0.09, 1.47, 0.3, g); mesh(PG.eye, 0x1a1a1a, 0.09, 1.47, 0.3, g);
+  const arm = (x) => { const p = new THREE.Group(); p.position.set(x, 1.1, 0); g.add(p); mesh(PG.arm, color, 0, -0.22, 0, p); return p; };
+  const armL = arm(-0.42), armR = arm(0.42);
+  if (tool === 'axe') {
+    const h = mesh(PG.handle, 0x7a4a26, 0, -0.42, 0.25, armR); h.rotation.x = PI / 2;
+    mesh(PG.axe, 0xc9d3dc, 0, -0.42, 0.56, armR).rotation.x = PI / 2;
+  } else if (tool === 'spear') {
+    const h = mesh(PG.handle, 0x7a4a26, 0, -0.42, 0.3, armR); h.rotation.x = PI / 2; h.scale.y = 1.4;
+    mesh(PG.spear, 0xc9d3dc, 0, -0.42, 0.88, armR).rotation.x = PI / 2;
+  }
+  g.scale.setScalar(s);
+  scene.add(g);
+  return { group: g, legL, legR, armL, armR, phase: 0, swing: 0 };
+}
+function animPerson(p, moving, dt) {
+  if (moving) p.phase += dt * 11; else p.phase *= 0.85;
+  const s = Math.sin(p.phase) * (moving ? 0.7 : 0);
+  p.legL.rotation.x = s; p.legR.rotation.x = -s; p.armL.rotation.x = -s * 0.8;
+  if (p.swing > 0) { p.swing = Math.max(0, p.swing - dt * 4); p.armR.rotation.x = -Math.sin(p.swing * PI) * 1.8; }
+  else p.armR.rotation.x = s * 0.8;
+}
+const lerpAng = (a, b, t) => { let d = ((b - a + PI) % (2 * PI) + 2 * PI) % (2 * PI) - PI; return a + d * t; };
+function stepToward(obj, target, speed, dt, stop = 0.05) {
+  const dx = target.x - obj.position.x, dz = target.z - obj.position.z, d = Math.hypot(dx, dz);
+  if (d <= stop) return true;
+  const s = Math.min(d - stop * 0.5, speed * dt);
+  obj.position.x += dx / d * s; obj.position.z += dz / d * s;
+  obj.rotation.y = lerpAng(obj.rotation.y, Math.atan2(dx, dz), 0.25);
+  return d - s <= stop;
+}
+// route through camp gates when crossing the fence
+function navStep(obj, target, speed, dt, stop) {
+  const p = obj.position;
+  if (inside(p) !== inside(target)) {
+    let best = null, bd = 1e9;
+    for (const g of GATES) {
+      const a = inside(p) ? g.in : g.out, b = inside(p) ? g.out : g.in;
+      const d = d2(p, a) + d2(a, b) + d2(b, target);
+      if (d < bd) { bd = d; best = [a, b]; }
+    }
+    const wp = d2(p, best[0]) > 0.45 && d2(p, best[1]) > d2(best[0], best[1]) ? best[0] : best[1];
+    stepToward(obj, wp, speed, dt, 0.05);
+    return false;
+  }
+  return stepToward(obj, target, speed, dt, stop);
+}
+
+// ---------------- trees ----------------
+const TREE_GEO = merge([
+  [new THREE.CylinderGeometry(0.18, 0.26, 0.9, 7), 0x7a4a26, 0, 0.45, 0],
+  [new THREE.ConeGeometry(1.15, 1.45, 8), 0x3c78b8, 0, 1.35, 0],
+  [new THREE.ConeGeometry(0.9, 1.2, 8), 0x4b8ccc, 0, 2.0, 0, 0.3],
+  [new THREE.ConeGeometry(0.58, 1.0, 8), 0x5c9fdc, 0, 2.6, 0],
+  [new THREE.ConeGeometry(0.25, 0.4, 8), 0xffffff, 0, 3.0, 0],
+]);
+const STUMP_GEO = merge([
+  [new THREE.CylinderGeometry(0.24, 0.28, 0.3, 8), 0x7a4a26, 0, 0.15, 0],
+  [new THREE.CylinderGeometry(0.22, 0.22, 0.02, 8), 0xf0c98a, 0, 0.31, 0],
+]);
+const trees = [];
+class Tree {
+  constructor(x, z) {
+    this.pos = new V3(x, 0, z); this.hp = 3; this.down = false; this.regrow = 0; this.shake = 0; this.grow = 1;
+    this.m = new THREE.Mesh(TREE_GEO, vcMat); this.m.castShadow = this.m.receiveShadow = true;
+    this.m.position.copy(this.pos); this.m.rotation.y = rand(0, 6); this.base = rand(0.85, 1.15); this.m.scale.setScalar(this.base);
+    this.stump = new THREE.Mesh(STUMP_GEO, vcMat); this.stump.position.copy(this.pos); this.stump.castShadow = true;
+    this.stump.visible = false;
+    scene.add(this.m, this.stump);
+    this.circle = { x, z, r: 0.45, on: () => true };
+    circles.push(this.circle);
+  }
+  hit(carrier) {
+    if (this.down || carrier.full()) return false;
+    this.hp--; this.shake = 0.3;
+    carrier.receive('log', makeItem('log'), this.pos.clone().add(new V3(0, 1.2, 0)));
+    if (this.hp <= 0) { this.down = true; this.regrow = 18; this.m.visible = false; this.stump.visible = true; burst(this.pos, 0x4b8ccc); }
+    return true;
+  }
+  update(dt) {
+    if (this.down) {
+      this.regrow -= dt;
+      if (this.regrow <= 0) { this.down = false; this.hp = 3; this.grow = 0; this.m.visible = true; this.stump.visible = false; }
+      return;
+    }
+    if (this.grow < 1) this.grow = Math.min(1, this.grow + dt * 1.5);
+    const sh = this.shake > 0 ? Math.sin(this.shake * 60) * 0.06 * this.shake / 0.3 : 0;
+    this.shake = Math.max(0, this.shake - dt);
+    this.m.rotation.z = sh;
+    this.m.scale.setScalar(this.base * (0.2 + 0.8 * easeOutBack(this.grow)));
+  }
+}
+const easeOutBack = t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
+  for (let x = x0; x <= x1; x += 2.5) for (let z = z0; z <= z1; z += 2.5) {
+    if (Math.random() < 0.62) trees.push(new Tree(x + rand(-0.6, 0.6), z + rand(-0.6, 0.6)));
+  }
+}
+// decorative backdrop forest (single draw call)
+{
+  const spots = [];
+  for (let x = -48; x <= 48; x += 2.6) for (let z = -50; z <= 44; z += 2.6) {
+    const px = x + rand(-0.9, 0.9), pz = z + rand(-0.9, 0.9);
+    const inPlay = px > BOUNDS.x0 - 1 && px < BOUNDS.x1 + 1 && pz > BOUNDS.z0 - 1 && pz < BOUNDS.z1 + 1;
+    if (inPlay || (px > 1 && px < 7 && pz > 0)) continue;
+    if (Math.random() < 0.8) spots.push([px, pz]);
+  }
+  const inst = new THREE.InstancedMesh(TREE_GEO, vcMat, spots.length);
+  const o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x, 0, z); o.rotation.y = rand(0, 6); o.scale.setScalar(rand(0.9, 1.4)); o.updateMatrix(); inst.setMatrixAt(i, o.matrix); });
+  inst.receiveShadow = true; scene.add(inst);
+}
+
+// ---------------- particles ----------------
+const puffs = [];
+const PUFF_GEO = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+function burst(pos, color, n = 8) {
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(PUFF_GEO, mat(color));
+    m.position.copy(pos).add(new V3(0, rand(0.5, 1.5), 0));
+    scene.add(m);
+    puffs.push({ m, v: new V3(rand(-3, 3), rand(2, 5), rand(-3, 3)), life: rand(0.4, 0.7) });
+  }
+}
+function updatePuffs(dt) {
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i]; p.life -= dt; p.v.y -= 14 * dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt * 8;
+    p.m.scale.setScalar(Math.max(0.01, p.life * 1.6));
+    if (p.life <= 0 || p.m.position.y < 0) { scene.remove(p.m); puffs.splice(i, 1); }
+  }
+}
+// falling snow
+const SNOW_N = 700;
+const snowGeo = new THREE.BufferGeometry();
+const snowPos = new Float32Array(SNOW_N * 3);
+for (let i = 0; i < SNOW_N; i++) { snowPos[i * 3] = rand(-25, 25); snowPos[i * 3 + 1] = rand(0, 24); snowPos[i * 3 + 2] = rand(-25, 25); }
+snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, transparent: true, opacity: 0.9 }));
+scene.add(snow);
+
+// ---------------- ground items (meat dropped by boars) ----------------
+const groundItems = [];
+function dropGround(type, pos) {
+  const m = makeItem(type), to = pos.clone().add(new V3(rand(-0.9, 0.9), 0, rand(-0.9, 0.9)));
+  to.y = 0.1;
+  const gi = { type, m, ready: false };
+  groundItems.push(gi);
+  fly(m, pos.clone().add(new V3(0, 0.6, 0)), () => to, 0.35, () => { gi.ready = true; m.rotation.y = rand(0, 3); }, 1.4);
+}
+function pickupGround(carrier, pos, type, r = 1.3) {
+  for (let i = groundItems.length - 1; i >= 0; i--) {
+    const gi = groundItems[i];
+    if (!gi.ready || (type && gi.type !== type) || carrier.full()) continue;
+    if (d2(gi.m.position, pos) < r) { groundItems.splice(i, 1); carrier.receive(gi.type, gi.m, gi.m.position.clone()); }
+  }
+}
+
+// ---------------- frost boars ----------------
+const boars = [];
+const BG = {
+  body: new THREE.BoxGeometry(0.7, 0.62, 1.1), head: new THREE.BoxGeometry(0.52, 0.48, 0.5),
+  snout: new THREE.BoxGeometry(0.28, 0.2, 0.12), tusk: new THREE.ConeGeometry(0.04, 0.2, 5),
+  leg: new THREE.BoxGeometry(0.16, 0.36, 0.16), ear: new THREE.ConeGeometry(0.08, 0.18, 4),
+};
+class Boar {
+  constructor(x, z) {
+    this.g = new THREE.Group(); this.g.position.set(x, 0, z);
+    this.mat = new THREE.MeshLambertMaterial({ color: 0xeef1f6, emissive: 0x000000 });
+    const b = mesh(BG.body, this.mat, 0, 0.62, 0, this.g);
+    mesh(BG.head, this.mat, 0, 0.72, 0.68, this.g);
+    mesh(BG.snout, 0xe9a3a3, 0, 0.62, 0.97, this.g);
+    const tL = mesh(BG.tusk, 0xffffff, -0.14, 0.62, 0.96, this.g), tR = mesh(BG.tusk, 0xffffff, 0.14, 0.62, 0.96, this.g);
+    tL.rotation.x = tR.rotation.x = -0.6;
+    mesh(BG.ear, 0xd4dae3, -0.16, 1.0, 0.6, this.g); mesh(BG.ear, 0xd4dae3, 0.16, 1.0, 0.6, this.g);
+    mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), 0x1a1a1a, -0.13, 0.82, 0.93, this.g);
+    mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), 0x1a1a1a, 0.13, 0.82, 0.93, this.g);
+    this.legs = [[-0.22, 0.33], [0.22, 0.33], [-0.22, -0.35], [0.22, -0.35]].map(([lx, lz]) => {
+      const p = new THREE.Group(); p.position.set(lx, 0.36, lz); this.g.add(p); mesh(BG.leg, 0xb9c2ce, 0, -0.18, 0, p); return p;
+    });
+    this.hp = 3; this.flash = 0; this.target = null; this.idle = rand(0, 2); this.phase = 0; this.alive = true; this.spawn = 0;
+    this.g.scale.setScalar(0.01);
+    scene.add(this.g); boars.push(this);
+  }
+  get pos() { return this.g.position; }
+  hit(dmg) {
+    if (!this.alive) return;
+    this.hp -= dmg; this.flash = 0.15;
+    burst(this.pos, 0xffffff, 4);
+    if (this.hp <= 0) {
+      this.alive = false; scene.remove(this.g); boars.splice(boars.indexOf(this), 1);
+      burst(this.pos, 0xe2666f, 10);
+      for (let i = 0; i < 3; i++) dropGround('meat', this.pos.clone());
+    } else {
+      // flee a little
+      this.target = new V3(clamp(this.pos.x + rand(-4, 4), FIELD.x0, FIELD.x1), 0, clamp(this.pos.z + rand(-4, 4), FIELD.z0, FIELD.z1));
+      this.idle = 0;
+    }
+  }
+  update(dt) {
+    this.spawn = Math.min(1, this.spawn + dt * 2); this.g.scale.setScalar(easeOutBack(this.spawn));
+    if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
+    let moving = false;
+    if (this.idle > 0) this.idle -= dt;
+    else {
+      if (!this.target) this.target = new V3(rand(FIELD.x0, FIELD.x1), 0, rand(FIELD.z0, FIELD.z1));
+      moving = true;
+      if (stepToward(this.g, this.target, this.flash > -0.6 ? 2.6 : 1.3, dt, 0.1)) { this.target = null; this.idle = rand(1, 3.5); }
+    }
+    if (moving) this.phase += dt * 12;
+    this.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(this.phase + (i % 2 ? PI : 0)) * 0.6 : 0; });
+  }
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+let boarTimer = 0;
+const maxBoars = () => 5 + (padLevel('hunter') + padLevel('tower')) * 2;
+
+// ---------------- stations ----------------
+const stationGroup = (x, z) => { const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); return g; };
+function popIn(g) { g.userData.pop = 0; g.scale.setScalar(0.01); popping.push(g); }
+const popping = [];
+
+// Grill
+const grill = { pos: new V3(-5, 0, -3), input: new Pile(-7.6, -3, 3, 3, 27, 0.62, 0.62, 0.17), output: new Pile(-2.4, -3, 3, 3, 36, 0.62, 0.62, 0.14), t: 0 };
+{
+  const g = stationGroup(-5, -3);
+  mesh(new THREE.CylinderGeometry(1.05, 1.15, 0.7, 12), 0x8f949c, 0, 0.35, 0, g);
+  mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 12), 0x3a3f47, 0, 0.72, 0, g);
+  for (let i = -3; i <= 3; i++) mesh(new THREE.BoxGeometry(0.04, 0.04, 1.5), 0x23272d, i * 0.2, 0.92, 0, g);
+  grill.fire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.7, 7), new THREE.MeshBasicMaterial({ color: 0xffa23a }));
+  grill.fire.position.set(0, 0.95, 0); g.add(grill.fire);
+  grill.fire2 = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.5, 7), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
+  grill.fire2.position.set(0.1, 0.9, 0.1); g.add(grill.fire2);
+  // chimney hood
+  for (const [x, z] of [[-0.75, -0.75], [0.75, -0.75], [-0.75, 0.75], [0.75, 0.75]]) mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.8, 5), 0x5a5f68, x, 0.9, z, g);
+  mesh(new THREE.ConeGeometry(1.2, 0.6, 4), 0xa35a2e, 0, 2.0, 0, g).rotation.y = PI / 4;
+  mesh(new THREE.ConeGeometry(0.95, 0.12, 4), 0xffffff, 0, 2.32, 0, g).rotation.y = PI / 4;
+  grill.cooking = makeItem('meat'); grill.cooking.position.set(0, 1.0, 0); grill.cooking.visible = false; g.add(grill.cooking);
+  grill.top = new V3(-5, 1.0, -3);
+  colliders.push({ x0: -6.2, x1: -3.8, z0: -4.2, z1: -1.8 });
+  zoneMarker(-7.6, -3, 'meat', '#ff9aa0');
+  zoneMarker(-2.4, -3, 'steak', '#ffc08a');
+}
+function updateGrill(dt) {
+  grill.fire.scale.y = 1 + Math.sin(performance.now() / 90) * 0.15;
+  grill.fire2.scale.y = 1 + Math.cos(performance.now() / 70) * 0.2;
+  grill.t += dt;
+  grill.cooking.visible = grill.input.n > 0;
+  const rate = 1.0 / (1 + padLevel('grill') * 0.8);
+  if (grill.t > rate && grill.input.n > 0 && grill.output.free() > 0) {
+    grill.t = 0;
+    const m = grill.input.take();
+    grill.output.pending++;
+    fly(m, m.position.clone(), () => grill.top, 0.25, () => {
+      scene.remove(m); grill.output.pending--;
+      const s = makeItem('steak'); burst(grill.top, 0xffa23a, 3);
+      grill.output.receive(s, grill.top.clone());
+    });
+  }
+}
+
+// Counter + customers
+const counter = { pos: new V3(4, 0, 5), input: new Pile(4, 3.3, 3, 3, 45, 0.62, 0.62, 0.14), cash: null, t: 0 };
+{
+  const g = stationGroup(4, 5);
+  mesh(new THREE.BoxGeometry(3, 1, 0.9), 0xb8733d, 0, 0.5, 0, g);
+  mesh(new THREE.BoxGeometry(3.2, 0.12, 1.05), 0x7d4a26, 0, 1.06, 0, g);
+  for (const x of [-1.4, 1.4]) mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 6), 0x7d4a26, x, 1.9, 0, g);
+  const awn = mesh(new THREE.BoxGeometry(3.4, 0.12, 1.4), 0xd84a3a, 0, 2.7, 0, g); awn.rotation.x = 0.18;
+  mesh(new THREE.BoxGeometry(3.4, 0.1, 1.2), 0xffffff, 0, 2.82, -0.05, g).rotation.x = 0.18;
+  counter.sign = groundLabel(1.3, c => { c.fillStyle = '#fff3d6'; roundRect(c, 10, 60, 236, 136, 24); c.fill(); drawIcon(c, 'steak', 128, 128, 1.2); });
+  counter.sign.mesh.rotation.set(0, 0, 0); counter.sign.mesh.position.set(0, 2.2, 0.5); g.add(counter.sign.mesh);
+  colliders.push({ x0: 2.4, x1: 5.6, z0: 4.5, z1: 5.5 });
+  zoneMarker(4, 3.3, 'steak', '#ffc08a');
+  counter.cash = new CashPile(7.4, 3.3);
+}
+const customers = [];
+let custTimer = 2, served = 0;
+const QUEUE = i => new V3(4, 0, 6.3 + i * 1.15);
+const PARKAS = [0xe0a43a, 0x8e5bd0, 0xd65a8f, 0x4fb0a8, 0xe3713d, 0x6c7fd8, 0x9c6b4a];
+function spawnCustomer() {
+  const p = makePerson(PARKAS[randi(0, PARKAS.length - 1)], null, 0.9);
+  p.group.position.set(4 + rand(-0.5, 0.5), 0, 22); p.group.rotation.y = PI;
+  const c = { p, want: randi(1, 3), got: 0, incoming: 0, state: 'queue', slot: customers.filter(c => c.state === 'queue').length };
+  const bubble = groundLabel(1.0, (x, n) => {
+    x.fillStyle = '#ffffff'; roundRect(x, 18, 30, 220, 150, 40); x.fill();
+    x.beginPath(); x.moveTo(110, 178); x.lineTo(128, 220); x.lineTo(146, 178); x.fill();
+    drawIcon(x, 'steak', 92, 105, 0.8); x.fillStyle = '#1d2a3a'; x.font = 'bold 64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(String(n ?? c.want), 182, 108);
+  });
+  bubble.mesh.rotation.set(0, 0, 0); bubble.mesh.position.set(0, 2.35, 0); p.group.add(bubble.mesh);
+  c.bubble = bubble; c.bag = makeItem('steak'); c.bag.scale.setScalar(0.8); c.bag.position.set(0, 0.95, 0.42); c.bag.visible = false; p.group.add(c.bag);
+  customers.push(c);
+}
+function updateCustomers(dt) {
+  const queueing = customers.filter(c => c.state === 'queue').length;
+  custTimer -= dt;
+  if (custTimer <= 0 && queueing < 6) { spawnCustomer(); custTimer = Math.max(1.6, 4.2 - served * 0.03); }
+  counter.t += dt;
+  for (let i = customers.length - 1; i >= 0; i--) {
+    const c = customers[i], g = c.p.group;
+    // keep bubble facing the camera
+    c.bubble.mesh.quaternion.copy(camera.quaternion).premultiply(g.quaternion.clone().invert());
+    if (c.state === 'queue') {
+      const target = QUEUE(c.slot), arrived = stepToward(g, target, 3.2, dt, 0.05);
+      animPerson(c.p, !arrived, dt);
+      if (arrived) g.rotation.y = lerpAng(g.rotation.y, PI, 0.2);
+      if (arrived && c.slot === 0 && counter.t > 0.3 && c.got + c.incoming < c.want && counter.input.n > 0) {
+        counter.t = 0;
+        const m = counter.input.take(); c.incoming++;
+        fly(m, m.position.clone(), () => g.position.clone().add(new V3(0, 1.0, 0)), 0.3, () => {
+          scene.remove(m); c.incoming--; c.got++; c.bag.visible = true;
+          c.bubble.redraw(c.want - c.got);
+          if (c.got >= c.want) {
+            counter.cash.addValue(c.want * STEAK_PRICE, g.position.clone().add(new V3(0, 1, 0)));
+            served++; c.state = 'leave'; c.bubble.mesh.visible = false;
+            for (const o of customers) if (o.state === 'queue' && o.slot > 0) o.slot--;
+          }
+        });
+      }
+    } else {
+      const out = new V3(g.position.x < 4 ? -2 : 10, 0, 24);
+      const done = stepToward(g, out, 3.4, dt, 0.3);
+      animPerson(c.p, true, dt);
+      if (done) { scene.remove(g); customers.splice(i, 1); }
+    }
+  }
+}
+
+// Sawmill
+const sawmill = { unlocked: false, pos: new V3(-6.5, 0, 4.6), input: new Pile(-8.7, 4.6, 2, 3, 30, 1.0, 0.42, 0.34), cash: null, t: 0 };
+function unlockSawmill(instant) {
+  if (sawmill.unlocked) return;
+  sawmill.unlocked = true;
+  const g = stationGroup(-6.5, 4.6); sawmill.g = g;
+  mesh(new THREE.BoxGeometry(2.0, 0.8, 1.4), 0x9a6234, 0, 0.4, 0, g);
+  mesh(new THREE.BoxGeometry(2.2, 0.1, 1.6), 0x6b3f1f, 0, 0.85, 0, g);
+  sawmill.blade = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.06, 18), 0xd5dde6, 0, 1.0, 0, g);
+  sawmill.blade.rotation.x = PI / 2;
+  for (const x of [-0.9, 0.9]) mesh(new THREE.BoxGeometry(0.15, 1.6, 0.15), 0x6b3f1f, x, 1.6, -0.6, g);
+  mesh(new THREE.BoxGeometry(2.4, 0.14, 1.0), 0x3f6f9f, 0, 2.45, -0.4, g).rotation.x = -0.25;
+  mesh(new THREE.BoxGeometry(2.4, 0.08, 0.8), 0xffffff, 0, 2.55, -0.45, g).rotation.x = -0.25;
+  colliders.push({ x0: -7.6, x1: -5.4, z0: 3.8, z1: 5.4 });
+  zoneMarker(-8.7, 4.6, 'log', '#f0c98a');
+  sawmill.cash = new CashPile(-6.5, 2.3);
+  if (!instant) { popIn(g); burst(sawmill.pos, 0xd3a679, 14); }
+}
+function updateSawmill(dt) {
+  if (!sawmill.unlocked) return;
+  sawmill.blade.rotation.y += dt * (sawmill.input.n ? 14 : 2);
+  sawmill.t += dt;
+  if (sawmill.t > 0.8 && sawmill.input.n > 0) {
+    sawmill.t = 0;
+    const m = sawmill.input.take(), top = new V3(-6.5, 1.0, 4.6);
+    fly(m, m.position.clone(), () => top, 0.25, () => {
+      scene.remove(m); burst(top, 0xf0c98a, 4);
+      sawmill.cash.addValue(LOG_PRICE * (1 + padLevel('sawup')), top);
+    });
+  }
+}
+
+// Watchtower
+const tower = { unlocked: false, pos: new V3(7.5, 0, -4.4), t: 0, bolts: [] };
+function unlockTower(instant) {
+  if (tower.unlocked) return;
+  tower.unlocked = true;
+  const g = stationGroup(7.5, -4.4); tower.g = g;
+  for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) mesh(new THREE.BoxGeometry(0.18, 2.6, 0.18), 0x8a5328, x, 1.3, z, g);
+  mesh(new THREE.BoxGeometry(1.5, 0.18, 1.5), 0xb8733d, 0, 2.6, 0, g);
+  mesh(new THREE.BoxGeometry(1.5, 0.45, 0.1), 0xb8733d, 0, 2.9, 0.72, g);
+  mesh(new THREE.BoxGeometry(1.5, 0.45, 0.1), 0xb8733d, 0, 2.9, -0.72, g);
+  tower.bow = new THREE.Group(); tower.bow.position.set(0, 3.1, 0); g.add(tower.bow);
+  mesh(new THREE.BoxGeometry(0.14, 0.14, 0.9), 0x5a3a1e, 0, 0, 0.1, tower.bow);
+  mesh(new THREE.BoxGeometry(1.0, 0.08, 0.1), 0x3f6f9f, 0, 0, 0.45, tower.bow);
+  mesh(new THREE.ConeGeometry(1.2, 0.8, 4), 0x3f6f9f, 0, 4.0, 0, g).rotation.y = PI / 4;
+  mesh(new THREE.ConeGeometry(0.9, 0.2, 4), 0xffffff, 0, 4.35, 0, g).rotation.y = PI / 4;
+  colliders.push({ x0: 6.8, x1: 8.2, z0: -5.1, z1: -3.7 });
+  if (!instant) { popIn(g); burst(tower.pos, 0xd3a679, 14); }
+}
+const BOLT_GEO = new THREE.CylinderGeometry(0.04, 0.04, 0.7, 5);
+function updateTower(dt) {
+  if (!tower.unlocked) return;
+  tower.t += dt;
+  let best = null, bd = 15;
+  for (const b of boars) { const d = d2(b.pos, tower.pos); if (d < bd && b.spawn >= 1) { bd = d; best = b; } }
+  if (best) tower.bow.rotation.y = lerpAng(tower.bow.rotation.y, Math.atan2(best.pos.x - tower.pos.x, best.pos.z - tower.pos.z), 0.2);
+  if (best && tower.t > 1.1) {
+    tower.t = 0;
+    const bolt = new THREE.Mesh(BOLT_GEO, mat(0x3a2a1a)); const tgt = best;
+    const from = new V3(7.5, 3.1, -4.4);
+    fly(bolt, from, () => tgt.pos.clone().add(new V3(0, 0.7, 0)), 0.35, () => { scene.remove(bolt); tgt.hit(1); }, 0.6);
+    bolt.lookAt(tgt.pos); bolt.rotateX(PI / 2);
+  }
+}
+
+// ---------------- workers ----------------
+const workers = [];
+const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a };
+class Worker {
+  constructor(kind, x, z) {
+    this.kind = kind;
+    this.p = makePerson(WCOL[kind], kind === 'lumber' ? 'axe' : kind === 'hunter' ? 'spear' : null);
+    this.g = this.p.group; this.g.position.set(x, 0, z);
+    this.c = new Carrier(this.g, kind === 'server' ? 8 : 6);
+    this.state = 'gather'; this.t = 0; this.idle = 0; this.tree = null;
+    workers.push(this);
+  }
+  update(dt) {
+    const pos = this.g.position; let moving = false;
+    this.t += dt;
+    const go = (target, stop) => { const arr = navStep(this.g, target, 3.6, dt, stop); moving = !arr; return arr; };
+    if (this.state === 'deliver') {
+      const dst = this.kind === 'lumber' ? sawmill.input : this.kind === 'hunter' ? grill.input : counter.input;
+      const type = this.kind === 'lumber' ? 'log' : this.kind === 'hunter' ? 'meat' : 'steak';
+      if (go(dst.center, 0.7) && this.t > 0.12) {
+        this.t = 0;
+        if (dst.free() > 0) { const it = this.c.take(type); if (it) dst.receive(it.m, it.pos); }
+      }
+      if (this.c.load === 0) this.state = 'gather';
+    } else if (this.kind === 'lumber') {
+      if (!this.tree || this.tree.down) this.tree = nearest(trees.filter(t => !t.down), pos);
+      if (this.tree && go(this.tree.pos, 1.3) && this.t > 0.7) {
+        this.t = 0; this.p.swing = 1; this.g.rotation.y = Math.atan2(this.tree.pos.x - pos.x, this.tree.pos.z - pos.z);
+        this.tree.hit(this.c);
+      }
+      if (this.c.full()) this.state = 'deliver';
+    } else if (this.kind === 'hunter') {
+      const meat = nearest(groundItems.filter(g => g.ready && g.type === 'meat'), pos, g => g.m.position);
+      if (meat && d2(meat.m.position, pos) < 12) { go(meat.m.position, 0.4); pickupGround(this.c, pos, 'meat', 1.0); }
+      else {
+        const b = nearest(boars, pos, b => b.pos);
+        if (b && go(b.pos, 1.5) && this.t > 0.6) { this.t = 0; this.p.swing = 1; b.hit(1); }
+        if (!b && this.c.load > 0) this.state = 'deliver';
+      }
+      if (this.c.full()) this.state = 'deliver';
+    } else if (this.kind === 'server') {
+      if (go(grill.output.center, 0.6)) {
+        if (this.t > 0.15 && grill.output.n > 0 && !this.c.full()) { this.t = 0; this.idle = 0; this.c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); }
+        this.idle += dt;
+        if (this.c.full() || (this.c.load > 0 && this.idle > 1.5)) { this.state = 'deliver'; this.idle = 0; }
+      }
+    }
+    animPerson(this.p, moving, dt);
+  }
+}
+function nearest(list, pos, get = x => x.pos) {
+  let best = null, bd = 1e9;
+  for (const x of list) { const d = d2(get(x), pos); if (d < bd) { bd = d; best = x; } }
+  return best;
+}
+
+// ---------------- build pads ----------------
+const PADS = [
+  { id: 'saw', label: 'Sawmill', icon: 'saw', costs: [30], x: -6.5, z: 4.6, req: () => true, apply: unlockSawmill },
+  { id: 'server', label: 'Hire Server', icon: 'person', costs: [80, 260], x: -1.2, z: 1.2, req: () => true, apply: () => new Worker('server', -1.2, 1.2) },
+  { id: 'bag', label: 'Bigger Pack', icon: 'pack', costs: [50, 160, 420], x: 1.6, z: -0.8, req: () => true, apply: l => { W.cap = [8, 12, 18, 26][l + 1]; player.c.cap = W.cap; } },
+  { id: 'lumber', label: 'Lumberjack', icon: 'person', costs: [120, 320], x: -3.6, z: 6.4, req: () => sawmill.unlocked, apply: () => new Worker('lumber', -3.6, 6.4) },
+  { id: 'hunter', label: 'Hire Hunter', icon: 'person', costs: [160, 380], x: 1.5, z: -4.2, req: () => true, apply: () => new Worker('hunter', 1.5, -4.2) },
+  { id: 'tower', label: 'Watchtower', icon: 'tower', costs: [240], x: 7.5, z: -4.4, req: () => padLevel('hunter') > 0, apply: unlockTower },
+  { id: 'boots', label: 'Fast Boots', icon: 'boot', costs: [120, 300], x: 7.6, z: -0.8, req: () => padLevel('bag') > 0, apply: l => { W.speed = [5, 6.2, 7.4][l + 1]; } },
+  { id: 'grill', label: 'Hotter Grill', icon: 'fire', costs: [150, 400], x: -5, z: -0.4, req: () => padLevel('server') > 0, apply: () => {} },
+  { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
+];
+const padState = {};
+const padLevel = id => (padState[id] ? padState[id].level : 0);
+for (const p of PADS) {
+  padState[p.id] = { level: 0, paid: 0 };
+  p.label3d = groundLabel(2.3, c => {
+    const st = padState[p.id], cost = p.costs[st.level] || 0, k = cost ? st.paid / cost : 0;
+    c.fillStyle = 'rgba(30,40,58,0.55)'; roundRect(c, 10, 10, 236, 236, 30); c.fill();
+    c.save(); roundRect(c, 10, 10, 236, 236, 30); c.clip(); c.fillStyle = 'rgba(80,205,110,0.7)'; c.fillRect(10, 246 - 236 * k, 236, 236 * k); c.restore();
+    c.lineWidth = 9; c.strokeStyle = '#ffffff'; c.setLineDash([26, 14]); roundRect(c, 10, 10, 236, 236, 30); c.stroke(); c.setLineDash([]);
+    drawIcon(c, p.icon, 128, 78, 0.85);
+    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = 'bold 30px "Nunito", sans-serif'; c.fillText(p.label + (p.costs.length > 1 ? ' ' + (st.level + 1) : ''), 128, 148);
+    c.font = '46px "Lilita One", sans-serif'; c.fillText('$' + fmt(cost - st.paid), 128, 200);
+  });
+  p.label3d.mesh.position.set(p.x, 0.03, p.z);
+}
+let padTick = 0;
+function refreshPads() {
+  for (const p of PADS) {
+    const st = padState[p.id], show = st.level < p.costs.length && p.req();
+    if (show && !p.label3d.mesh.parent) { scene.add(p.label3d.mesh); p.label3d.redraw(); }
+    if (!show && p.label3d.mesh.parent) scene.remove(p.label3d.mesh);
+  }
+}
+function payPad(p) {
+  const st = padState[p.id], cost = p.costs[st.level];
+  if (W.cash <= 0) return;
+  const chunk = Math.min(W.cash, cost - st.paid, Math.max(1, Math.ceil(cost / 30)));
+  W.cash -= chunk; st.paid += chunk; setCash();
+  const bill = makeItem('cash');
+  fly(bill, player.g.position.clone().add(new V3(0, 1.2, 0)), () => new V3(p.x, 0.1, p.z), 0.22, () => scene.remove(bill), 0.8);
+  if (st.paid >= cost) {
+    st.level++; st.paid = 0; p.lock = true;
+    p.apply(st.level - 1, false);
+    burst(new V3(p.x, 0, p.z), 0x7be38a, 16);
+    refreshPads(); save();
+  }
+  p.label3d.redraw();
+}
+
+// ---------------- player ----------------
+const player = { p: makePerson(0x2f78d6, 'axe') };
+player.g = player.p.group; player.g.position.set(0, 0, 2);
+player.c = new Carrier(player.g, W.cap);
+player.atk = 0; player.tick = 0;
+const maxLabel = (() => {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
+  const x = cv.getContext('2d'); x.fillStyle = '#e8433a'; roundRect(x, 8, 8, 240, 80, 24); x.fill();
+  x.fillStyle = '#fff'; x.font = '60px "Lilita One", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('MAX', 128, 52);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+  s.scale.set(1.2, 0.45, 1); s.renderOrder = 5; scene.add(s); s.visible = false;
+  s.redraw = () => { x.clearRect(0, 0, 256, 96); x.fillStyle = '#e8433a'; roundRect(x, 8, 8, 240, 80, 24); x.fill(); x.fillStyle = '#fff'; x.fillText('MAX', 128, 52); s.material.map.needsUpdate = true; };
+  return s;
+})();
+
+function collide(pos, r) {
+  for (const b of colliders) {
+    const cx = clamp(pos.x, b.x0, b.x1), cz = clamp(pos.z, b.z0, b.z1);
+    const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
+    if (d < r) {
+      if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; }
+      else { // inside: push out along shortest axis
+        const opts = [[b.x0 - r - pos.x, 0], [b.x1 + r - pos.x, 0], [0, b.z0 - r - pos.z], [0, b.z1 + r - pos.z]];
+        opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1])); pos.x += opts[0][0]; pos.z += opts[0][1];
+      }
+    }
+  }
+  for (const c of circles) {
+    if (!c.on()) continue;
+    const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
+    if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
+  }
+  pos.x = clamp(pos.x, BOUNDS.x0, BOUNDS.x1); pos.z = clamp(pos.z, BOUNDS.z0, BOUNDS.z1);
+}
+const inZone = (pos, x, z, half = 1.05) => Math.abs(pos.x - x) < half && Math.abs(pos.z - z) < half;
+
+function playerInteract() {
+  const pos = player.g.position, c = player.c;
+  // drop-offs
+  const drops = [[grill.input, 'meat'], [counter.input, 'steak']];
+  if (sawmill.unlocked) drops.push([sawmill.input, 'log']);
+  for (const [pile, type] of drops) {
+    if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); return; } }
+  }
+  // pick-up
+  if (inZone(pos, grill.output.x, grill.output.z) && grill.output.n > 0 && !c.full()) {
+    c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
+  }
+  // cash
+  for (const cp of [counter.cash, sawmill.cash]) {
+    if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
+    const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
+    cp.value -= share;
+    if (m) fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); });
+    else { W.cash += share; setCash(); }
+    return;
+  }
+  // pads
+  for (const p of PADS) {
+    const on = inZone(pos, p.x, p.z, 1.1);
+    if (!on) p.lock = false;
+    else if (p.label3d.mesh.parent && !p.lock) { payPad(p); return; }
+  }
+}
+
+function updatePlayer(dt) {
+  const dir = new V3(), f = new V3(-CAM.x, 0, -CAM.z).normalize(), r = new V3(-f.z, 0, f.x);
+  let jx = joy.dx, jy = joy.dy;
+  if (keys.size) {
+    jx = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+    jy = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
+    const l = Math.hypot(jx, jy); if (l) { jx /= l; jy /= l; }
+  }
+  dir.addScaledVector(r, jx).addScaledVector(f, -jy);
+  const mag = Math.min(1, dir.length()), moving = mag > 0.1;
+  const pos = player.g.position;
+  if (moving) {
+    dir.normalize();
+    pos.addScaledVector(dir, W.speed * mag * dt);
+    player.g.rotation.y = lerpAng(player.g.rotation.y, Math.atan2(dir.x, dir.z), 0.3);
+    collide(pos, 0.38);
+  }
+  animPerson(player.p, moving, dt);
+
+  // auto chop / hunt
+  player.atk -= dt;
+  if (player.atk <= 0) {
+    const b = nearest(boars, pos, b => b.pos);
+    if (b && d2(b.pos, pos) < 1.9) {
+      player.atk = 0.45; player.p.swing = 1; b.hit(1);
+      if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
+    } else if (!player.c.full()) {
+      const t = nearest(trees.filter(t => !t.down), pos);
+      if (t && d2(t.pos, pos) < 1.55) {
+        player.atk = 0.38; player.p.swing = 1; t.hit(player.c);
+        if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
+      }
+    }
+  }
+  pickupGround(player.c, pos, null, 1.4);
+  player.tick += dt;
+  for (let n = 0; player.tick > 0.07 && n < 6; n++) { player.tick -= 0.07; playerInteract(); }
+  player.tick = Math.min(player.tick, 0.07);
+
+  maxLabel.visible = player.c.full();
+  if (maxLabel.visible) maxLabel.position.copy(player.c.topWorld()).add(new V3(0, 0.45, 0));
+}
+
+// ---------------- guide arrow & goal text ----------------
+const guide = new THREE.Group();
+mesh(new THREE.ConeGeometry(0.35, 0.7, 4), 0xffd23a, 0, 0, 0, guide).rotation.x = PI;
+guide.children[0].castShadow = false;
+scene.add(guide);
+const goalEl = document.getElementById('goal');
+let goalText = '';
+function setGoal(t) { if (t !== goalText) { goalText = t; goalEl.textContent = t; goalEl.hidden = !t; } }
+function updateGuide(t) {
+  let target = null, text = '';
+  const c = player.c;
+  if (padLevel('saw') === 0) {
+    if (c.count('steak') > 0) { target = counter.input.center; text = 'Sell steaks at the counter'; }
+    else if (counter.cash.value > 0) { target = counter.cash.center; text = 'Collect your cash'; }
+    else if (W.cash >= 1 && served >= 2) { target = new V3(-6.5, 0, 4.6); text = 'Build the Sawmill'; }
+    else if (grill.output.n > 0 && !c.full()) { target = grill.output.center; text = 'Grab the cooked steaks'; }
+    else if (c.count('meat') > 0) { target = grill.input.center; text = 'Drop meat at the grill'; }
+    else if (grill.input.n > 0) { target = grill.output.center; text = 'Wait for the grill'; }
+    else { const b = nearest(boars, player.g.position, b => b.pos); if (b) target = b.pos; text = 'Hunt frost boars in the north field'; }
+  } else if (padLevel('lumber') === 0 && padLevel('server') === 0 && c.count('log') === 0 && sawmill.input.n === 0 && sawmill.cash.value === 0) {
+    text = 'Chop trees in the forest for the sawmill';
+    target = nearest(trees.filter(t => !t.down), player.g.position).pos;
+  }
+  setGoal(text);
+  guide.visible = !!target;
+  if (target) guide.position.set(target.x, 2.6 + Math.abs(Math.sin(t * 4)) * 0.5, target.z);
+  guide.rotation.y = t * 2;
+}
+
+// ---------------- HUD ----------------
+const cashEl = document.getElementById('cash'), cashV = document.getElementById('cashv');
+function fmt(n) { n = Math.max(0, Math.round(n)); return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+let bumpT = 0;
+function setCash() { cashV.textContent = fmt(W.cash); cashEl.classList.add('bump'); clearTimeout(bumpT); bumpT = setTimeout(() => cashEl.classList.remove('bump'), 120); }
+
+// ---------------- input ----------------
+const joy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
+const joyEl = document.getElementById('joy'), knob = document.getElementById('knob');
+const keys = new Set();
+const cv = renderer.domElement;
+cv.addEventListener('pointerdown', e => {
+  if (joy.active) return;
+  joy.active = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
+  joyEl.style.left = e.clientX + 'px'; joyEl.style.top = e.clientY + 'px'; joyEl.hidden = false;
+  knob.style.transform = '';
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+});
+cv.addEventListener('pointermove', e => {
+  if (!joy.active || e.pointerId !== joy.id) return;
+  let dx = e.clientX - joy.sx, dy = e.clientY - joy.sy; const l = Math.hypot(dx, dy), R = 50;
+  if (l > R) { dx = dx / l * R; dy = dy / l * R; }
+  joy.dx = dx / R; joy.dy = dy / R;
+  knob.style.transform = `translate(${dx}px,${dy}px)`;
+});
+const endJoy = e => { if (e.pointerId !== joy.id) return; joy.active = false; joy.dx = joy.dy = 0; joyEl.hidden = true; };
+cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
+addEventListener('keydown', e => { keys.add(e.key.toLowerCase()); });
+addEventListener('keyup', e => { keys.delete(e.key.toLowerCase()); });
+addEventListener('blur', () => keys.clear());
+
+const confirmEl = document.getElementById('confirm');
+document.getElementById('reset').onclick = () => { confirmEl.hidden = false; };
+document.getElementById('no').onclick = () => { confirmEl.hidden = true; };
+document.getElementById('yes').onclick = () => {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  resetting = true; location.reload();
+};
+let resetting = false;
+
+// ---------------- save / load ----------------
+function save() {
+  if (resetting) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served })); } catch (e) {}
+}
+if (saved && saved.pads) {
+  W.cash = saved.cash || 0; served = saved.served || 0;
+  for (const p of PADS) {
+    const s = saved.pads[p.id]; if (!s) continue;
+    for (let l = 0; l < Math.min(s.level, p.costs.length); l++) { p.apply(l, true); padState[p.id].level = l + 1; }
+    padState[p.id].paid = s.paid || 0;
+  }
+}
+refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash();
+setInterval(save, 3000);
+addEventListener('pagehide', save);
+if (document.fonts) document.fonts.ready.then(() => { PADS.forEach(p => p.label3d.redraw()); maxLabel.redraw(); });
+
+// ---------------- main loop ----------------
+const clock = new THREE.Clock();
+const camTarget = player.g.position.clone();
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  updatePlayer(dt);
+  for (const tr of trees) tr.update(dt);
+  boarTimer -= dt;
+  if (boarTimer <= 0 && boars.length < maxBoars()) { new Boar(rand(FIELD.x0, FIELD.x1), rand(FIELD.z0, FIELD.z1)); boarTimer = 2.5; }
+  for (const b of boars.slice()) b.update(dt);
+  updateGrill(dt); updateSawmill(dt); updateTower(dt);
+  updateCustomers(dt);
+  for (const w of workers) w.update(dt);
+  updateFlyers(dt); updatePuffs(dt);
+  for (let i = popping.length - 1; i >= 0; i--) {
+    const g = popping[i]; g.userData.pop = Math.min(1, g.userData.pop + dt * 2.2); g.scale.setScalar(Math.max(0.01, easeOutBack(g.userData.pop)));
+    if (g.userData.pop >= 1) popping.splice(i, 1);
+  }
+  padTick += dt; if (padTick > 0.5) { padTick = 0; refreshPads(); }
+  updateGuide(t);
+
+  // camera & light follow
+  camTarget.lerp(player.g.position, 1 - Math.pow(0.002, dt));
+  camera.position.copy(camTarget).add(CAM);
+  camera.lookAt(camTarget.x, camTarget.y + 0.5, camTarget.z);
+  sun.position.set(camTarget.x - 9, 24, camTarget.z + 6); sun.target.position.copy(camTarget);
+  // snow
+  for (let i = 0; i < SNOW_N; i++) {
+    let y = snowPos[i * 3 + 1] - dt * (1.6 + (i % 5) * 0.25);
+    snowPos[i * 3] += Math.sin(t + i) * dt * 0.3;
+    if (y < 0) y += 24;
+    snowPos[i * 3 + 1] = y;
+  }
+  snowGeo.attributes.position.needsUpdate = true;
+  snow.position.set(camTarget.x, 0, camTarget.z);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+window.__game = { W, player, grill, counter, sawmill, boars, trees, padState, PADS, setCash, workers };
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
