@@ -40,7 +40,9 @@ become potions at the Apothecary. **Market Town**, south of camp, has the Genera
 that buys jam, tools and potions. New workers (berry picker, store clerk, smelter hand,
 herbalist) and Town Hall haulers (Mine Cart, Ice Wagon, Potion Courier) automate it.
 Also in Market Town: a Bee Yard and Candle Maker, a Furniture Shop (logs into chairs) and
-a Jeweler (crystal + gold = rings); south of camp, a Pie Bakery (meat + berries).
+a Jeweler (crystal + gold = rings); south of camp, a Pie Bakery (meat + berries). South of Ridge Camp: a Milking Barn (yaks give
+milk), a Creamery (milk into cheese) and a Toy Workshop (wool + log = toy bear). By the
+river, a Glassblower turns ice and coal into ornaments.
 
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).

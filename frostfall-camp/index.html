@@ -424,6 +424,18 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'pie') {
     c.fillStyle = '#d8a060'; c.beginPath(); c.ellipse(0, 6, 46, 28, 0, 0, 2 * PI); c.fill();
     c.strokeStyle = '#9a2a4a'; c.lineWidth = 6; for (const x of [-20, 0, 20]) { c.beginPath(); c.moveTo(x - 10, -14); c.lineTo(x + 10, 26); c.stroke(); }
+  } else if (icon === 'milk') {
+    c.fillStyle = W_; roundRect(c, -22, -16, 44, 58, 10); c.fill(); c.fillRect(-12, -34, 24, 20);
+    c.fillStyle = '#3f7fc8'; c.fillRect(-14, -42, 28, 10); c.fillRect(-22, 6, 44, 12);
+  } else if (icon === 'cheese') {
+    c.fillStyle = '#ffd23a'; c.beginPath(); c.moveTo(-44, 26); c.lineTo(40, 26); c.lineTo(40, -6); c.lineTo(-44, 8); c.closePath(); c.fill();
+    c.fillStyle = '#e0b020'; for (const [x, y] of [[-14, 14], [16, 6], [26, 18]]) { c.beginPath(); c.arc(x, y, 5, 0, 2 * PI); c.fill(); }
+  } else if (icon === 'toy') {
+    c.fillStyle = '#c48a4a'; c.beginPath(); c.arc(0, 16, 26, 0, 2 * PI); c.arc(0, -22, 18, 0, 2 * PI); c.fill();
+    c.beginPath(); c.arc(-16, -36, 8, 0, 2 * PI); c.arc(16, -36, 8, 0, 2 * PI); c.fill();
+  } else if (icon === 'ornament') {
+    c.fillStyle = '#e8433a'; c.beginPath(); c.arc(0, 8, 30, 0, 2 * PI); c.fill();
+    c.fillStyle = '#ffd23a'; c.fillRect(-8, -32, 16, 12); c.fillRect(-30, 4, 60, 6);
   } else if (icon === 'exit') {
     c.fillStyle = W_; c.beginPath(); c.moveTo(-40, -12); c.lineTo(6, -12); c.lineTo(6, -36); c.lineTo(46, 0); c.lineTo(6, 36); c.lineTo(6, 12); c.lineTo(-40, 12); c.closePath(); c.fill();
   } else if (icon === 'fire') {
@@ -509,6 +521,12 @@ const GEO = {
   gem: new THREE.OctahedronGeometry(0.2, 0),
   gold: new THREE.DodecahedronGeometry(0.18, 0),
   berry: new THREE.SphereGeometry(0.13, 8, 6),
+  milk: merge([[new THREE.CylinderGeometry(0.11, 0.13, 0.3, 10), 0xffffff, 0, 0, 0], [new THREE.CylinderGeometry(0.07, 0.09, 0.08, 10), 0xffffff, 0, 0.19, 0], [new THREE.CylinderGeometry(0.075, 0.075, 0.05, 10), 0x3f7fc8, 0, 0.25, 0]]),
+  cheese: merge([[new THREE.CylinderGeometry(0.26, 0.26, 0.2, 12, 1, false, 0, PI * 1.5), 0xffd23a, 0, 0, 0], [new THREE.SphereGeometry(0.04, 6, 4), 0xe0b020, 0.1, 0.1, 0.05]]),
+  toy: merge([[new THREE.SphereGeometry(0.16, 10, 8), 0xa86a3a, 0, 0, 0], [new THREE.SphereGeometry(0.11, 10, 8), 0xa86a3a, 0, 0.22, 0],
+    [new THREE.SphereGeometry(0.045, 6, 4), 0xa86a3a, -0.08, 0.31, 0], [new THREE.SphereGeometry(0.045, 6, 4), 0xa86a3a, 0.08, 0.31, 0], [new THREE.SphereGeometry(0.04, 6, 4), 0xf0d0b0, 0, 0.2, 0.1],
+    [new THREE.BoxGeometry(0.2, 0.05, 0.05), 0xd84a3a, 0, 0.12, 0.08]]),
+  ornament: merge([[new THREE.SphereGeometry(0.16, 12, 10), 0xe8433a, 0, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 0.06, 8), 0xffd23a, 0, 0.17, 0], [new THREE.TorusGeometry(0.16, 0.02, 4, 16).rotateX(PI / 2), 0xffd23a, 0, 0, 0]]),
   comb: merge([[new THREE.CylinderGeometry(0.2, 0.2, 0.16, 6), 0xf0b030, 0, 0, 0], [new THREE.CylinderGeometry(0.12, 0.12, 0.17, 6), 0xffd860, 0, 0, 0]]),
   candle: merge([[new THREE.CylinderGeometry(0.09, 0.1, 0.34, 10), 0xfff2d6, 0, 0, 0], [new THREE.ConeGeometry(0.04, 0.1, 5), 0xff9a3c, 0, 0.22, 0], [new THREE.CylinderGeometry(0.14, 0.14, 0.03, 10), 0xc8a050, 0, -0.17, 0]]),
   chair: merge([[new THREE.BoxGeometry(0.4, 0.06, 0.4), 0xa86a3a, 0, 0, 0], [new THREE.BoxGeometry(0.4, 0.34, 0.06), 0x8f582e, 0, 0.2, -0.17],
@@ -533,7 +551,7 @@ const GEO = {
 const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x5a4000 });
 const shardMat = new THREE.MeshLambertMaterial({ color: 0xd08cff, emissive: 0x4a1d66 });
 const iceMat = new THREE.MeshLambertMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.85, emissive: 0x1d3a55 });
-const H = { comb: 0.18, candle: 0.36, chair: 0.48, ring: 0.14, pie: 0.15, berry: 0.24, coal: 0.3, ore: 0.32, bar: 0.16, ice: 0.32, tool: 0.16, jam: 0.32, bloom: 0.18, potion: 0.36, shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const H = { milk: 0.34, cheese: 0.22, toy: 0.4, ornament: 0.34, comb: 0.18, candle: 0.36, chair: 0.48, ring: 0.14, pie: 0.15, berry: 0.24, coal: 0.3, ore: 0.32, bar: 0.16, ice: 0.32, tool: 0.16, jam: 0.32, bloom: 0.18, potion: 0.36, shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
@@ -549,7 +567,7 @@ function makeItem(t) {
   else if (t === 'ore') m = new THREE.Mesh(GEO.ore, mat(0xb5653a));
   else if (t === 'bar') m = new THREE.Mesh(GEO.bar, mat(0xb8c2cc));
   else if (t === 'ice') m = new THREE.Mesh(GEO.ice, iceMat);
-  else if (['tool', 'jam', 'bloom', 'potion', 'comb', 'candle', 'chair', 'ring', 'pie'].includes(t)) m = new THREE.Mesh(GEO[t], vcMat);
+  else if (['tool', 'jam', 'bloom', 'potion', 'comb', 'candle', 'chair', 'ring', 'pie', 'milk', 'cheese', 'toy', 'ornament'].includes(t)) m = new THREE.Mesh(GEO[t], vcMat);
   else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
   else if (t === 'lantern') m = new THREE.Mesh(GEO.lantern, lanternMat);
   else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
@@ -819,16 +837,16 @@ class Tree {
 const easeOutBack = t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
   for (let x = x0; x <= x1; x += 2.5) for (let z = z0; z <= z1; z += 2.5) {
-    if (x > 13 && z > -8.5 && z < 9.5) continue; // road to the river
+    if (x > 13 && z > -8.5 && z < 15) continue; // road to the river
     if (x < -12 && z > -7.5 && z < 9.5) continue; // berry meadow
     if (Math.random() < 0.62) trees.push(new Tree(x + rand(-0.6, 0.6), z + rand(-0.6, 0.6)));
   }
 }
-for (let x = -22; x <= -14; x += 2.7) for (let z = -6; z <= 1; z += 2.4) if (Math.random() < 0.8) berries.push(new Tree(x + rand(-0.5, 0.5), z + rand(-0.5, 0.5), 'berry'));
+for (let x = -22.5; x <= -13.5; x += 2.2) for (let z = -6.5; z <= 2; z += 2.1) if (Math.random() < 0.9) berries.push(new Tree(x + rand(-0.5, 0.5), z + rand(-0.5, 0.5), 'berry'));
 for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
   if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 37) continue;
   if (Math.abs(x - 45) < 3.8 && z > -16 && z < -6) continue;
-  if (x > RIDGE.x0 - 2 && x < RIDGE.x1 + 2 && z > RIDGE.z0 - 2.4 && z < RIDGE.z1 + 2.4) continue;
+  if (x > RIDGE.x0 - 2 && x < RIDGE.x1 + 2 && z > RIDGE.z0 - 2.4 && z < RIDGE.z1 + 8) continue;
   const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8);
   if (z < -9 && x > 45) { if (Math.random() < 0.6) trees.push(new Tree(px, pz)); }
   else if (Math.random() < 0.5) rocks.push(new Tree(px, pz, 'rock'));
@@ -1666,7 +1684,7 @@ function updateTrader(dt) {
 }
 
 // Reindeer sled: ship goods to a faraway town for better prices
-const SHIP_PRICE = { steak: 9, gem: 14, fish: 10, jam: 24, tool: 95, potion: 140, pie: 42, candle: 52, chair: 85, ring: 200 };
+const SHIP_PRICE = { steak: 9, gem: 14, fish: 10, jam: 24, tool: 95, potion: 140, pie: 42, candle: 52, chair: 85, ring: 200, cheese: 70, toy: 115, ornament: 95 };
 const depot = { built: false, pos: new V3(9, 0, 15), input: new Pile(6.8, 15, 3, 3, 20, 0.62, 0.62, 0.3), types: [], state: 'load', t: 0, idle: 0, cash: null, load: 0 };
 function unlockDepot(instant) {
   if (depot.built) return;
@@ -2023,6 +2041,11 @@ const UPGRADES = [
   { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
   { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
   { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
+  { id: 'cheesep', name: 'Aged Cheese', desc: '+$12 for every cheese', costs: [2500, 6000], req: () => store.built && creamery.built },
+  { id: 'toyp', name: 'Button Eyes', desc: '+$20 for every toy', costs: [3000, 8000], req: () => store.built && toyshop.built },
+  { id: 'glassp', name: 'Gold Leaf', desc: '+$18 for every ornament', costs: [3000, 7000], req: () => store.built && glass.built },
+  { id: 'woolcart', name: 'Wool Cart', desc: 'Sends wool from the Yak Pen to the Toy Workshop', costs: [3000], req: () => toyshop.built },
+  { id: 'gsupply', name: 'Glass Supply', desc: 'Sends ice and coal to the Glassblower', costs: [4000], req: () => glass.built },
   { id: 'piep', name: 'Golden Crust', desc: '+$8 for every pie', costs: [1500, 4000], req: () => store.built && bakery.built },
   { id: 'candlep', name: 'Scented Wax', desc: '+$10 for every candle', costs: [2000, 5000], req: () => store.built && chandler.built },
   { id: 'chairp', name: 'Velvet Cushions', desc: '+$15 for every chair', costs: [2500, 6000], req: () => store.built && furniture.built },
@@ -2358,7 +2381,7 @@ class Station {
       return;
     }
     this.t += dt;
-    if (this.t < this.time) return;
+    if (this.t < (this.timeFn ? this.timeFn() : this.time)) return;
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
@@ -2372,7 +2395,7 @@ class Station {
     for (const i of this.ins) for (let k = 0; k < i.n; k++) { const m = i.pile.take(); fly(m, m.position.clone(), () => top, 0.25, () => scene.remove(m)); }
   }
 }
-const ICON_OF = { comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
+const ICON_OF = { milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 const hut = (g, wall, roof, w = 2.2, d = 1.6) => {
   mesh(new THREE.BoxGeometry(w, 1.4, d), wall, 0, 0.7, 0, g);
   const rf = mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.6, 1.0, 4), roof, 0, 1.9, 0, g); rf.rotation.y = PI / 4; rf.scale.z = d / w;
@@ -2397,7 +2420,8 @@ const carver = new Station({ id: 'carver', x: 7, z: 30.4, inputs: [['ice', 5.6, 
   build: (g, st) => { hut(g, 0xdff1ff, 0x3f7fc8); const deer = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), iceMat); deer.position.set(1.4, 0.4, 0.9); g.add(deer); } });
 const store = new Station({ id: 'store', x: 0, z: 30.4, size: [3.2, 1.8], inputs: [['*', 0, 27.2]], cashAt: [2.8, 27.2], time: 1.0,
   accepts: { jam: () => 18 + 4 * U('jamp'), tool: () => 75 + 20 * U('toolp'), potion: () => 110 + 30 * U('potionp'),
-    pie: () => 32 + 8 * U('piep'), candle: () => 40 + 10 * U('candlep'), chair: () => 65 + 15 * U('chairp'), ring: () => 160 + 40 * U('ringp') },
+    pie: () => 32 + 8 * U('piep'), candle: () => 40 + 10 * U('candlep'), chair: () => 65 + 15 * U('chairp'), ring: () => 160 + 40 * U('ringp'),
+    cheese: () => 55 + 12 * U('cheesep'), toy: () => 90 + 20 * U('toyp'), ornament: () => 75 + 18 * U('glassp') },
   hint: 'The General Store buys jam, tools, potions, pies, candles, chairs and rings.',
   build: (g) => { hut(g, 0xf2e6c8, 0x2f8a5a, 3.2, 1.8); for (let i = 0; i < 8; i++) mesh(new THREE.BoxGeometry(0.4, 0.08, 0.7), i % 2 ? 0xffffff : 0x2f8a5a, -1.4 + i * 0.4, 1.5, 1.2, g); } });
 const apoth = new Station({ id: 'apoth', x: 128, z: 65, inputs: [['bloom', 124.8, 66.0], ['shard', 124.8, 63.6]], out: ['potion', 130.2, 62.6], time: 2.4, fx: 0x5ff0d0,
@@ -2430,6 +2454,21 @@ const bakery = new Station({ id: 'bakery', x: -2.2, z: 19.5, inputs: [['meat', -
   hint: 'Meat + two berries = a hot berry pie. The General Store sells them.',
   build: (g, st) => { hut(g, 0xf6dcc0, 0xd84a3a); mesh(new THREE.BoxGeometry(0.4, 0.9, 0.4), 0x8d97a6, 0.7, 2.3, -0.3, g); st.smoke = 0; },
   anim: (dt, st) => { st.smoke -= dt; if (st.smoke <= 0 && st.ins.every(i => i.pile.n)) { st.smoke = 0.4; const m = new THREE.Mesh(SMOKE_GEO, smokeMat); m.position.set(-1.5, 2.9, 19.2); scene.add(m); smoke.parts.push({ m, life: 2.5 }); } } });
+
+const barn = new Station({ id: 'barn', x: 38.6, z: 13.6, inputs: [], out: ['milk', 38.6, 11.0], time: 6, timeFn: () => pen.level ? 7 / pen.level : 1e9, fx: 0xffffff,
+  hint: 'Your yaks give milk here. More yaks, more milk!',
+  build: (g) => { hut(g, 0xc0392b, 0xf2f2f2); mesh(new THREE.BoxGeometry(0.9, 1.0, 0.05), 0xffffff, 0, 0.55, 0.81, g); const pail = mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.3, 10), 0xb8c2cc, 1.4, 0.15, 0.9, g); } });
+const creamery = new Station({ id: 'creamery', x: 51.4, z: 13.6, inputs: [['milk', 49.2, 11.0, 2]], out: ['cheese', 51.6, 11.0], time: 2.4, fx: 0xffd23a,
+  hint: 'Two bottles of milk make a wheel of cheese.',
+  build: (g) => { hut(g, 0xfff4d0, 0x3f7fc8); const ch = new THREE.Mesh(GEO.cheese, vcMat); ch.scale.setScalar(2.4); ch.position.set(1.4, 0.3, 0.95); g.add(ch); } });
+const toyshop = new Station({ id: 'toyshop', x: 44.2, z: 13.6, inputs: [['wool', 42.0, 11.0], ['log', 44.2, 11.0]], out: ['toy', 46.4, 11.0], time: 2.4, fx: 0xa86a3a,
+  hint: 'Wool + a log = a cuddly toy bear.',
+  build: (g) => { hut(g, 0xffd6ec, 0x7a4fc8); const t = new THREE.Mesh(GEO.toy, vcMat); t.scale.setScalar(2.2); t.position.set(0, 2.6, 0); g.add(t); } });
+const glass = new Station({ id: 'glass', x: 17, z: 12.6, inputs: [['ice', 14.8, 11.4], ['coal', 14.8, 13.8]], out: ['ornament', 19.4, 11.4], time: 2.2, fx: 0xe8433a,
+  hint: 'Melt ice with coal to blow glass ornaments.',
+  build: (g, st) => { mesh(new THREE.CylinderGeometry(1.0, 1.15, 1.4, 8), 0x8d97a6, 0, 0.7, 0, g); mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.4, 8), 0x6b7488, 0, 2.0, 0, g);
+    st.glow = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff8a3a })); st.glow.position.set(0, 0.8, 0.9); g.add(st.glow); },
+  anim: (dt, st) => { st.glow.scale.setScalar(1 + Math.sin(performance.now() / 120) * 0.12); } });
 
 // Market Town plaza
 const town = { built: false, folk: [] };
@@ -2476,19 +2515,31 @@ function updateCarts(dt) {
     if (cutter.unlocked) move(cutter.input, jeweler.ins[0].pile, 'gem');
     if (smith.built) move(smith.input, jeweler.ins[1].pile, 'gold');
   }
+  if (U('woolcart') && toyshop.built && pen.built) move(pen.out, toyshop.ins[0].pile, 'wool');
+  if (U('gsupply') && glass.built) {
+    if (icesaw.built) move(icesaw.outPile, glass.ins[0].pile, 'ice');
+    if (smelter.built) move(smelter.ins[1].pile, glass.ins[1].pile, 'coal');
+  }
   if (U('psupply') && bakery.built) {
     move(grill.input, bakery.ins[0].pile, 'meat');
-    if (kitchen.built) move(kitchen.ins[0].pile, bakery.ins[1].pile, 'berry');
+    if (kitchen.built) for (let i = 0; i < 4 && kitchen.ins[0].pile.n > 4 && bakery.ins[1].pile.free() > 0; i++) { scene.remove(kitchen.ins[0].pile.take()); bakery.ins[1].pile.receive(makeItem('berry'), bakery.ins[1].pile.center.clone().add(new V3(0, 3, 0))); }
   }
 }
 // Generic worker jobs for the new chains
+let pickerAlt = false;
 const JOBS = {
-  picker: { want: () => 'berry', nodes: () => berries, dst: () => kitchen.ins[0].pile },
+  picker: { want: () => 'berry', nodes: () => berries, dst: () => {
+    const k = kitchen.ins[0].pile, b = bakery.ins[1].pile;
+    pickerAlt = !pickerAlt;
+    if (bakery.built && (!kitchen.built || pickerAlt || b.n + b.pending < k.n + k.pending)) return b;
+    return k;
+  } },
   smelterhand: { want: () => { const [o, c] = smelter.ins.map(i => i.pile.n + i.pile.pending); return o <= c ? 'ore' : 'coal'; }, nodes: t => t === 'ore' ? irons : coals, dst: t => t === 'ore' ? smelter.ins[0].pile : smelter.ins[1].pile },
   herbalist: { want: () => { const [b, s] = apoth.ins.map(i => i.pile.n + i.pile.pending); return b <= s ? 'bloom' : 'shard'; }, nodes: t => t === 'bloom' ? blooms : isle.shards, dst: t => t === 'bloom' ? apoth.ins[0].pile : apoth.ins[1].pile },
   carpenter: { want: () => 'log', nodes: () => trees.filter(t => t.pos.x < RIVER.x0), dst: () => furniture.ins[0].pile },
   beekeeper: { pickup: true, srcs: () => (beeyard.built && beeyard.outPile.n > 0 ? [[beeyard.outPile, 'comb']] : []), dst: () => chandler.ins[0].pile, idle: new V3(18.5, 0, 26.2) },
-  clerk: { pickup: true, srcs: () => [[kitchen, 'jam'], [smithy, 'tool'], [chandler, 'candle'], [furniture, 'chair'], [jeweler, 'ring'], [bakery, 'pie']].filter(([st]) => st.built && st.outPile.n > 0).map(([st, ty]) => [st.outPile, ty]), dst: () => store.ins[0].pile, idle: new V3(-3.4, 0, 25.4) },
+  milkmaid: { pickup: true, srcs: () => (barn.built && barn.outPile.n > 0 ? [[barn.outPile, 'milk']] : []), dst: () => creamery.ins[0].pile, idle: new V3(44, 0, 10) },
+  clerk: { pickup: true, srcs: () => [[kitchen, 'jam'], [smithy, 'tool'], [chandler, 'candle'], [furniture, 'chair'], [jeweler, 'ring'], [bakery, 'pie'], [creamery, 'cheese'], [toyshop, 'toy'], [glass, 'ornament']].filter(([st]) => st.built && st.outPile.n > 0).map(([st, ty]) => [st.outPile, ty]), dst: () => store.ins[0].pile, idle: new V3(-3.4, 0, 25.4) },
 };
 function runJob(w, job, go) {
   const pos = w.g.position;
@@ -2802,6 +2853,9 @@ const ACH = [
   ['chair25', 'Have a Seat', 'Build 25 chairs', () => stat('chair') >= 25],
   ['ring10', 'Lord of the Rings', 'Craft 10 rings', () => stat('ring') >= 10],
   ['earn10m', 'Tycoon', 'Earn $10,000,000', () => stat('earned') >= 10000000],
+  ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
+  ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
+  ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
   ['maker', 'Master Maker', 'Build every crafting station', () => STATIONS.every(st => st.built)],
   ['star5', 'Star Collector', 'Hold 5 Golden Stars', () => legacy.stars >= 5],
 ];
@@ -2852,7 +2906,7 @@ function renderLegacy() {
 
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const WCOL = { milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
 const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
@@ -2969,7 +3023,7 @@ const PADS = [
   { id: 'store', label: 'General Store', icon: 'cart', costs: [2000], x: 0, z: 30.4, req: () => town.built, apply: (l, i) => store.unlock(i) },
   { id: 'kitchen', label: 'Jam Kitchen', icon: 'jam', costs: [1800], x: -16.6, z: 5.6, req: () => sawmill.unlocked, apply: (l, i) => kitchen.unlock(i) },
   { id: 'picker', label: 'Berry Picker', icon: 'person', costs: [1500, 3000], x: -19.8, z: 8.2, req: () => kitchen.built, apply: () => new Worker('picker', -19.8, 8.2) },
-  { id: 'clerk', label: 'Store Clerk', icon: 'person', costs: [2500], x: -3.4, z: 24.4, req: () => store.built, apply: () => new Worker('clerk', -3.4, 24.4) },
+  { id: 'clerk', label: 'Store Clerk', icon: 'person', costs: [2500, 5000, 8000], x: -3.4, z: 24.4, req: () => store.built, apply: () => new Worker('clerk', -3.4, 24.4) },
   { id: 'smithy', label: 'Blacksmith', icon: 'pick', costs: [3500], x: -8, z: 30.4, req: () => town.built, apply: (l, i) => smithy.unlock(i) },
   { id: 'smelter', label: 'Smelter', icon: 'fire', costs: [3000], x: 113, z: 10.6, req: () => mine.built, apply: (l, i) => smelter.unlock(i) },
   { id: 'smelterhand', label: 'Smelter Hand', icon: 'person', costs: [2500, 5000], x: 116.5, z: 4.5, req: () => smelter.built, apply: () => new Worker('smelterhand', 116.5, 4.5) },
@@ -2980,6 +3034,11 @@ const PADS = [
   { id: 'carpenter', label: 'Carpenter', icon: 'person', costs: [2500, 5000], x: -16.5, z: 25, req: () => furniture.built, apply: () => new Worker('carpenter', -16.5, 25) },
   { id: 'jeweler', label: 'Jeweler', icon: 'ring', costs: [6000], x: -22, z: 31, req: () => town.built && cutter.unlocked, apply: (l, i) => jeweler.unlock(i) },
   { id: 'bakery', label: 'Pie Bakery', icon: 'pie', costs: [2800], x: -2.2, z: 19.5, req: () => kitchen.built, apply: (l, i) => bakery.unlock(i) },
+  { id: 'barn', label: 'Milking Barn', icon: 'milk', costs: [3000], x: 38.6, z: 13.6, req: () => ridge.unlocked && pen.level > 0, apply: (l, i) => barn.unlock(i) },
+  { id: 'creamery', label: 'Creamery', icon: 'cheese', costs: [3500], x: 51.4, z: 13.6, req: () => barn.built, apply: (l, i) => creamery.unlock(i) },
+  { id: 'milkmaid', label: 'Hire Milker', icon: 'person', costs: [2500], x: 45, z: 15.6, req: () => creamery.built, apply: () => new Worker('milkmaid', 45, 15.6) },
+  { id: 'toyshop', label: 'Toy Workshop', icon: 'toy', costs: [4000], x: 44.2, z: 13.6, req: () => ridge.unlocked && pen.level > 0, apply: (l, i) => toyshop.unlock(i) },
+  { id: 'glass', label: 'Glassblower', icon: 'ornament', costs: [4500], x: 17, z: 12.6, req: () => icesaw.built, apply: (l, i) => glass.unlock(i) },
   { id: 'icesaw', label: 'Ice Saw', icon: 'ice', costs: [1500], x: 24.6, z: 8.6, req: () => bridge.unlocked, apply: (l, i) => icesaw.unlock(i) },
   { id: 'carver', label: 'Ice Carver', icon: 'ice', costs: [2500], x: 7, z: 30.4, req: () => town.built, apply: (l, i) => carver.unlock(i) },
   { id: 'apoth', label: 'Apothecary', icon: 'potion', costs: [6000], x: 128, z: 65, req: () => isle.built, apply: (l, i) => apoth.unlock(i) },
@@ -3187,7 +3246,7 @@ function playerInteract() {
   }
   // sled depot takes steaks, gems and fish
   if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
-    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion') || c.take('pie') || c.take('candle') || c.take('chair') || c.take('ring');
+    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion') || c.take('pie') || c.take('candle') || c.take('chair') || c.take('ring') || c.take('cheese') || c.take('toy') || c.take('ornament');
     if (it) { depotReceive(it.type, it); sfx('drop'); return; }
   }
   // wardrobe: step in to switch outfits
@@ -3583,7 +3642,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, berries, coals, irons, blooms };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
