@@ -254,6 +254,16 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'gem') {
     c.fillStyle = '#8fe8f8'; c.beginPath(); c.moveTo(0, -46); c.lineTo(36, -8); c.lineTo(0, 46); c.lineTo(-36, -8); c.closePath(); c.fill();
     c.fillStyle = '#d8faff'; c.beginPath(); c.moveTo(0, -46); c.lineTo(14, -8); c.lineTo(-14, -8); c.closePath(); c.fill();
+  } else if (icon === 'fish') {
+    c.fillStyle = '#9fc4e0'; c.beginPath(); c.ellipse(-8, 0, 40, 22, 0, 0, 2 * PI); c.fill();
+    c.beginPath(); c.moveTo(26, 0); c.lineTo(52, -22); c.lineTo(52, 22); c.closePath(); c.fill();
+    c.fillStyle = '#1d2a3a'; c.beginPath(); c.arc(-30, -5, 5, 0, 2 * PI); c.fill();
+  } else if (icon === 'gate') {
+    c.fillStyle = W_; for (let i = -3; i <= 3; i++) roundRect(c, i * 13 - 5, -36, 10, 72, 4), c.fill();
+    c.fillRect(-46, -16, 92, 8); c.fillRect(-46, 12, 92, 8);
+  } else if (icon === 'house') {
+    c.fillStyle = W_; c.fillRect(-32, -4, 64, 40); c.beginPath(); c.moveTo(-42, -2); c.lineTo(0, -38); c.lineTo(42, -2); c.closePath(); c.fill();
+    c.fillRect(16, -40, 12, 22);
   } else if (icon === 'bridge') {
     c.strokeStyle = W_; c.lineWidth = 9; c.beginPath(); c.moveTo(-50, 20); c.quadraticCurveTo(0, -30, 50, 20); c.stroke();
     c.beginPath(); c.moveTo(-50, 32); c.lineTo(50, 32); c.stroke();
@@ -288,7 +298,10 @@ const bridge = { unlocked: false };
     const m = new THREE.Mesh(logGeo, [mat(0xc0662f), mat(0xf0c98a), mat(0xf0c98a)]);
     m.rotation.z = PI / 2; m.position.set(cx + rand(-0.3, 0.3), 0.2, -60 + i * 22 + rand(-4, 4)); m.castShadow = true; scene.add(m); riverLogs.push(m);
   }
-  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -300, z1: BRIDGE_Z - 1.1 });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -300, z1: -6.2 });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -6.2, z1: -3.8, on: () => !dock.built });
+  colliders.push({ x0: 28.4, x1: RIVER.x1 + 0.3, z0: -6.2, z1: -3.8, on: () => dock.built });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -3.8, z1: BRIDGE_Z - 1.1 });
   colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: BRIDGE_Z + 1.1, z1: 300 });
   colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: BRIDGE_Z - 1.2, z1: BRIDGE_Z + 1.2, on: () => !bridge.unlocked });
 }
@@ -336,8 +349,9 @@ const GEO = {
   steak: new THREE.CylinderGeometry(0.26, 0.28, 0.12, 10),
   cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
   gem: new THREE.OctahedronGeometry(0.2, 0),
+  fish: new THREE.SphereGeometry(0.2, 10, 8).scale(1.5, 0.55, 0.75),
 };
-const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34 };
+const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2 };
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
   let m;
@@ -345,6 +359,7 @@ function makeItem(t) {
   else if (t === 'meat') m = new THREE.Mesh(GEO.meat, mat(0xe2666f));
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
+  else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
   else m = new THREE.Mesh(GEO.cash, mat(0x45b04f));
   m.castShadow = true;
   return m;
@@ -478,7 +493,7 @@ function stepToward(obj, target, speed, dt, stop = 0.05) {
   return d - s <= stop;
 }
 // route through camp gates when crossing the fence
-function navStep(obj, target, speed, dt, stop) {
+function navStep(obj, target, speed, dt, stop, pass) {
   const p = obj.position;
   if (riverSide(p) !== riverSide(target)) {
     const a = riverSide(p) ? BRIDGE.e : BRIDGE.w, b = riverSide(p) ? BRIDGE.w : BRIDGE.e;
@@ -489,10 +504,12 @@ function navStep(obj, target, speed, dt, stop) {
   if (inside(p) !== inside(target)) {
     let best = null, bd = 1e9;
     for (const g of GATES) {
+      if (pass && !pass(g)) continue;
       const a = inside(p) ? g.in : g.out, b = inside(p) ? g.out : g.in;
       const d = d2(p, a) + d2(a, b) + d2(b, target);
       if (d < bd) { bd = d; best = [a, b]; }
     }
+    if (!best) return stepToward(obj, target, speed, dt, stop);
     const wp = d2(p, best[0]) > 0.45 && d2(p, best[1]) > d2(best[0], best[1]) ? best[0] : best[1];
     stepToward(obj, wp, speed, dt, 0.05);
     return false;
@@ -564,7 +581,7 @@ class Tree {
 const easeOutBack = t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
   for (let x = x0; x <= x1; x += 2.5) for (let z = z0; z <= z1; z += 2.5) {
-    if (x > 13 && z > -1.5 && z < 9.5) continue; // road to the river
+    if (x > 13 && z > -8.5 && z < 9.5) continue; // road to the river
     if (Math.random() < 0.62) trees.push(new Tree(x + rand(-0.6, 0.6), z + rand(-0.6, 0.6)));
   }
 }
@@ -623,9 +640,25 @@ function dropGround(type, pos) {
   groundItems.push(gi);
   fly(m, pos.clone().add(new V3(0, 0.6, 0)), () => to, 0.35, () => { gi.ready = true; m.rotation.y = rand(0, 3); }, 1.4);
 }
+function dropFromCarrier(carrier, n) {
+  for (let i = 0; i < n; i++) {
+    const it = carrier.take(); if (!it) break;
+    const to = it.pos.clone().add(new V3(rand(-1.6, 1.6), 0, rand(-1.6, 1.6))); to.y = 0.1;
+    const gi = { type: it.type, m: it.m, ready: false }; groundItems.push(gi);
+    fly(it.m, it.pos, () => to, 0.45, () => { gi.ready = true; }, 1.6);
+  }
+}
 function pickupGround(carrier, pos, type, r = 1.3) {
   for (let i = groundItems.length - 1; i >= 0; i--) {
     const gi = groundItems[i];
+    if (gi.ready && gi.type === 'cash' && carrier === player.c && !type) {
+      if (d2(gi.m.position, pos) < r) {
+        groundItems.splice(i, 1); const m = gi.m;
+        fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += 25; setCash(); sfx('coin'); });
+      }
+      continue;
+    }
+    if (gi.type === 'cash') continue;
     if (!gi.ready || (type && gi.type !== type) || carrier.full()) continue;
     if (d2(gi.m.position, pos) < r) { groundItems.splice(i, 1); carrier.receive(gi.type, gi.m, gi.m.position.clone()); }
   }
@@ -857,7 +890,7 @@ function updateTower(dt) {
   if (!tower.unlocked) return;
   tower.t += dt;
   let best = null, bd = 15;
-  for (const b of boars.concat(wolves)) { const d = d2(b.pos, tower.pos); if (d < bd && b.spawn >= 1) { bd = d; best = b; } }
+  for (const b of boars.concat(wolves, bear ? [bear] : [])) { const d = d2(b.pos, tower.pos); if (d < bd && b.spawn >= 1) { bd = d; best = b; } }
   if (best) tower.bow.rotation.y = lerpAng(tower.bow.rotation.y, Math.atan2(best.pos.x - tower.pos.x, best.pos.z - tower.pos.z), 0.2);
   if (best && tower.t > 1.1) {
     tower.t = 0;
@@ -913,9 +946,198 @@ function updateCutter(dt) {
   }
 }
 
+// Camp gates (close at night, wolves must break them)
+const gates = { built: false };
+const GATE_DEF = [
+  { gi: 0, x: -10, z: 1.5, rot: PI / 2, w: 3, name: 'west' },
+  { gi: 1, x: 10, z: 1.5, rot: PI / 2, w: 3, name: 'east' },
+  { gi: 2, x: 0, z: -6, rot: 0, w: 5, name: 'north' },
+  { gi: 3, x: 4, z: 8, rot: 0, w: 4, name: 'south' },
+];
+const gatesBlocking = () => gates.built && isNight();
+function unlockGates(instant) {
+  if (gates.built) return;
+  gates.built = true;
+  for (const d of GATE_DEF) {
+    const G = GATES[d.gi];
+    const grp = stationGroup(d.x, d.z); grp.rotation.y = d.rot;
+    const half = d.w / 2;
+    const door = (side) => {
+      const piv = new THREE.Group(); piv.position.set(side * half, 0, 0); grp.add(piv);
+      const n = Math.max(3, Math.round(half / 0.32));
+      for (let k = 0; k < n; k++) mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.25 + (k % 2) * 0.12, 6), 0xb5652f, -side * (k + 0.5) * (half - 0.05) / n, 0.65, 0, piv);
+      mesh(new THREE.BoxGeometry(half - 0.1, 0.14, 0.32), 0x7d4a26, -side * half / 2, 0.45, 0, piv);
+      mesh(new THREE.BoxGeometry(half - 0.1, 0.14, 0.32), 0x7d4a26, -side * half / 2, 1.0, 0, piv);
+      return piv;
+    };
+    Object.assign(G, { grp, doors: [door(-1), door(1)], hp: 8, broken: false, open: 1, shake: 0, center: new V3(d.x, 0, d.z), name: d.name });
+    if (!instant) { popIn(grp); burst(G.center, 0xb5652f, 10); }
+  }
+}
+function hitGate(g) {
+  g.hp--; g.shake = 0.3; burst(g.center.clone().add(new V3(0, 0.4, 0)), 0xb5652f, 4);
+  if (d2(g.center, player.g.position) < 14) sfx('gate');
+  if (g.hp <= 0 && !g.broken) { g.broken = true; toast('Wolves broke the ' + g.name + ' gate!'); }
+}
+function updateGates(dt) {
+  if (!gates.built) return;
+  const friends = [player.g, ...workers.map(w => w.g), ...customers.map(c => c.p.group)];
+  for (const g of GATES) {
+    const near = friends.some(f => d2(f.position, g.center) < 2.6);
+    const want = !gatesBlocking() || g.broken || near ? 1 : 0;
+    g.open += (want - g.open) * Math.min(1, dt * 6);
+    g.doors[0].rotation.y = g.open * 1.5; g.doors[1].rotation.y = -g.open * 1.5;
+    g.doors[0].rotation.z = g.doors[1].rotation.z = g.broken ? 0.35 : 0;
+    g.shake = Math.max(0, g.shake - dt);
+    g.grp.position.x = g.center.x + Math.sin(g.shake * 70) * g.shake * 0.25;
+  }
+}
+function repairGates() { for (const g of GATES) { g.hp = 8; g.broken = false; } }
+
+// Fishing dock
+const dock = { built: false, spot: new V3(27.3, 0, -5), bobPos: new V3(29.3, 0.06, -5), active: 0 };
+function unlockDock(instant) {
+  if (dock.built) return;
+  dock.built = true;
+  const g = stationGroup(26.6, -5); dock.g = g;
+  for (let i = 0; i < 10; i++) mesh(new THREE.BoxGeometry(0.38, 0.12, 2.0), i % 2 ? 0xa86a3a : 0x8f582e, -1.8 + i * 0.42, 0.34, 0, g);
+  for (const x of [-1.8, 0, 1.8]) for (const z of [-0.95, 0.95]) mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.0, 6), 0x6b3f1f, x, 0.1, z, g);
+  dock.bob = new THREE.Group(); scene.add(dock.bob);
+  mesh(new THREE.SphereGeometry(0.13, 10, 8), 0xe8433a, 0, 0, 0, dock.bob);
+  mesh(new THREE.SphereGeometry(0.08, 8, 6), 0xffffff, 0, 0.1, 0, dock.bob);
+  dock.bob.position.copy(dock.bobPos);
+  const zm = zoneMarker(dock.spot.x, dock.spot.z, 'fish', '#9fd2f5'); zm.position.y = 0.42;
+  if (!instant) { popIn(g); burst(new V3(26.6, 0, -5), 0xa86a3a, 12); }
+}
+function tryFish(carrier, who, dt) {
+  dock.active = 0.3;
+  who.fishT = (who.fishT || 0) + dt;
+  if (who.fishT > 1.4 && !carrier.full()) {
+    who.fishT = 0;
+    carrier.receive('fish', makeItem('fish'), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
+    burst(dock.bobPos.clone().add(new V3(0, -0.6, 0)), 0xa9d8f7, 6);
+    if (carrier === player.c) sfx('splash');
+  }
+}
+function updateDock(dt) {
+  if (!dock.built) return;
+  dock.active -= dt;
+  const t = performance.now() / 1000;
+  dock.bob.position.y = 0.06 + Math.sin(t * (dock.active > 0 ? 9 : 2)) * (dock.active > 0 ? 0.08 : 0.03);
+}
+
+// Smokehouse
+const FISH_PRICE = 6;
+const smoke = { unlocked: false, pos: new V3(19, 0, -5), input: new Pile(16.5, -5, 3, 3, 36, 0.62, 0.62, 0.2), cash: null, t: 0, puffT: 0, parts: [] };
+function unlockSmoke(instant) {
+  if (smoke.unlocked) return;
+  smoke.unlocked = true;
+  const g = stationGroup(19, -5); smoke.g = g;
+  mesh(new THREE.BoxGeometry(2.0, 1.5, 1.6), 0x6b4a33, 0, 0.75, 0, g);
+  mesh(new THREE.BoxGeometry(0.7, 0.9, 0.05), 0x3a281b, 0, 0.45, 0.81, g);
+  const roof = mesh(new THREE.ConeGeometry(1.7, 1.0, 4), 0x9a3b2a, 0, 2.0, 0, g); roof.rotation.y = PI / 4; roof.scale.z = 0.85;
+  mesh(new THREE.ConeGeometry(1.3, 0.25, 4), 0xffffff, 0, 2.45, 0, g).rotation.y = PI / 4;
+  mesh(new THREE.BoxGeometry(0.35, 1.0, 0.35), 0x8f949c, 0.55, 2.3, -0.3, g);
+  colliders.push({ x0: 17.9, x1: 20.1, z0: -5.9, z1: -4.1 });
+  zoneMarker(16.5, -5, 'fish', '#9fd2f5');
+  smoke.cash = new CashPile(21.5, -5);
+  if (!instant) { popIn(g); burst(smoke.pos, 0x6b4a33, 14); }
+}
+const SMOKE_GEO = new THREE.SphereGeometry(0.22, 8, 6);
+const smokeMat = new THREE.MeshLambertMaterial({ color: 0xc8ccd2, transparent: true, opacity: 0.8 });
+function updateSmoke(dt) {
+  for (let i = smoke.parts.length - 1; i >= 0; i--) {
+    const sp = smoke.parts[i]; sp.life -= dt; sp.m.position.y += dt * 1.2; sp.m.position.x += dt * 0.4;
+    sp.m.scale.setScalar(1 + (2.5 - sp.life)); if (sp.life <= 0) { scene.remove(sp.m); smoke.parts.splice(i, 1); }
+  }
+  if (!smoke.unlocked) return;
+  smoke.t += dt; smoke.puffT -= dt;
+  if (smoke.input.n > 0 && smoke.puffT <= 0) {
+    smoke.puffT = 0.35; const m = new THREE.Mesh(SMOKE_GEO, smokeMat); m.position.set(19.55, 2.9, -5.3); scene.add(m); smoke.parts.push({ m, life: 2.5 });
+  }
+  if (smoke.t > 1.0 && smoke.input.n > 0) {
+    smoke.t = 0;
+    const m = smoke.input.take(), top = new V3(19, 1.3, -5);
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); smoke.cash.addValue(FISH_PRICE, top); });
+  }
+}
+
+// Ice Bear boss
+let bear = null;
+const BRG = {
+  body: new THREE.BoxGeometry(1.5, 1.3, 2.3), head: new THREE.BoxGeometry(1.0, 0.9, 0.95), snout: new THREE.BoxGeometry(0.5, 0.4, 0.4),
+  ear: new THREE.BoxGeometry(0.25, 0.25, 0.12), leg: new THREE.BoxGeometry(0.45, 0.9, 0.5), dot: new THREE.BoxGeometry(0.12, 0.12, 0.05),
+};
+class Bear {
+  constructor(x, z) {
+    this.g = new THREE.Group(); this.g.position.set(x, 0, z);
+    this.mat = new THREE.MeshLambertMaterial({ color: 0xeaf2fb, emissive: 0x000000 });
+    mesh(BRG.body, this.mat, 0, 1.3, 0, this.g);
+    mesh(BRG.head, this.mat, 0, 1.75, 1.45, this.g);
+    mesh(BRG.snout, 0xd5dce6, 0, 1.6, 2.0, this.g);
+    mesh(BRG.dot, 0x1a1a1a, 0, 1.72, 2.21, this.g);
+    mesh(BRG.dot, 0x1a1a1a, -0.25, 1.95, 1.93, this.g); mesh(BRG.dot, 0x1a1a1a, 0.25, 1.95, 1.93, this.g);
+    mesh(BRG.ear, this.mat, -0.38, 2.28, 1.3, this.g); mesh(BRG.ear, this.mat, 0.38, 2.28, 1.3, this.g);
+    this.legs = [[-0.5, 0.75], [0.5, 0.75], [-0.5, -0.75], [0.5, -0.75]].map(([lx, lz]) => {
+      const p = new THREE.Group(); p.position.set(lx, 0.9, lz); this.g.add(p); mesh(BRG.leg, this.mat, 0, -0.45, 0, p); return p;
+    });
+    this.max = 30; this.hp = this.max; this.flash = 0; this.spawn = 0; this.phase = 0; this.cd = 0; this.target = null; this.reach = 2.7; this.alive = true;
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+    this.sprite.scale.set(2.4, 0.38, 1); this.sprite.position.set(0, 3.1, 0); this.sprite.renderOrder = 6; this.g.add(this.sprite);
+    this.drawBar();
+    this.g.scale.setScalar(0.01); scene.add(this.g);
+  }
+  get pos() { return this.g.position; }
+  drawBar() {
+    const x = this.bar.getContext('2d'); x.clearRect(0, 0, 256, 40);
+    x.fillStyle = 'rgba(20,28,48,.85)'; roundRect(x, 0, 0, 256, 40, 12); x.fill();
+    x.fillStyle = '#e8433a'; roundRect(x, 5, 5, 246 * Math.max(0, this.hp / this.max), 30, 9); x.fill();
+    this.sprite.material.map.needsUpdate = true;
+  }
+  hit(dmg) {
+    if (!this.alive) return;
+    this.hp -= dmg; this.flash = 0.15; this.drawBar(); burst(this.pos.clone().add(new V3(0, 0.8, 0)), 0xffffff, 4);
+    if (this.hp <= 0) {
+      this.alive = false; scene.remove(this.g); bear = null; burst(this.pos, 0xeaf2fb, 24); camShake = 0.4;
+      for (let i = 0; i < 8; i++) dropGround('meat', this.pos.clone());
+      for (let i = 0; i < 6; i++) dropGround('cash', this.pos.clone());
+      toast('You beat the Ice Bear! Grab the loot.'); sfx('buy');
+    }
+  }
+  update(dt) {
+    this.spawn = Math.min(1, this.spawn + dt * 1.2); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn)));
+    if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
+    this.cd -= dt;
+    const pp = player.g.position, dp = d2(pp, this.pos);
+    let moving = true;
+    if (dp < 8 && !inside(pp)) {
+      this.target = null;
+      moving = !stepToward(this.g, pp, 3.7, dt, 1.9);
+      if (dp < 2.4 && this.cd <= 0) {
+        this.cd = 1.6; this.phase = 0;
+        const dir = new V3(pp.x - this.pos.x, 0, pp.z - this.pos.z).normalize();
+        player.kb.set(dir.x * 13, 0, dir.z * 13);
+        dropFromCarrier(player.c, 3); camShake = 0.35; sfx('roar');
+      }
+    } else {
+      if (!this.target) this.target = new V3(rand(FIELD.x0, FIELD.x1), 0, rand(FIELD.z0, FIELD.z1));
+      if (stepToward(this.g, this.target, 1.6, dt, 0.2)) this.target = null;
+    }
+    if (moving) this.phase += dt * 8;
+    this.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(this.phase + (i % 2 ? PI : 0)) * 0.45 : 0; });
+  }
+}
+let camShake = 0;
+function spawnBear() {
+  if (bear) return;
+  bear = new Bear(rand(FIELD.x0 + 3, FIELD.x1 - 3), rand(FIELD.z0 + 2, FIELD.z0 + 6));
+  toast('A giant Ice Bear roams the north field!'); sfx('roar');
+}
+
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0 };
+const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8 };
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
@@ -930,8 +1152,8 @@ class Worker {
     this.t += dt;
     const go = (target, stop) => { const arr = navStep(this.g, target, 3.6, dt, stop); moving = !arr; return arr; };
     if (this.state === 'deliver') {
-      const dst = { lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input }[this.kind];
-      const type = { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem' }[this.kind];
+      const dst = { lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
+      const type = { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish' }[this.kind];
       if (go(dst.center, 0.7) && this.t > 0.12) {
         this.t = 0;
         if (dst.free() > 0) { const it = this.c.take(type); if (it) dst.receive(it.m, it.pos); }
@@ -955,6 +1177,9 @@ class Worker {
         if (b && go(b.pos, 1.5) && this.t > 0.6) { this.t = 0; this.p.swing = 1; b.hit(1); }
         if (!b && this.c.load > 0) this.state = 'deliver';
       }
+      if (this.c.full()) this.state = 'deliver';
+    } else if (this.kind === 'fisher') {
+      if (go(dock.spot, 0.3)) { this.g.rotation.y = lerpAng(this.g.rotation.y, PI / 2, 0.2); tryFish(this.c, this, dt); }
       if (this.c.full()) this.state = 'deliver';
     } else if (this.kind === 'server') {
       if (go(grill.output.center, 0.6)) {
@@ -985,6 +1210,10 @@ const PADS = [
   { id: 'bridge', label: 'Build Bridge', icon: 'bridge', costs: [250], x: 23.6, z: BRIDGE_Z, req: () => sawmill.unlocked, apply: unlockBridge },
   { id: 'cutter', label: 'Gem Cutter', icon: 'gem', costs: [300], x: 19, z: 6, req: () => bridge.unlocked, apply: unlockCutter },
   { id: 'miner', label: 'Hire Miner', icon: 'person', costs: [260, 520], x: 17, z: 2.4, req: () => cutter.unlocked, apply: () => new Worker('miner', 17, 2.4) },
+  { id: 'gates', label: 'Camp Gates', icon: 'gate', costs: [200], x: 4.6, z: -0.8, req: () => sawmill.unlocked, apply: unlockGates },
+  { id: 'dock', label: 'Fishing Dock', icon: 'fish', costs: [180], x: 23.4, z: -5, req: () => bridge.unlocked, apply: unlockDock },
+  { id: 'smoke', label: 'Smokehouse', icon: 'house', costs: [220], x: 19, z: -5, req: () => dock.built, apply: unlockSmoke },
+  { id: 'fisher', label: 'Hire Fisher', icon: 'person', costs: [220], x: 17, z: -1.8, req: () => smoke.unlocked, apply: () => new Worker('fisher', 17, -1.8) },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
 const padState = {};
@@ -1031,7 +1260,9 @@ function payPad(p) {
 const player = { p: makePerson(0x2f78d6, 'axe') };
 player.g = player.p.group; player.g.position.set(0, 0, 2);
 player.c = new Carrier(player.g, W.cap);
-player.atk = 0; player.tick = 0;
+player.atk = 0; player.tick = 0; player.kb = new V3(); player.fishT = 0;
+player.rod = mesh(new THREE.CylinderGeometry(0.025, 0.035, 1.9, 5), 0x5a3a1e, 0.45, 1.5, 0.75, player.g);
+player.rod.rotation.x = 1.05; player.rod.visible = false;
 const maxLabel = (() => {
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
   const x = cv.getContext('2d'); x.fillStyle = '#e8433a'; roundRect(x, 8, 8, 240, 80, 24); x.fill();
@@ -1070,6 +1301,7 @@ function playerInteract() {
   const drops = [[grill.input, 'meat'], [counter.input, 'steak']];
   if (sawmill.unlocked) drops.push([sawmill.input, 'log']);
   if (cutter.unlocked) drops.push([cutter.input, 'gem']);
+  if (smoke.unlocked) drops.push([smoke.input, 'fish']);
   for (const [pile, type] of drops) {
     if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
@@ -1078,7 +1310,7 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of [counter.cash, sawmill.cash, cutter.cash]) {
+  for (const cp of [counter.cash, sawmill.cash, cutter.cash, smoke.cash]) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
@@ -1111,13 +1343,17 @@ function updatePlayer(dt) {
     player.g.rotation.y = lerpAng(player.g.rotation.y, Math.atan2(dir.x, dir.z), 0.3);
     collide(pos, 0.38);
   }
+  if (player.kb.lengthSq() > 0.05) { pos.addScaledVector(player.kb, dt); player.kb.multiplyScalar(Math.pow(0.01, dt)); collide(pos, 0.38); }
   animPerson(player.p, moving, dt);
+  const fishing = dock.built && !moving && inZone(pos, dock.spot.x, dock.spot.z, 1.0);
+  player.rod.visible = fishing;
+  if (fishing) { player.g.rotation.y = lerpAng(player.g.rotation.y, PI / 2, 0.2); tryFish(player.c, player, dt); } else player.fishT = 0;
 
   // auto chop / hunt
   player.atk -= dt;
   if (player.atk <= 0) {
-    const b = nearest(boars.concat(wolves), pos, b => b.pos);
-    if (b && d2(b.pos, pos) < 1.9) {
+    const b = nearest(boars.concat(wolves, bear ? [bear] : []), pos, b => b.pos);
+    if (b && d2(b.pos, pos) < (b.reach || 1.9)) {
       player.atk = 0.45; player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
@@ -1156,7 +1392,7 @@ function updateGuide(t) {
     else if (c.count('meat') > 0) { target = grill.input.center; text = 'Drop meat at the grill'; }
     else if (grill.input.n > 0) { target = grill.output.center; text = 'Wait for the grill'; }
     else { const b = nearest(boars, player.g.position, b => b.pos); if (b) target = b.pos; text = 'Hunt frost boars in the north field'; }
-  } else if (padLevel('lumber') === 0 && padLevel('server') === 0 && c.count('log') === 0 && sawmill.input.n === 0 && sawmill.cash.value === 0) {
+  } else if (!bridge.unlocked && padLevel('lumber') === 0 && padLevel('server') === 0 && c.count('log') === 0 && sawmill.input.n === 0 && sawmill.cash.value === 0) {
     text = 'Chop trees in the forest for the sawmill';
     target = nearest(trees.filter(t => !t.down), player.g.position).pos;
   } else if (!bridge.unlocked && W.cash >= 120) {
@@ -1198,6 +1434,9 @@ function sfx(name) {
     case 'drop': tone(420, 320, 0.05, 'sine', 0.05); break;
     case 'buy': [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.11, i * 0.08)); break;
     case 'howl': tone(300, 620, 0.9, 'sine', 0.1); tone(620, 360, 1.1, 'sine', 0.09, 0.9); break;
+    case 'splash': tone(520, 180, 0.18, 'sine', 0.08); break;
+    case 'roar': tone(150, 55, 0.7, 'sawtooth', 0.11); tone(110, 60, 0.6, 'square', 0.05, 0.05); break;
+    case 'gate': tone(170, 120, 0.12, 'square', 0.06); break;
     case 'dawn': [392, 523, 659].forEach((f, i) => tone(f, f, 0.3, 'sine', 0.08, i * 0.12)); break;
   }
 }
@@ -1237,7 +1476,7 @@ class Wolf {
     this.legs = [[-0.16, 0.36], [0.16, 0.36], [-0.16, -0.36], [0.16, -0.36]].map(([lx, lz]) => {
       const p = new THREE.Group(); p.position.set(lx, 0.42, lz); this.g.add(p); mesh(WG.leg, 0x555c68, 0, -0.21, 0, p); return p;
     });
-    this.hp = 2; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
+    this.hp = 2; this.bite = 0; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
     this.g.scale.setScalar(0.01); scene.add(this.g); wolves.push(this);
   }
   get pos() { return this.g.position; }
@@ -1261,8 +1500,15 @@ class Wolf {
       const piles = [[grill.output, 'steak'], [counter.input, 'steak'], [grill.input, 'meat']];
       const pick = piles.find(([p]) => p.n > 0);
       const target = pick ? pick[0].center : new V3(0, 0, 1);
-      const arrived = navStep(this.g, target, 3.3, dt, 0.8);
-      moving = !arrived;
+      let arrived = false;
+      if (!inside(this.pos) && gatesBlocking() && !GATES.some(g => g.broken)) {
+        const gt = nearest(GATES, this.pos, g => g.out);
+        const at = navStep(this.g, gt.out, 3.3, dt, 0.5); moving = !at;
+        if (at) {
+          this.g.rotation.y = Math.atan2(gt.in.x - this.pos.x, gt.in.z - this.pos.z);
+          this.bite += dt; if (this.bite > 1) { this.bite = 0; hitGate(gt); }
+        }
+      } else { arrived = navStep(this.g, target, 3.3, dt, 0.8, g => !gatesBlocking() || g.broken); moving = !arrived; }
       if (arrived && pick) {
         const m = pick[0].take();
         if (m) { m.position.set(0, 0.78, 1.25); m.rotation.set(0, 0, m.rotation.z); this.g.add(m); this.carry = m; this.carryType = pick[1]; this.state = 'flee'; }
@@ -1286,8 +1532,12 @@ function updateDayNight(dt) {
   hemi.intensity = 1.05 - 0.55 * nightK; hemi.color.copy(DAY_SKY).lerp(NIGHT_SKY, nightK);
   sun.intensity = 0.62 - 0.5 * nightK;
   grillGlow.intensity = 1.9 * nightK; lantern.intensity = 1.4 * nightK;
-  if (night && !wasNight) { toast('Night falls. Wolves are coming for your food!'); sfx('howl'); wolfTimer = 2; }
-  if (!night && wasNight) { toast('Morning! The wolves ran off.'); sfx('dawn'); }
+  if (night && !wasNight) { toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!'); sfx('howl'); wolfTimer = 2; }
+  if (!night && wasNight) {
+    repairGates();
+    if ((Math.floor(dayT / CYCLE) + 1) % 3 === 0 && !bear) spawnBear();
+    else { toast('Morning! The wolves ran off.'); sfx('dawn'); }
+  }
   wasNight = night;
   if (night) { wolfTimer -= dt; if (wolfTimer <= 0 && wolves.length < maxWolves()) { spawnWolf(); wolfTimer = 6; } }
   const ph = dayT % CYCLE;
@@ -1367,6 +1617,7 @@ function frame() {
   for (const b of boars.slice()) b.update(dt);
   for (const rk of rocks) rk.update(dt);
   updateGrill(dt); updateSawmill(dt); updateTower(dt); updateCutter(dt); updateRiver(dt); updateDayNight(dt);
+  updateGates(dt); updateDock(dt); updateSmoke(dt); if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
   for (const w of workers) w.update(dt);
@@ -1381,6 +1632,7 @@ function frame() {
   // camera & light follow
   camTarget.lerp(player.g.position, 1 - Math.pow(0.002, dt));
   camera.position.copy(camTarget).add(CAM);
+  if (camShake > 0) { camShake = Math.max(0, camShake - dt); camera.position.x += rand(-1, 1) * camShake; camera.position.y += rand(-1, 1) * camShake; }
   camera.lookAt(camTarget.x, camTarget.y + 0.5, camTarget.z);
   sun.position.set(camTarget.x - 9, 24, camTarget.z + 6); sun.target.position.copy(camTarget);
   // snow
@@ -1396,7 +1648,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; } };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES };
 requestAnimationFrame(frame);
 })();
 </script>

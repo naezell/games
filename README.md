@@ -7,7 +7,8 @@ Small games built just for fun.
 A snowy camp-builder: hunt frost boars, cook meat on the grill, sell steaks to villagers,
 then spend the cash on build pads (sawmill, workers, watchtower, upgrades).
 Build a bridge over the river to mine crystals for the Gem Cutter, and defend your food
-from wolves that raid the camp at night.
+from wolves that raid the camp at night (build Camp Gates to slow them down).
+Fish off the dock for the Smokehouse, and every third day take on the Ice Bear.
 
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
