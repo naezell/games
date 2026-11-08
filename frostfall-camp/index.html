@@ -174,7 +174,7 @@ const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 // ---------------- world layout ----------------
 const CAMP = { x0: -10, x1: 10, z0: -6, z1: 8 };
 const FIELD = { x0: -8, x1: 12, z0: -26, z1: -10 };
-const BOUNDS = { x0: -25, x1: 58, z0: -29, z1: 22 };
+const BOUNDS = { x0: -25, x1: 58, z0: -29, z1: 34 };
 const RIDGE = { x0: 36, x1: 54, z0: -6, z1: 8 };
 const inRidge = p => p.x > RIDGE.x0 && p.x < RIDGE.x1 && p.z > RIDGE.z0 && p.z < RIDGE.z1;
 const RIVER = { x0: 26, x1: 30 }, BRIDGE_Z = 1.5;
@@ -386,6 +386,30 @@ function drawIcon(c, icon, cx, cy, s) {
     c.beginPath(); c.moveTo(-30, -24); c.lineTo(-22, -46); c.lineTo(-8, -30); c.moveTo(30, -24); c.lineTo(22, -46); c.lineTo(8, -30); c.fill();
     c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(-14, -6, 10, 0, 2 * PI); c.arc(14, -6, 10, 0, 2 * PI); c.fill();
     c.fillStyle = '#1d2a3a'; c.beginPath(); c.arc(-14, -6, 4, 0, 2 * PI); c.arc(14, -6, 4, 0, 2 * PI); c.fill();
+  } else if (icon === 'jam') {
+    c.fillStyle = '#b03a8a'; roundRect(c, -28, -20, 56, 58, 10); c.fill();
+    c.fillStyle = W_; c.fillRect(-32, -36, 64, 18); c.fillStyle = '#ffd6ec'; c.fillRect(-18, 0, 36, 18);
+  } else if (icon === 'berry') {
+    c.fillStyle = '#d2365a'; for (const [x, y] of [[-16, 8], [16, 8], [0, -14], [0, 24]]) { c.beginPath(); c.arc(x, y, 17, 0, 2 * PI); c.fill(); }
+    c.fillStyle = '#3f7f4a'; c.beginPath(); c.ellipse(0, -36, 16, 7, 0.3, 0, 2 * PI); c.fill();
+  } else if (icon === 'coal' || icon === 'ore') {
+    c.fillStyle = icon === 'coal' ? '#2c2f36' : '#b5653a'; c.beginPath(); c.moveTo(-36, 10); c.lineTo(-18, -30); c.lineTo(20, -34); c.lineTo(40, 2); c.lineTo(24, 32); c.lineTo(-22, 32); c.closePath(); c.fill();
+    c.strokeStyle = W_; c.lineWidth = 4; c.stroke();
+  } else if (icon === 'bar') {
+    c.fillStyle = '#c8d0d8'; c.beginPath(); c.moveTo(-44, 20); c.lineTo(-30, -14); c.lineTo(30, -14); c.lineTo(44, 20); c.closePath(); c.fill();
+    c.fillStyle = '#e8eef4'; c.fillRect(-26, -14, 52, 8);
+  } else if (icon === 'tool') {
+    c.strokeStyle = '#c48a4a'; c.lineWidth = 10; c.beginPath(); c.moveTo(-34, 36); c.lineTo(20, -18); c.stroke();
+    c.fillStyle = '#c8d0d8'; c.beginPath(); c.moveTo(-6, -40); c.lineTo(44, -2); c.lineTo(30, 10); c.lineTo(-18, -28); c.closePath(); c.fill();
+  } else if (icon === 'ice') {
+    c.fillStyle = '#bfe8ff'; c.fillRect(-34, -20, 52, 50); c.fillStyle = '#e6f6ff'; c.beginPath(); c.moveTo(-34, -20); c.lineTo(-16, -38); c.lineTo(36, -38); c.lineTo(18, -20); c.closePath(); c.fill();
+    c.fillStyle = '#9fd2f5'; c.beginPath(); c.moveTo(18, -20); c.lineTo(36, -38); c.lineTo(36, 12); c.lineTo(18, 30); c.closePath(); c.fill();
+  } else if (icon === 'bloom') {
+    c.fillStyle = W_; for (let k = 0; k < 6; k++) { c.beginPath(); c.arc(Math.cos(k * 1.047) * 22, Math.sin(k * 1.047) * 22, 15, 0, 2 * PI); c.fill(); }
+    c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(0, 0, 13, 0, 2 * PI); c.fill();
+  } else if (icon === 'potion') {
+    c.fillStyle = '#5ff0d0'; c.beginPath(); c.arc(0, 12, 30, 0, 2 * PI); c.fill();
+    c.fillStyle = W_; c.fillRect(-10, -42, 20, 30); c.fillStyle = '#c48a4a'; c.fillRect(-12, -48, 24, 10);
   } else if (icon === 'exit') {
     c.fillStyle = W_; c.beginPath(); c.moveTo(-40, -12); c.lineTo(6, -12); c.lineTo(6, -36); c.lineTo(46, 0); c.lineTo(6, 36); c.lineTo(6, 12); c.lineTo(-40, 12); c.closePath(); c.fill();
   } else if (icon === 'fire') {
@@ -470,6 +494,15 @@ const GEO = {
   cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
   gem: new THREE.OctahedronGeometry(0.2, 0),
   gold: new THREE.DodecahedronGeometry(0.18, 0),
+  berry: new THREE.SphereGeometry(0.13, 8, 6),
+  coal: new THREE.DodecahedronGeometry(0.17, 0),
+  ore: new THREE.DodecahedronGeometry(0.18, 0),
+  bar: new THREE.BoxGeometry(0.42, 0.14, 0.2),
+  ice: new THREE.BoxGeometry(0.38, 0.3, 0.38),
+  tool: merge([[new THREE.CylinderGeometry(0.035, 0.035, 0.6, 5).rotateZ(PI / 2), 0x7a4a26, 0, 0, 0], [new THREE.BoxGeometry(0.1, 0.12, 0.34), 0xb8c2cc, 0.28, 0, 0]]),
+  jam: merge([[new THREE.CylinderGeometry(0.14, 0.14, 0.24, 10), 0x8a2a6a, 0, 0, 0], [new THREE.CylinderGeometry(0.15, 0.15, 0.06, 10), 0xf6f6f6, 0, 0.14, 0], [new THREE.CylinderGeometry(0.145, 0.145, 0.08, 10), 0xffffff, 0, -0.02, 0]]),
+  bloom: merge([[new THREE.SphereGeometry(0.07, 6, 4), 0xffd23a, 0, 0, 0], ...[0, 1, 2, 3, 4].map(k => [new THREE.SphereGeometry(0.08, 6, 4), 0xffffff, Math.cos(k * 1.256) * 0.11, 0, Math.sin(k * 1.256) * 0.11])]),
+  potion: merge([[new THREE.SphereGeometry(0.15, 10, 8), 0x5ff0d0, 0, 0, 0], [new THREE.CylinderGeometry(0.05, 0.05, 0.14, 6), 0xdff8f0, 0, 0.18, 0], [new THREE.CylinderGeometry(0.055, 0.055, 0.05, 6), 0x7a4a26, 0, 0.27, 0]]),
   shard: new THREE.OctahedronGeometry(0.2, 0).scale(0.8, 1.5, 0.8),
   fish: new THREE.SphereGeometry(0.2, 10, 8).scale(1.5, 0.55, 0.75),
   lantern: new THREE.CylinderGeometry(0.15, 0.19, 0.3, 6),
@@ -477,7 +510,8 @@ const GEO = {
 };
 const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x5a4000 });
 const shardMat = new THREE.MeshLambertMaterial({ color: 0xd08cff, emissive: 0x4a1d66 });
-const H = { shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const iceMat = new THREE.MeshLambertMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.85, emissive: 0x1d3a55 });
+const H = { berry: 0.24, coal: 0.3, ore: 0.32, bar: 0.16, ice: 0.32, tool: 0.16, jam: 0.32, bloom: 0.18, potion: 0.36, shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
@@ -488,6 +522,12 @@ function makeItem(t) {
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
   else if (t === 'gold') m = new THREE.Mesh(GEO.gold, goldMat);
   else if (t === 'shard') m = new THREE.Mesh(GEO.shard, shardMat);
+  else if (t === 'berry') m = new THREE.Mesh(GEO.berry, mat(0xd2365a));
+  else if (t === 'coal') m = new THREE.Mesh(GEO.coal, mat(0x24262c));
+  else if (t === 'ore') m = new THREE.Mesh(GEO.ore, mat(0xb5653a));
+  else if (t === 'bar') m = new THREE.Mesh(GEO.bar, mat(0xb8c2cc));
+  else if (t === 'ice') m = new THREE.Mesh(GEO.ice, iceMat);
+  else if (t === 'tool' || t === 'jam' || t === 'bloom' || t === 'potion') m = new THREE.Mesh(GEO[t], vcMat);
   else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
   else if (t === 'lantern') m = new THREE.Mesh(GEO.lantern, lanternMat);
   else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
@@ -692,6 +732,22 @@ const GOLD_GEO = merge([
   [new THREE.DodecahedronGeometry(0.2, 0), 0xffcc33, 0.05, 1.2, -0.25],
   [new THREE.DodecahedronGeometry(0.15, 0), 0xffe680, -0.45, 0.6, 0.4],
 ]);
+const berries = [], coals = [], irons = [], blooms = [];
+const lumpRock = (c1, c2) => merge([
+  [new THREE.DodecahedronGeometry(0.8, 0), 0x55607a, 0, 0.45, 0],
+  [new THREE.DodecahedronGeometry(0.25, 0), c1, 0.38, 0.85, 0.3], [new THREE.DodecahedronGeometry(0.2, 0), c2, -0.32, 1.0, 0.1],
+  [new THREE.DodecahedronGeometry(0.22, 0), c1, 0.05, 1.2, -0.25], [new THREE.DodecahedronGeometry(0.17, 0), c2, -0.45, 0.6, 0.4],
+]);
+const NODE_EXTRA = {
+  berry: { geo: merge([[new THREE.DodecahedronGeometry(0.62, 1), 0x3f7f4a, 0, 0.55, 0], [new THREE.SphereGeometry(0.5, 8, 6), 0xf6f8fb, 0, 0.92, 0],
+    ...[[0.5, 0.6, 0.2], [-0.45, 0.7, 0.3], [0.2, 0.75, 0.52], [-0.2, 0.5, -0.55], [0.4, 0.4, -0.4], [-0.55, 0.35, -0.1], [0.05, 0.55, 0.6]].map(([x, y, z]) => [new THREE.SphereGeometry(0.1, 6, 4), 0xd2365a, x, y, z])]),
+    stump: merge([[new THREE.DodecahedronGeometry(0.35, 1), 0x3f7f4a, 0, 0.25, 0]]), item: 'berry', hp: 3, regrow: 20, color: 0xd2365a, r: 0.55, sound: 'chop' },
+  coal: { geo: lumpRock(0x1d1f24, 0x2c2f36), stump: null, item: 'coal', hp: 4, regrow: 28, color: 0x2c2f36, r: 0.75, sound: 'mine' },
+  iron: { geo: lumpRock(0xb5653a, 0x8a4a2a), stump: null, item: 'ore', hp: 4, regrow: 28, color: 0xb5653a, r: 0.75, sound: 'mine' },
+  bloom: { geo: merge([[new THREE.SphereGeometry(0.55, 10, 6, 0, 2 * PI, 0, PI / 2), 0xf6fbff, 0, 0, 0], [new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), 0x4a9a5a, 0, 0.7, 0],
+    [new THREE.SphereGeometry(0.1, 6, 4), 0xffd23a, 0, 1.0, 0], ...[0, 1, 2, 3, 4, 5].map(k => [new THREE.SphereGeometry(0.11, 6, 4), 0xe8f4ff, Math.cos(k * 1.047) * 0.17, 1.0, Math.sin(k * 1.047) * 0.17])]),
+    stump: merge([[new THREE.SphereGeometry(0.5, 10, 6, 0, 2 * PI, 0, PI / 2), 0xf6fbff, 0, 0, 0]]), item: 'bloom', hp: 2, regrow: 22, color: 0xe8f4ff, r: 0.45, sound: 'chop' },
+};
 const NODE = {
   shard: { geo: merge([
     [new THREE.DodecahedronGeometry(0.6, 0), 0xdfe9f5, 0, 0.3, 0],
@@ -704,6 +760,7 @@ const NODE = {
   rock: { geo: ROCK_GEO, stump: RUBBLE_GEO, item: 'gem', hp: 4, regrow: 25, color: 0x7fe3f5, r: 0.7, sound: 'mine' },
 };
 const trees = [], rocks = [];
+Object.assign(NODE, NODE_EXTRA); NODE.coal.stump = NODE.iron.stump = RUBBLE_GEO;
 class Tree {
   constructor(x, z, kind = 'tree') {
     this.k = NODE[kind]; this.kind = kind;
@@ -741,9 +798,11 @@ const easeOutBack = t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3
 for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
   for (let x = x0; x <= x1; x += 2.5) for (let z = z0; z <= z1; z += 2.5) {
     if (x > 13 && z > -8.5 && z < 9.5) continue; // road to the river
+    if (x < -12 && z > -7.5 && z < 9.5) continue; // berry meadow
     if (Math.random() < 0.62) trees.push(new Tree(x + rand(-0.6, 0.6), z + rand(-0.6, 0.6)));
   }
 }
+for (let x = -22; x <= -14; x += 2.7) for (let z = -6; z <= 1; z += 2.4) if (Math.random() < 0.8) berries.push(new Tree(x + rand(-0.5, 0.5), z + rand(-0.5, 0.5), 'berry'));
 for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
   if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 37) continue;
   if (Math.abs(x - 45) < 3.8 && z > -16 && z < -6) continue;
@@ -1435,6 +1494,8 @@ const QUEST_DEFS = [
   { id: 'gem', text: n => `Mine ${n} crystals`, n: [6, 10, 16], ok: () => bridge.unlocked },
   { id: 'fish', text: n => `Catch ${n} fish`, n: [4, 8, 12], ok: () => dock.built },
   { id: 'wolf', text: n => `Defeat ${n} wolves`, n: [2, 3, 5], ok: () => dayT > CYCLE * 0.6 },
+  { id: 'berry', text: n => `Pick ${n} berries`, n: [10, 18, 30], ok: () => kitchen.built },
+  { id: 'coal', text: n => `Mine ${n} coal`, n: [6, 10, 16], ok: () => smelter.built },
   { id: 'guest', text: n => `Host ${n} spa guests`, n: [3, 5, 8], ok: () => springs.unlocked },
 ];
 let quests = [], questDay = 0;
@@ -1583,7 +1644,7 @@ function updateTrader(dt) {
 }
 
 // Reindeer sled: ship goods to a faraway town for better prices
-const SHIP_PRICE = { steak: 9, gem: 14, fish: 10 };
+const SHIP_PRICE = { steak: 9, gem: 14, fish: 10, jam: 24, tool: 95, potion: 140 };
 const depot = { built: false, pos: new V3(9, 0, 15), input: new Pile(6.8, 15, 3, 3, 20, 0.62, 0.62, 0.3), types: [], state: 'load', t: 0, idle: 0, cash: null, load: 0 };
 function unlockDepot(instant) {
   if (depot.built) return;
@@ -1682,7 +1743,7 @@ function updateRank(celebrate) {
 
 // Minimap
 const mapCv = document.getElementById('map'), mapX = mapCv.getContext('2d');
-const MAP = { x0: -26, x1: 59, z0: -30, z1: 23 };
+const MAP = { x0: -26, x1: 59, z0: -30, z1: 35 };
 const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - MAP.z0) / (MAP.z1 - MAP.z0) * mapCv.height;
 let mapT = 0;
 function drawMap(dt) {
@@ -1693,6 +1754,7 @@ function drawMap(dt) {
     c.fillStyle = '#eef6ff'; c.fillRect(mx(ISLE.x0), mz(ISLE.z0), mx(ISLE.x1) - mx(ISLE.x0), mz(ISLE.z1) - mz(ISLE.z0));
     const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
     for (const sh of isle.shards) if (!sh.down) dot(sh.pos.x, sh.pos.z, 3, '#d08cff');
+    for (const n of blooms) if (!n.down) dot(n.pos.x, n.pos.z, 2.5, '#ffffff');
     for (const pg of isle.penguins) dot(pg.g.position.x, pg.g.position.z, 2, '#1d2433');
     if (hotel.built) dot(122, 61, 5, '#bfe4ff');
     dot(isle.exitZone.x, isle.exitZone.z, 4, '#ffd23a');
@@ -1704,12 +1766,14 @@ function drawMap(dt) {
     const c = mapX; c.fillStyle = '#1c2333'; c.fillRect(0, 0, mapCv.width, mapCv.height);
     const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
     for (const gn of golds) if (!gn.down) dot(gn.pos.x, gn.pos.z, 3, '#ffcc33');
+    for (const n of coals) if (!n.down) dot(n.pos.x, n.pos.z, 3, '#0b0d12');
+    for (const n of irons) if (!n.down) dot(n.pos.x, n.pos.z, 3, '#d07a4a');
     dot(mine.exitZone.x, mine.exitZone.z, 4, '#8fe8f8');
     for (const gm of mine.golems) dot(gm.pos.x, gm.pos.z, gm.king ? 7 : 4, gm.king ? '#c08cff' : '#e8433a');
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
     return;
   }
-  Object.assign(MAP, { x0: -26, x1: 59, z0: -30, z1: 23 });
+  Object.assign(MAP, { x0: -26, x1: 59, z0: -30, z1: 35 });
   const c = mapX, W_ = mapCv.width, H_ = mapCv.height;
   c.clearRect(0, 0, W_, H_);
   c.fillStyle = nightK > 0.5 ? '#2a3a58' : '#e9f0f6'; c.fillRect(0, 0, W_, H_);
@@ -1718,6 +1782,9 @@ function drawMap(dt) {
   c.fillStyle = 'rgba(80,140,200,0.35)';
   for (const t of trees) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
   c.fillStyle = '#8fe8f8'; for (const t of rocks) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
+  if (town.built) { c.fillStyle = '#c9cfd8'; c.fillRect(mx(-15), mz(23.4), mx(15) - mx(-15), mz(33.8) - mz(23.4)); }
+  c.fillStyle = '#d2365a'; for (const t of berries) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
+  for (const st of STATIONS) if (st.built && st.x < 90) { c.fillStyle = '#5a3a1e'; c.beginPath(); c.arc(mx(st.x), mz(st.z), 3, 0, 2 * PI); c.fill(); }
   if (ridge.unlocked) { c.fillStyle = '#b9a8c4'; c.fillRect(mx(RIDGE.x0), mz(RIDGE.z0), mx(RIDGE.x1) - mx(RIDGE.x0), mz(RIDGE.z1) - mz(RIDGE.z0)); }
   c.fillStyle = '#c99a6c'; c.fillRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
   c.strokeStyle = '#8a5328'; c.lineWidth = 2; c.strokeRect(mx(CAMP.x0), mz(CAMP.z0), mx(CAMP.x1) - mx(CAMP.x0), mz(CAMP.z1) - mz(CAMP.z0));
@@ -1927,6 +1994,13 @@ const UPGRADES = [
   { id: 'hotelp', name: 'Silk Pillows', desc: '+$15 for every hotel guest', costs: [3000, 8000], req: () => hotel.built },
   { id: 'shardp', name: 'Shard Polish', desc: '+$20 for every aurora shard', costs: [3000, 8000], req: () => exch.built },
   { id: 'owlp', name: 'Owl Talons', desc: 'Your owl strikes twice as hard', costs: [2000], req: () => owl.owned },
+  { id: 'jamp', name: 'Secret Recipe', desc: '+$4 for every jar of jam', costs: [1500, 4000], req: () => store.built },
+  { id: 'toolp', name: 'Tempered Steel', desc: '+$20 for every tool', costs: [3000, 8000], req: () => store.built },
+  { id: 'potionp', name: 'Crystal Vials', desc: '+$30 for every potion', costs: [4000, 10000], req: () => store.built },
+  { id: 'icep', name: 'Fine Chisels', desc: '+$12 for every ice sculpture', costs: [2000, 5000], req: () => carver.built },
+  { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
+  { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
+  { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
   { id: 'goldp', name: 'Gold Polish', desc: '+$10 for every gold nugget', costs: [1500, 4000], req: () => smith.built },
   { id: 'yak', name: 'Happy Yaks', desc: 'Yaks grow wool 35% faster', costs: [600, 1500], req: () => pen.level > 0 },
 ];
@@ -2097,10 +2171,16 @@ function unlockMine(instant) {
   zoneMarker(mine.exitZone.x, mine.exitZone.z, 'exit', '#8fe8f8');
   for (let i = 0; i < 18; i++) {
     let x, z, tries = 0;
-    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4)));
+    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5)));
     golds.push(new Tree(x, z, 'gold'));
   }
   mine.wasIn = !instant;
+  for (const [list, kind] of [[coals, 'coal'], [irons, 'iron']]) for (let i = 0; i < 8; i++) {
+    let x, z, tries = 0;
+    const taken = () => golds.concat(coals, irons).some(n => d2(n.pos, { x, z }) < 2.4);
+    do { x = rand(106, 131); z = rand(-12.5, 12.5); tries++; } while (tries < 30 && ((x > 121 && Math.abs(z) < 5.5) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 116.5) < 2 && Math.abs(z - 4.5) < 2) || taken()));
+    list.push(new Tree(x, z, kind));
+  }
   if (!instant) { popIn(m); burst(new V3(45, 0, -11), 0xffcc33, 18); toast('The Frost Mine is open! Gold awaits below.'); }
 }
 // Goldsmith inside the mine
@@ -2212,6 +2292,166 @@ function applyMineEnv() {
   hemi.intensity = 0.55; hemi.color.setHex(0xa8bcff); sun.intensity = 0.2;
 }
 
+// ================= Crafting stations (generic) =================
+class TypedPile extends Pile {
+  constructor(...a) { super(...a); this.types = []; this.typed = true; }
+  receiveT(m, from, type) { this.types.push(type); this.receive(m, from); }
+  takeT() { const m = this.take(); return m ? [m, this.types.pop()] : null; }
+}
+const STATIONS = [];
+class Station {
+  constructor(o) {
+    Object.assign(this, o); this.built = false; this.t = 0; this.make = 0; this.pos = new V3(o.x, 0, o.z);
+    this.ins = (o.inputs || []).map(([type, x, z, n = 1]) => ({ type, n, pile: o.accepts ? new TypedPile(x, z, 3, 3, 36, 0.6, 0.6, 0.36) : new Pile(x, z, 3, 3, 30, 0.6, 0.6, H[type] + 0.02) }));
+    if (o.out) this.outPile = new Pile(o.out[1], o.out[2], 3, 3, 36, 0.6, 0.6, H[o.out[0]] + 0.02);
+    STATIONS.push(this);
+  }
+  unlock(instant) {
+    if (this.built) return; this.built = true;
+    const g = stationGroup(this.x, this.z); this.g = g; this.build(g, this);
+    const [w, d] = this.size || [2.2, 1.6];
+    colliders.push({ x0: this.x - w / 2, x1: this.x + w / 2, z0: this.z - d / 2, z1: this.z + d / 2 });
+    for (const i of this.ins) zoneMarker(i.pile.x, i.pile.z, this.accepts ? 'cart' : ICON_OF[i.type] || i.type, '#ffffff');
+    if (this.outPile) zoneMarker(this.outPile.x, this.outPile.z, ICON_OF[this.out[0]] || this.out[0], '#ffd23a');
+    if (this.cashAt) this.cash = new CashPile(this.cashAt[0], this.cashAt[1]);
+    if (!instant) { popIn(g); burst(this.pos, 0xffd23a, 14); if (this.hint) toast(this.hint); }
+  }
+  update(dt) {
+    if (!this.built) return;
+    if (this.anim) this.anim(dt, this);
+    const top = this.pos.clone().add(new V3(0, 1.4, 0));
+    if (this.make > 0) {
+      this.make -= dt;
+      if (this.make <= 0) {
+        burst(top, this.fx || 0xffd23a, 5); bump(this.stat || (this.out && this.out[0]));
+        if (this.outPile) { this.outPile.pending--; this.outPile.receive(makeItem(this.out[0]), top.clone()); }
+        else this.cash.addValue(this.sell(), top);
+      }
+      return;
+    }
+    this.t += dt;
+    if (this.t < this.time) return;
+    if (this.accepts) {
+      const pile = this.ins[0].pile; if (!pile.n) return;
+      this.t = 0; const [m, type] = pile.takeT();
+      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type](), top); });
+      return;
+    }
+    if (!this.ins.every(i => i.pile.n >= i.n)) return;
+    if (this.outPile && this.outPile.free() <= 0) return;
+    this.t = 0; this.make = 0.32;
+    if (this.outPile) this.outPile.pending++;
+    for (const i of this.ins) for (let k = 0; k < i.n; k++) { const m = i.pile.take(); fly(m, m.position.clone(), () => top, 0.25, () => scene.remove(m)); }
+  }
+}
+const ICON_OF = { ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
+const hut = (g, wall, roof, w = 2.2, d = 1.6) => {
+  mesh(new THREE.BoxGeometry(w, 1.4, d), wall, 0, 0.7, 0, g);
+  const rf = mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.6, 1.0, 4), roof, 0, 1.9, 0, g); rf.rotation.y = PI / 4; rf.scale.z = d / w;
+  mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.45, 0.22, 4), 0xffffff, 0, 2.3, 0, g).rotation.y = PI / 4;
+};
+const kitchen = new Station({ id: 'kitchen', x: -16.6, z: 5.6, inputs: [['berry', -13.8, 4.0, 2]], out: ['jam', -13.8, 7.2], time: 1.6, fx: 0xd2365a,
+  hint: 'Two berries make one jar of jam. Sell jam at the General Store!',
+  build: (g, st) => { hut(g, 0xf0d8c0, 0xb03a8a); st.pot = mesh(new THREE.CylinderGeometry(0.3, 0.25, 0.35, 10), 0x8a2a6a, 0.6, 1.55, 0.7, g); } });
+const smelter = new Station({ id: 'smelter', x: 113, z: 10.6, inputs: [['ore', 110.4, 12.4], ['coal', 110.4, 9.0]], out: ['bar', 115.8, 10.6], time: 2.0, fx: 0xff9a3c,
+  hint: 'Iron ore + coal = iron bars. The Blacksmith in Market Town makes tools!',
+  build: (g, st) => { mesh(new THREE.CylinderGeometry(1.0, 1.2, 1.8, 8), 0x6b4a3a, 0, 0.9, 0, g); mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.6, 8), 0x55607a, 0, 2.5, 0, g);
+    st.glow = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.1), new THREE.MeshBasicMaterial({ color: 0xff7a2a })); st.glow.position.set(0, 0.7, 1.0); g.add(st.glow); },
+  anim: (dt, st) => { st.glow.material.color.setHex(st.make > 0 || st.ins.every(i => i.pile.n) ? 0xffb03a : 0x8a3a1a); } });
+const smithy = new Station({ id: 'smithy', x: -8, z: 30.4, inputs: [['bar', -9.8, 27.2]], out: ['tool', -6.4, 27.2], time: 2.2, fx: 0xc8d0d8,
+  build: (g, st) => { hut(g, 0x8a7a6a, 0x3d3050); mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35), 0x2b3442, 1.3, 0.75, 0.9, g); st.fire = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 6), new THREE.MeshBasicMaterial({ color: 0xff9a3c })); st.fire.position.set(-1.3, 0.4, 0.9); g.add(st.fire); },
+  anim: (dt, st) => { st.fire.scale.y = 1 + Math.sin(performance.now() / 80) * 0.2; } });
+const icesaw = new Station({ id: 'icesaw', x: 24.6, z: 8.6, inputs: [], out: ['ice', 22.0, 8.6], time: 3.0, fx: 0xbfe8ff, size: [1.6, 1.6], stat: 'iceblock',
+  hint: 'The Ice Saw cuts blocks from the river all by itself.',
+  build: (g, st) => { mesh(new THREE.BoxGeometry(1.4, 0.8, 1.4), 0x5d6b7c, 0, 0.4, 0, g); st.blade = mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.05, 16), 0xd5dde6, 0.9, 0.7, 0, g); st.blade.rotation.z = PI / 2; },
+  anim: (dt, st) => { st.blade.rotation.x += dt * 10; } });
+const carver = new Station({ id: 'carver', x: 7, z: 30.4, inputs: [['ice', 5.6, 27.2]], cashAt: [11.2, 30.4], time: 2.0, sell: () => 45 + 12 * U('icep'), stat: 'sculpt', fx: 0xbfe8ff,
+  build: (g, st) => { hut(g, 0xdff1ff, 0x3f7fc8); const deer = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), iceMat); deer.position.set(1.4, 0.4, 0.9); g.add(deer); } });
+const store = new Station({ id: 'store', x: 0, z: 30.4, size: [3.2, 1.8], inputs: [['*', 0, 27.2]], cashAt: [2.8, 27.2], time: 1.0,
+  accepts: { jam: () => 18 + 4 * U('jamp'), tool: () => 75 + 20 * U('toolp'), potion: () => 110 + 30 * U('potionp') },
+  hint: 'The General Store buys jam, tools and potions.',
+  build: (g) => { hut(g, 0xf2e6c8, 0x2f8a5a, 3.2, 1.8); for (let i = 0; i < 8; i++) mesh(new THREE.BoxGeometry(0.4, 0.08, 0.7), i % 2 ? 0xffffff : 0x2f8a5a, -1.4 + i * 0.4, 1.5, 1.2, g); } });
+const apoth = new Station({ id: 'apoth', x: 128, z: 65, inputs: [['bloom', 124.8, 66.0], ['shard', 124.8, 63.6]], out: ['potion', 130.2, 62.6], time: 2.4, fx: 0x5ff0d0,
+  hint: 'Snowbloom + aurora shard = potion. Potions sell for the most!',
+  build: (g, st) => { hut(g, 0xe8dcf8, 0x6a3ab0); st.flask = new THREE.Mesh(GEO.potion, vcMat); st.flask.scale.setScalar(2.2); st.flask.position.set(0, 2.9, 0); g.add(st.flask); },
+  anim: (dt, st) => { st.flask.rotation.y += dt; } });
+
+// Market Town plaza
+const town = { built: false, folk: [] };
+function unlockTown(instant) {
+  if (town.built) return;
+  town.built = true;
+  const plaza = new THREE.Mesh(new THREE.PlaneGeometry(30, 10.5), mat(0xc9cfd8)); plaza.rotation.x = -PI / 2; plaza.position.set(0, 0.011, 28.6); plaza.receiveShadow = true; scene.add(plaza);
+  for (let x = -14; x <= 14; x += 1.5) for (const z of [23.5, 33.6]) { const st = mesh(new THREE.BoxGeometry(1.3, 0.05, 0.5), 0xb3bac6, x, 0.02, z); st.castShadow = false; }
+  for (const [x, z] of [[-13, 24], [13, 24], [-3, 33], [3.6, 33], [-13, 33], [13, 33]]) {
+    const l = stationGroup(x, z); mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.4, 6), 0x2b3442, 0, 1.2, 0, l);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a })); b.position.y = 2.5; l.add(b);
+  }
+  const tree = new THREE.Mesh(TREE_GEO, vcMat); tree.position.set(-12, 0, 28.5); tree.scale.setScalar(1.4); tree.castShadow = true; scene.add(tree);
+  for (let k = 0; k < 6; k++) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: FW_COLORS[k] })); o.position.set(-12 + Math.cos(k) * 0.9, 1.2 + k * 0.35, 28.5 + Math.sin(k) * 0.9); scene.add(o); }
+  for (let i = 0; i < 5; i++) { const p = makePerson(PARKAS[randi(0, PARKAS.length - 1)], null, 0.9); p.group.position.set(rand(-12, 12), 0, rand(24.5, 26.5)); town.folk.push({ p, target: null, idle: rand(0, 3) }); }
+  if (!instant) { burst(new V3(0, 0, 27), 0xffd23a, 24); toast('Market Town is open for business!'); for (let k = 0; k < 4; k++) setTimeout(() => firework(new V3(rand(-8, 8), 0, 28)), k * 300); }
+}
+function updateTown(dt) {
+  for (const f of town.folk) {
+    let moving = false;
+    if (f.idle > 0) f.idle -= dt;
+    else {
+      if (!f.target) f.target = new V3(rand(-12.5, 12.5), 0, rand(24, 26.4));
+      moving = !stepToward(f.p.group, f.target, 1.4, dt, 0.1);
+      if (!moving) { f.target = null; f.idle = rand(2, 6); }
+    }
+    animPerson(f.p, moving, dt);
+  }
+}
+// Auto-haulers bought at the Town Hall
+let cartT = 0;
+function updateCarts(dt) {
+  cartT += dt; if (cartT < 15) return; cartT = 0;
+  const move = (src, dst, type, typed) => {
+    for (let i = 0; i < 6 && src.n > 0 && dst.free() > 0; i++) {
+      scene.remove(src.take()); const m = makeItem(type), from = dst.center.clone().add(new V3(0, 3, 0));
+      if (typed) dst.receiveT(m, from, type); else dst.receive(m, from);
+    }
+  };
+  if (U('minecart') && smelter.built && smithy.built) move(smelter.outPile, smithy.ins[0].pile, 'bar');
+  if (U('icewagon') && icesaw.built && carver.built) move(icesaw.outPile, carver.ins[0].pile, 'ice');
+  if (U('courier') && apoth.built && store.built) move(apoth.outPile, store.ins[0].pile, 'potion', true);
+}
+// Generic worker jobs for the new chains
+const JOBS = {
+  picker: { want: () => 'berry', nodes: () => berries, dst: () => kitchen.ins[0].pile },
+  smelterhand: { want: () => { const [o, c] = smelter.ins.map(i => i.pile.n + i.pile.pending); return o <= c ? 'ore' : 'coal'; }, nodes: t => t === 'ore' ? irons : coals, dst: t => t === 'ore' ? smelter.ins[0].pile : smelter.ins[1].pile },
+  herbalist: { want: () => { const [b, s] = apoth.ins.map(i => i.pile.n + i.pile.pending); return b <= s ? 'bloom' : 'shard'; }, nodes: t => t === 'bloom' ? blooms : isle.shards, dst: t => t === 'bloom' ? apoth.ins[0].pile : apoth.ins[1].pile },
+  clerk: { pickup: true, srcs: () => [[kitchen, 'jam'], [smithy, 'tool']].filter(([st]) => st.built && st.outPile.n > 0).map(([st, ty]) => [st.outPile, ty]), dst: () => store.ins[0].pile, idle: new V3(-3.4, 0, 25.4) },
+};
+function runJob(w, job, go) {
+  const pos = w.g.position;
+  if (w.state === 'deliver') {
+    const [dst, type] = w.drop;
+    if (go(dst.center, 0.7) && w.t > 0.12) {
+      w.t = 0;
+      if (dst.free() > 0) { const it = type === '*' ? w.c.take() : w.c.take(type); if (it) { if (dst.typed) dst.receiveT(it.m, it.pos, it.type); else dst.receive(it.m, it.pos); } }
+    }
+    if (w.c.load === 0) { w.state = 'gather'; w.want = null; w.tree = null; }
+    return;
+  }
+  if (job.pickup) {
+    const src = job.srcs()[0];
+    if (!src) { go(job.idle, 0.3); if (w.c.load > 0) { w.state = 'deliver'; w.drop = [job.dst(), '*']; } return; }
+    if (go(src[0].center, 0.6) && w.t > 0.15 && !w.c.full()) { w.t = 0; w.c.receive(src[1], src[0].take(), src[0].slot(src[0].n)); }
+    if (w.c.full()) { w.state = 'deliver'; w.drop = [job.dst(), '*']; }
+    return;
+  }
+  if (!w.want) w.want = job.want();
+  if (!w.tree || w.tree.down) w.tree = nearest(job.nodes(w.want).filter(n => !n.down), pos);
+  if (w.tree && go(w.tree.pos, 1.3) && w.t > 0.7) {
+    w.t = 0; w.p.swing = 1; w.g.rotation.y = Math.atan2(w.tree.pos.x - pos.x, w.tree.pos.z - pos.z);
+    w.tree.hit(w.c);
+  }
+  if (w.c.full()) { w.state = 'deliver'; w.drop = [job.dst(w.want), w.want]; }
+}
+
 // ================= Fishing boat =================
 const boat = { owned: false, state: 'dock', t: 4, pile: new Pile(23.2, -2.4, 3, 3, 40, 0.62, 0.62, 0.2), home: new V3(29.3, 0, -3.4) };
 function buyBoat(l, instant) {
@@ -2312,6 +2552,11 @@ function unlockIsle(instant) {
     let x, z, tries = 0;
     do { x = rand(104, 130); z = rand(42, 52); tries++; } while (tries < 20 && isle.shards.some(sh => d2(sh.pos, { x, z }) < 2.6));
     isle.shards.push(new Tree(x, z, 'shard'));
+  }
+  for (let i = 0; i < 10; i++) {
+    let x, z, tries = 0;
+    do { x = rand(104, 118); z = rand(55, 62.5); tries++; } while (tries < 20 && (blooms.some(b => d2(b.pos, { x, z }) < 1.8) || (Math.abs(x - 114.5) < 1.6 && Math.abs(z - 58.5) < 1.6) || (Math.abs(x - 108) < 1.6 && Math.abs(z - 60) < 1.6)));
+    blooms.push(new Tree(x, z, 'bloom'));
   }
   for (let i = 0; i < 8; i++) isle.penguins.push(new Penguin(rand(106, 128), rand(55, 66)));
   if (!instant) { burst(new V3(27.2, 0, -8.6), 0x3f7fc8, 16); toast('The Aurora Ferry is ready! Hop on at the river.'); }
@@ -2481,6 +2726,13 @@ const ACH = [
   ['alpha', 'Alpha Down', 'Defeat the Wolf Alpha', () => stat('alpha') >= 1],
   ['yeti', 'Yeti Tamer', 'Defeat the Yeti', () => stat('yeti') >= 1],
   ['pets', 'Animal Friends', 'Own the husky and the owl', () => husky.owned && owl.owned],
+  ['town', 'Market Day', 'Open Market Town', () => town.built],
+  ['jam50', 'Jam Session', 'Make 50 jars of jam', () => stat('jam') >= 50],
+  ['bar50', 'Iron Will', 'Smelt 50 iron bars', () => stat('bar') >= 50],
+  ['tool25', 'Toolmaker', 'Forge 25 tools', () => stat('tool') >= 25],
+  ['ice50', 'Ice Artist', 'Carve 50 ice sculptures', () => stat('sculpt') >= 50],
+  ['potion10', 'Alchemist', 'Brew 10 potions', () => stat('potion') >= 10],
+  ['maker', 'Master Maker', 'Build every crafting station', () => STATIONS.every(st => st.built)],
   ['star5', 'Star Collector', 'Hold 5 Golden Stars', () => legacy.stars >= 5],
 ];
 const trophyBtn = document.getElementById('trophybtn'), trophiesEl = document.getElementById('trophies'), trophyList = document.getElementById('trophylist');
@@ -2530,13 +2782,13 @@ function renderLegacy() {
 
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const WCOL = { picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
-const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash].filter(Boolean);
+const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
-    this.p = makePerson(WCOL[kind] || 0x8a5a36, kind === 'lumber' || kind === 'miner' || kind === 'crafter' || kind === 'digger' || kind === 'sharder' ? 'axe' : kind === 'hunter' ? 'spear' : null, kind === 'digger' ? 0.75 : 1);
+    this.p = makePerson(WCOL[kind] || 0x8a5a36, kind === 'lumber' || kind === 'miner' || kind === 'crafter' || kind === 'digger' || kind === 'sharder' || kind === 'picker' || kind === 'smelterhand' || kind === 'herbalist' ? 'axe' : kind === 'hunter' ? 'spear' : null, kind === 'digger' ? 0.75 : 1);
     this.g = this.p.group; this.g.position.set(x, 0, z);
     this.c = new Carrier(this.g, (kind === 'server' ? 8 : 6) + 2 * U('wcap'));
     this.state = 'gather'; this.t = 0; this.idle = 0; this.tree = null;
@@ -2547,7 +2799,8 @@ class Worker {
     const rush = boost.work > 0 ? 1.7 : 1;
     this.t += dt * rush;
     const go = (target, stop) => { const arr = navStep(this.g, target, 3.6 * rush * (1 + 0.15 * U('wspeed')) * (1 - 0.2 * stormK), dt, stop); moving = !arr; return arr; };
-    if (this.state === 'deliver') {
+    if (JOBS[this.kind]) runJob(this, JOBS[this.kind], go);
+    else if (this.state === 'deliver') {
       if (!this.dst) this.dst = this.kind === 'lumber' && springs.unlocked && springs.input.n < sawmill.input.n ? springs.input : null;
       if (this.kind === 'crafter') this.dst = this.want === 'gem' ? workshop.gems : workshop.logs;
       const dst = this.dst || { digger: smith.input, sharder: exch.input, shepherd: tailor.input, runner: market.input, lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
@@ -2642,6 +2895,18 @@ const PADS = [
   { id: 'tailor', label: 'Tailor', icon: 'coat', costs: [900], x: 50, z: 4.8, req: () => pen.level > 0, apply: unlockTailor },
   { id: 'crafter', label: 'Hire Crafter', icon: 'person', costs: [600, 1200], x: 40.2, z: 1.2, req: () => workshop.built, apply: () => new Worker('crafter', 40.2, 1.2) },
   { id: 'shepherd', label: 'Hire Shepherd', icon: 'person', costs: [500, 1000], x: 44.8, z: 1.2, req: () => tailor.built, apply: () => new Worker('shepherd', 44.8, 1.2) },
+  { id: 'town', label: 'Market Town', icon: 'house', costs: [2500], x: 0, z: 25.2, req: () => sawmill.unlocked, apply: unlockTown },
+  { id: 'store', label: 'General Store', icon: 'cart', costs: [2000], x: 0, z: 30.4, req: () => town.built, apply: (l, i) => store.unlock(i) },
+  { id: 'kitchen', label: 'Jam Kitchen', icon: 'jam', costs: [1800], x: -16.6, z: 5.6, req: () => sawmill.unlocked, apply: (l, i) => kitchen.unlock(i) },
+  { id: 'picker', label: 'Berry Picker', icon: 'person', costs: [1500, 3000], x: -19.8, z: 8.2, req: () => kitchen.built, apply: () => new Worker('picker', -19.8, 8.2) },
+  { id: 'clerk', label: 'Store Clerk', icon: 'person', costs: [2500], x: -3.4, z: 24.4, req: () => store.built, apply: () => new Worker('clerk', -3.4, 24.4) },
+  { id: 'smithy', label: 'Blacksmith', icon: 'pick', costs: [3500], x: -8, z: 30.4, req: () => town.built, apply: (l, i) => smithy.unlock(i) },
+  { id: 'smelter', label: 'Smelter', icon: 'fire', costs: [3000], x: 113, z: 10.6, req: () => mine.built, apply: (l, i) => smelter.unlock(i) },
+  { id: 'smelterhand', label: 'Smelter Hand', icon: 'person', costs: [2500, 5000], x: 116.5, z: 4.5, req: () => smelter.built, apply: () => new Worker('smelterhand', 116.5, 4.5) },
+  { id: 'icesaw', label: 'Ice Saw', icon: 'ice', costs: [1500], x: 24.6, z: 8.6, req: () => bridge.unlocked, apply: (l, i) => icesaw.unlock(i) },
+  { id: 'carver', label: 'Ice Carver', icon: 'ice', costs: [2500], x: 7, z: 30.4, req: () => town.built, apply: (l, i) => carver.unlock(i) },
+  { id: 'apoth', label: 'Apothecary', icon: 'potion', costs: [6000], x: 128, z: 65, req: () => isle.built, apply: (l, i) => apoth.unlock(i) },
+  { id: 'herbalist', label: 'Herbalist', icon: 'person', costs: [4000], x: 108, z: 60, req: () => apoth.built, apply: () => new Worker('herbalist', 108, 60) },
   { id: 'boat', label: 'Fishing Boat', icon: 'fish', costs: [1200], x: 23.2, z: -2.4, req: () => dock.built, apply: buyBoat },
   { id: 'ferry', label: 'Aurora Ferry', icon: 'boat', costs: [5000], x: 21.4, z: -7.6, req: () => ridge.unlocked, apply: unlockIsle },
   { id: 'hotel', label: 'Ice Hotel', icon: 'house', costs: [6000], x: 122, z: 60, req: () => isle.built, apply: unlockHotel },
@@ -2785,13 +3050,23 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of cashPiles().concat([smith.cash, hotel.cash, exch.cash].filter(Boolean))) {
+  for (const cp of cashPiles().concat([smith.cash, hotel.cash, exch.cash, ...STATIONS.filter(st => st.x >= 90).map(st => st.cash)].filter(Boolean))) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
     if (m) fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); sfx('coin'); });
     else { W.cash += share; setCash(); }
     return;
+  }
+  // crafting stations
+  for (const st of STATIONS) {
+    if (!st.built) continue;
+    for (const i of st.ins) {
+      if (!inZone(pos, i.pile.x, i.pile.z) || i.pile.free() <= 0) continue;
+      if (st.accepts) { for (const ty in st.accepts) { const it = c.take(ty); if (it) { i.pile.receiveT(it.m, it.pos, ty); sfx('drop'); return; } } }
+      else { const it = c.take(i.type); if (it) { i.pile.receive(it.m, it.pos); sfx('drop'); return; } }
+    }
+    if (st.outPile && inZone(pos, st.outPile.x, st.outPile.z) && st.outPile.n > 0 && !c.full()) { c.receive(st.out[0], st.outPile.take(), st.outPile.slot(st.outPile.n)); return; }
   }
   // aurora isle ferry
   if (isle.built) {
@@ -2835,7 +3110,7 @@ function playerInteract() {
   }
   // sled depot takes steaks, gems and fish
   if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
-    const it = c.take('steak') || c.take('gem') || c.take('fish');
+    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion');
     if (it) { depotReceive(it.type, it); sfx('drop'); return; }
   }
   // wardrobe: step in to switch outfits
@@ -2892,7 +3167,7 @@ function updatePlayer(dt) {
       player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
-      const t = nearest(trees.concat(rocks, golds, isle.shards).filter(t => !t.down), pos);
+      const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
         player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
@@ -3191,7 +3466,13 @@ function frame() {
   updateWorkshop(dt); updateMarket(dt); updateTailor(dt); for (const y of pen.yaks) y.update(dt);
   for (const f of decoAnim) f(dt);
   updateMine(dt); updateSmith(dt); checkTrophies(dt);
-  updateBoat(dt); updateOwl(dt); updateIsle(dt); trackIncome(dt); updateBossCal();
+  updateBoat(dt); updateOwl(dt); updateIsle(dt);
+  for (const st of STATIONS) st.update(dt);
+  for (const n of berries) n.update(dt);
+  for (const n of coals) n.update(dt);
+  for (const n of irons) n.update(dt);
+  for (const n of blooms) n.update(dt);
+  updateTown(dt); updateCarts(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
@@ -3225,7 +3506,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>

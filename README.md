@@ -33,6 +33,13 @@ attacks enemies anywhere, hire **Gold Diggers** in the mine, follow the weekly *
 calendar** (Ice Bear, Wolf Alpha, Yeti), and hire a **Camp Manager** who earns money
 while you're away.
 
+**Crafting chains:** berries from the west meadow become jam at the Jam Kitchen; coal
+and iron ore from the Frost Mine become iron bars at the Smelter, then tools at the
+Blacksmith; the Ice Saw cuts river ice for the Ice Carver; snowblooms and aurora shards
+become potions at the Apothecary. **Market Town**, south of camp, has the General Store
+that buys jam, tools and potions. New workers (berry picker, store clerk, smelter hand,
+herbalist) and Town Hall haulers (Mine Cart, Ice Wagon, Potion Courier) automate it.
+
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
 - Chopping and attacking happen automatically when you walk next to a tree or boar.
