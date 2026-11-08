@@ -62,12 +62,22 @@
   #mute:focus-visible, #reset:focus-visible { outline: 3px solid var(--white); }
   #goal {
     position: fixed; left: 50%; transform: translateX(-50%);
-    top: calc(env(safe-area-inset-top, 0px) + 112px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
     max-width: calc(100% - 32px); box-sizing: border-box;
     background: var(--panel); color: var(--white); border-radius: 999px; padding: 8px 18px;
     font: 800 15px var(--font-body); text-align: center; pointer-events: none; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
+  #quests { pointer-events: auto; background: var(--panel); color: var(--white); border-radius: 12px; padding: 7px 10px;
+    font: 800 12px/1.35 var(--font-body); max-width: 210px; cursor: pointer; display: grid; gap: 3px; }
+  #quests h3 { margin: 0; font: 14px var(--font-display); letter-spacing: .4px; display: flex; justify-content: space-between; gap: 10px; }
+  #quests h3 span { font: 800 11px var(--font-body); opacity: .7; }
+  #quests .q { display: grid; grid-template-columns: 14px 1fr auto; gap: 6px; align-items: center; }
+  #quests .q i { width: 10px; height: 10px; border: 2px solid rgba(255,255,255,.8); border-radius: 3px; }
+  #quests .q.done { opacity: .55; }
+  #quests .q.done i { background: #7be38a; border-color: #7be38a; }
+  #quests .q b { color: #9ff0a8; font-variant-numeric: tabular-nums; }
+  #quests.min .q { display: none; }
   #joy {
     position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
     border: 4px solid rgba(255,255,255,0.7); background: rgba(30,45,65,0.18); pointer-events: none;
@@ -91,7 +101,7 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
   <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button></div>
 </div>
 <div id="toast" hidden></div>
@@ -268,6 +278,16 @@ function drawIcon(c, icon, cx, cy, s) {
     c.strokeStyle = W_; c.lineWidth = 9; c.beginPath(); c.moveTo(-50, 20); c.quadraticCurveTo(0, -30, 50, 20); c.stroke();
     c.beginPath(); c.moveTo(-50, 32); c.lineTo(50, 32); c.stroke();
     for (const x of [-30, -10, 10, 30]) { c.beginPath(); c.moveTo(x, 32); c.lineTo(x, x * x / 90 - 10); c.stroke(); }
+  } else if (icon === 'dog') {
+    c.fillStyle = W_; c.beginPath(); c.ellipse(0, 8, 34, 30, 0, 0, 2 * PI); c.fill();
+    c.beginPath(); c.moveTo(-32, -6); c.lineTo(-26, -44); c.lineTo(-8, -18); c.fill();
+    c.beginPath(); c.moveTo(32, -6); c.lineTo(26, -44); c.lineTo(8, -18); c.fill();
+    c.fillStyle = 'rgba(30,40,58,0.85)'; c.beginPath(); c.arc(-12, 2, 5, 0, 2 * PI); c.arc(12, 2, 5, 0, 2 * PI); c.fill();
+    c.beginPath(); c.ellipse(0, 20, 8, 6, 0, 0, 2 * PI); c.fill();
+  } else if (icon === 'spa') {
+    c.fillStyle = '#7fd8ea'; c.beginPath(); c.ellipse(0, 22, 50, 18, 0, 0, 2 * PI); c.fill();
+    c.strokeStyle = W_; c.lineWidth = 7;
+    for (const x of [-20, 0, 20]) { c.beginPath(); c.moveTo(x, 4); c.bezierCurveTo(x - 12, -10, x + 12, -22, x, -40); c.stroke(); }
   } else if (icon === 'fire') {
     c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
     c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
@@ -561,7 +581,7 @@ class Tree {
     if (this.down || carrier.full()) return false;
     this.hp--; this.shake = 0.3;
     carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.2, 0)));
-    if (carrier === player.c) sfx(this.k.sound);
+    if (carrier === player.c) { sfx(this.k.sound); questProgress(this.k.item); }
     if (this.hp <= 0) { this.down = true; this.regrow = this.k.regrow; this.m.visible = false; this.stump.visible = true; burst(this.pos, this.k.color); }
     return true;
   }
@@ -699,6 +719,7 @@ class Boar {
       this.alive = false; scene.remove(this.g); boars.splice(boars.indexOf(this), 1);
       burst(this.pos, 0xe2666f, 10);
       for (let i = 0; i < 3; i++) dropGround('meat', this.pos.clone());
+      questProgress('boar');
     } else {
       // flee a little
       this.target = new V3(clamp(this.pos.x + rand(-4, 4), FIELD.x0, FIELD.x1), 0, clamp(this.pos.z + rand(-4, 4), FIELD.z0, FIELD.z1));
@@ -821,7 +842,7 @@ function updateCustomers(dt) {
           c.bubble.redraw(c.want - c.got);
           if (c.got >= c.want) {
             counter.cash.addValue(c.want * STEAK_PRICE, g.position.clone().add(new V3(0, 1, 0)));
-            served++; c.state = 'leave'; c.bubble.mesh.visible = false;
+            served++; questProgress('steak', c.want); c.state = 'leave'; c.bubble.mesh.visible = false;
             for (const o of customers) if (o.state === 'queue' && o.slot > 0) o.slot--;
           }
         });
@@ -1016,7 +1037,7 @@ function tryFish(carrier, who, dt) {
     who.fishT = 0;
     carrier.receive('fish', makeItem('fish'), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
     burst(dock.bobPos.clone().add(new V3(0, -0.6, 0)), 0xa9d8f7, 6);
-    if (carrier === player.c) sfx('splash');
+    if (carrier === player.c) { sfx('splash'); questProgress('fish'); }
   }
 }
 function updateDock(dt) {
@@ -1135,6 +1156,159 @@ function spawnBear() {
   toast('A giant Ice Bear roams the north field!'); sfx('roar');
 }
 
+// Hot springs
+const SPA_PRICE = 12;
+const springs = { unlocked: false, pos: new V3(-7, 0, 15), input: new Pile(-11.2, 15, 2, 3, 24, 1.0, 0.42, 0.34), cash: null, guests: [], spawnT: 2, steamT: 0, parts: [] };
+const SEATS = [0, 1, 2, 3].map(k => new V3(-7 + Math.cos(k * PI / 2 + PI / 4) * 1.2, 0, 15 + Math.sin(k * PI / 2 + PI / 4) * 1.2));
+function unlockSprings(instant) {
+  if (springs.unlocked) return;
+  springs.unlocked = true;
+  const g = stationGroup(-7, 15); springs.g = g;
+  mesh(new THREE.TorusGeometry(2.25, 0.38, 8, 22), 0x9aa3ae, 0, 0.18, 0, g).rotation.x = PI / 2;
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.12, 28), new THREE.MeshLambertMaterial({ color: 0x5fd0e6, emissive: 0x0d3a44 }));
+  water.position.y = 0.16; g.add(water);
+  for (let i = 0; i < 9; i++) { const a = i / 9 * 2 * PI + 0.3; mesh(new THREE.DodecahedronGeometry(rand(0.3, 0.5), 0), i % 2 ? 0x8d97a6 : 0xb3bcc8, Math.cos(a) * 2.6, 0.25, Math.sin(a) * 2.6, g); }
+  for (const x of [-0.6, 0.6]) mesh(new THREE.BoxGeometry(0.12, 1.6, 0.12), 0x7d4a26, x + 2.9, 0.8, -2.2, g);
+  const sign = groundLabel(1.2, c => { c.fillStyle = '#fff3d6'; roundRect(c, 10, 50, 236, 156, 24); c.fill(); drawIcon(c, 'spa', 128, 128, 1.1); });
+  sign.mesh.rotation.set(-0.7, LABEL_ROT, 0, 'YXZ'); sign.mesh.position.set(2.9, 1.8, -2.15); g.add(sign.mesh);
+  circles.push({ x: -7, z: 15, r: 2.5, on: () => springs.unlocked });
+  zoneMarker(-11.2, 15, 'log', '#f0c98a');
+  springs.cash = new CashPile(-3.2, 15);
+  if (!instant) { popIn(g); burst(springs.pos, 0x5fd0e6, 16); toast('Bring logs to keep the springs hot!'); }
+}
+const STEAM_GEO = new THREE.SphereGeometry(0.3, 8, 6);
+const steamMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+function updateSprings(dt) {
+  for (let i = springs.parts.length - 1; i >= 0; i--) {
+    const sp = springs.parts[i]; sp.life -= dt; sp.m.position.y += dt * 0.9; sp.m.scale.setScalar(0.5 + (2 - sp.life) * 0.8);
+    if (sp.life <= 0) { scene.remove(sp.m); springs.parts.splice(i, 1); }
+  }
+  if (!springs.unlocked) return;
+  springs.steamT -= dt;
+  if (springs.steamT <= 0) {
+    springs.steamT = springs.guests.length ? 0.18 : 0.5;
+    const a = rand(0, 2 * PI), rr = rand(0, 1.8), m = new THREE.Mesh(STEAM_GEO, steamMat);
+    m.position.set(-7 + Math.cos(a) * rr, 0.4, 15 + Math.sin(a) * rr); scene.add(m); springs.parts.push({ m, life: 2 });
+  }
+  springs.spawnT -= dt;
+  const used = springs.guests.filter(gu => gu.state !== 'leave').map(gu => gu.seat);
+  const free = [0, 1, 2, 3].filter(k => !used.includes(k));
+  if (springs.spawnT <= 0 && free.length && springs.input.n > 0) {
+    springs.spawnT = 3.5;
+    const m = springs.input.take(), mid = new V3(-7, 0.4, 15);
+    fly(m, m.position.clone(), () => mid, 0.35, () => { scene.remove(m); burst(mid, 0xffa23a, 5); });
+    const p = makePerson(PARKAS[randi(0, PARKAS.length - 1)], null, 0.9);
+    p.group.position.set(-7 + rand(-1, 1), 0, 24);
+    springs.guests.push({ p, seat: free[0], state: 'walk', t: 7 });
+  }
+  for (let i = springs.guests.length - 1; i >= 0; i--) {
+    const gu = springs.guests[i], g = gu.p.group;
+    if (gu.state === 'walk') {
+      const arr = stepToward(g, SEATS[gu.seat], 3, dt, 0.05); animPerson(gu.p, !arr, dt);
+      if (d2(g.position, springs.pos) < 2.4) g.position.y = Math.max(-0.6, g.position.y - dt * 2);
+      if (arr) { gu.state = 'soak'; g.position.y = -0.6; g.rotation.y = Math.atan2(-7 - g.position.x, 15 - g.position.z) + PI; }
+    } else if (gu.state === 'soak') {
+      gu.t -= dt; g.position.y = -0.6 + Math.sin(performance.now() / 400 + gu.seat) * 0.04; animPerson(gu.p, false, dt);
+      if (gu.t <= 0) { gu.state = 'leave'; springs.cash.addValue(SPA_PRICE, g.position.clone().add(new V3(0, 1.4, 0))); questProgress('guest'); }
+    } else {
+      if (d2(g.position, springs.pos) > 2.4) g.position.y = 0; else g.position.y = Math.min(0, g.position.y + dt * 2);
+      const done = stepToward(g, new V3(-7, 0, 25), 3.2, dt, 0.3); animPerson(gu.p, true, dt);
+      if (done) { scene.remove(g); springs.guests.splice(i, 1); }
+    }
+  }
+}
+
+// Husky companion
+const husky = { owned: false, t: 0, phase: 0 };
+function adoptHusky(instant) {
+  if (husky.owned) return;
+  husky.owned = true;
+  const g = new THREE.Group(); husky.g = g;
+  const fur = 0x7d8796;
+  mesh(new THREE.BoxGeometry(0.42, 0.38, 0.85), fur, 0, 0.5, 0, g);
+  mesh(new THREE.BoxGeometry(0.36, 0.12, 0.7), 0xffffff, 0, 0.32, 0.02, g);
+  mesh(new THREE.BoxGeometry(0.38, 0.36, 0.38), fur, 0, 0.78, 0.48, g);
+  mesh(new THREE.BoxGeometry(0.3, 0.2, 0.2), 0xffffff, 0, 0.7, 0.72, g);
+  mesh(new THREE.BoxGeometry(0.08, 0.07, 0.04), 0x1a1a1a, 0, 0.76, 0.83, g);
+  mesh(new THREE.ConeGeometry(0.08, 0.2, 4), fur, -0.12, 1.04, 0.44, g); mesh(new THREE.ConeGeometry(0.08, 0.2, 4), fur, 0.12, 1.04, 0.44, g);
+  mesh(new THREE.BoxGeometry(0.06, 0.06, 0.04), 0x1a1a1a, -0.09, 0.86, 0.68, g); mesh(new THREE.BoxGeometry(0.06, 0.06, 0.04), 0x1a1a1a, 0.09, 0.86, 0.68, g);
+  husky.tail = mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), 0xffffff, 0, 0.75, -0.5, g); husky.tail.rotation.x = 0.8;
+  husky.legs = [[-0.13, 0.28], [0.13, 0.28], [-0.13, -0.28], [0.13, -0.28]].map(([lx, lz]) => {
+    const p = new THREE.Group(); p.position.set(lx, 0.32, lz); g.add(p); mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), 0xffffff, 0, -0.16, 0, p); return p;
+  });
+  g.position.copy(player.g.position).add(new V3(1, 0, 1)); scene.add(g);
+  if (!instant) { burst(g.position, 0xffffff, 10); toast('Meet your husky! It fetches loot and chases wolves.'); }
+}
+function updateHusky(dt) {
+  if (!husky.owned) return;
+  const g = husky.g, pos = g.position, pp = player.g.position;
+  husky.t += dt; let moving = true;
+  husky.tail.rotation.y = Math.sin(performance.now() / 90) * 0.6;
+  const wolf = nearest(wolves, pos, w => w.pos);
+  const loot = nearest(groundItems.filter(gi => gi.ready && d2(gi.m.position, pp) < 9 && (gi.type === 'cash' || !player.c.full())), pos, gi => gi.m.position);
+  if (d2(pos, pp) > 22) { pos.copy(pp).add(new V3(1, 0, 1)); }
+  if (wolf && d2(wolf.pos, pos) < 7) {
+    moving = !navStep(g, wolf.pos, 6.5, dt, 1.0);
+    if (!moving && husky.t > 0.6) { husky.t = 0; wolf.hit(1); sfx('bark'); }
+  } else if (loot) {
+    if (navStep(g, loot.m.position, 6.5, dt, 0.5)) {
+      const i = groundItems.indexOf(loot); groundItems.splice(i, 1);
+      if (loot.type === 'cash') { const m = loot.m; fly(m, m.position.clone(), () => pp.clone().add(new V3(0, 1.2, 0)), 0.3, () => { scene.remove(m); W.cash += 25; setCash(); sfx('coin'); }); }
+      else player.c.receive(loot.type, loot.m, loot.m.position.clone());
+    }
+  } else {
+    const back = new V3(Math.sin(player.g.rotation.y), 0, Math.cos(player.g.rotation.y)).multiplyScalar(-1.3).add(new V3(0.6, 0, 0));
+    moving = !navStep(g, pp.clone().add(back), Math.max(W.speed * 1.15, d2(pos, pp) * 2), dt, 0.4);
+  }
+  if (moving) husky.phase += dt * 16;
+  husky.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(husky.phase + (i % 2 ? PI : 0)) * 0.8 : 0; });
+}
+
+// Daily goals
+const QUEST_DEFS = [
+  { id: 'steak', text: n => `Sell ${n} steaks`, n: [8, 14, 22], ok: () => true },
+  { id: 'boar', text: n => `Hunt ${n} boars`, n: [3, 5, 8], ok: () => true },
+  { id: 'log', text: n => `Chop ${n} logs`, n: [10, 18, 26], ok: () => sawmill.unlocked },
+  { id: 'gem', text: n => `Mine ${n} crystals`, n: [6, 10, 16], ok: () => bridge.unlocked },
+  { id: 'fish', text: n => `Catch ${n} fish`, n: [4, 8, 12], ok: () => dock.built },
+  { id: 'wolf', text: n => `Defeat ${n} wolves`, n: [2, 3, 5], ok: () => dayT > CYCLE * 0.6 },
+  { id: 'guest', text: n => `Host ${n} spa guests`, n: [3, 5, 8], ok: () => springs.unlocked },
+];
+let quests = [], questDay = 0;
+const questsEl = document.getElementById('quests');
+let questsMin = false;
+try { questsMin = localStorage.getItem(SAVE_KEY + '-qmin') === '1'; } catch (e) {}
+const toggleQuests = () => { questsMin = !questsMin; renderQuests(); try { localStorage.setItem(SAVE_KEY + '-qmin', questsMin ? '1' : '0'); } catch (e) {} };
+questsEl.addEventListener('click', toggleQuests);
+questsEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleQuests(); } });
+function newQuests(announce) {
+  const day = Math.floor(dayT / CYCLE) + 1;
+  if (questDay === day && quests.length) return;
+  questDay = day;
+  const pool = QUEST_DEFS.filter(q => q.ok()).sort(() => Math.random() - 0.5).slice(0, 3);
+  const tier = Math.min(2, Math.floor((day - 1) / 2));
+  quests = pool.map(q => ({ id: q.id, need: q.n[tier], have: 0, reward: Math.round((40 + day * 15) * (1 + tier * 0.3) / 5) * 5, done: false }));
+  renderQuests();
+  if (announce) setTimeout(() => toast('New daily goals!'), 4200);
+}
+function questProgress(id, k = 1) {
+  let changed = false;
+  for (const q of quests) {
+    if (q.id !== id || q.done) continue;
+    q.have = Math.min(q.need, q.have + k); changed = true;
+    if (q.have >= q.need) { q.done = true; W.cash += q.reward; setCash(); toast(`Goal complete! +$${q.reward}`); sfx('buy'); save(); }
+  }
+  if (changed) renderQuests();
+}
+function renderQuests() {
+  const left = quests.filter(q => !q.done).length;
+  questsEl.classList.toggle('min', questsMin);
+  questsEl.innerHTML = `<h3>Daily goals <span>${left ? left + ' left' : 'all done'}</span></h3>` + quests.map(q => {
+    const def = QUEST_DEFS.find(d => d.id === q.id);
+    return `<div class="q${q.done ? ' done' : ''}"><i></i><span>${def.text(q.need)} (${q.have}/${q.need})</span><b>$${q.reward}</b></div>`;
+  }).join('');
+}
+
 // ---------------- workers ----------------
 const workers = [];
 const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8 };
@@ -1152,13 +1326,14 @@ class Worker {
     this.t += dt;
     const go = (target, stop) => { const arr = navStep(this.g, target, 3.6, dt, stop); moving = !arr; return arr; };
     if (this.state === 'deliver') {
-      const dst = { lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
+      if (!this.dst) this.dst = this.kind === 'lumber' && springs.unlocked && springs.input.n < sawmill.input.n ? springs.input : null;
+      const dst = this.dst || { lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
       const type = { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish' }[this.kind];
       if (go(dst.center, 0.7) && this.t > 0.12) {
         this.t = 0;
         if (dst.free() > 0) { const it = this.c.take(type); if (it) dst.receive(it.m, it.pos); }
       }
-      if (this.c.load === 0) this.state = 'gather';
+      if (this.c.load === 0) { this.state = 'gather'; this.dst = null; }
     } else if (this.kind === 'lumber' || this.kind === 'miner') {
       if (!this.tree || this.tree.down) this.tree = nearest((this.kind === 'lumber' ? trees : rocks).filter(t => !t.down), pos);
       if (this.tree && go(this.tree.pos, 1.3) && this.t > 0.7) {
@@ -1214,6 +1389,8 @@ const PADS = [
   { id: 'dock', label: 'Fishing Dock', icon: 'fish', costs: [180], x: 23.4, z: -5, req: () => bridge.unlocked, apply: unlockDock },
   { id: 'smoke', label: 'Smokehouse', icon: 'house', costs: [220], x: 19, z: -5, req: () => dock.built, apply: unlockSmoke },
   { id: 'fisher', label: 'Hire Fisher', icon: 'person', costs: [220], x: 17, z: -1.8, req: () => smoke.unlocked, apply: () => new Worker('fisher', 17, -1.8) },
+  { id: 'springs', label: 'Hot Springs', icon: 'spa', costs: [400], x: -7, z: 15, req: () => padLevel('lumber') > 0 || bridge.unlocked, apply: unlockSprings },
+  { id: 'husky', label: 'Adopt Husky', icon: 'dog', costs: [300], x: 0.9, z: 4.6, req: () => gates.built || dayT > CYCLE, apply: adoptHusky },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
 const padState = {};
@@ -1302,6 +1479,7 @@ function playerInteract() {
   if (sawmill.unlocked) drops.push([sawmill.input, 'log']);
   if (cutter.unlocked) drops.push([cutter.input, 'gem']);
   if (smoke.unlocked) drops.push([smoke.input, 'fish']);
+  if (springs.unlocked) drops.push([springs.input, 'log']);
   for (const [pile, type] of drops) {
     if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
@@ -1310,7 +1488,7 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of [counter.cash, sawmill.cash, cutter.cash, smoke.cash]) {
+  for (const cp of [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash]) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
@@ -1437,6 +1615,7 @@ function sfx(name) {
     case 'splash': tone(520, 180, 0.18, 'sine', 0.08); break;
     case 'roar': tone(150, 55, 0.7, 'sawtooth', 0.11); tone(110, 60, 0.6, 'square', 0.05, 0.05); break;
     case 'gate': tone(170, 120, 0.12, 'square', 0.06); break;
+    case 'bark': tone(520, 380, 0.07, 'square', 0.05); tone(560, 400, 0.07, 'square', 0.05, 0.12); break;
     case 'dawn': [392, 523, 659].forEach((f, i) => tone(f, f, 0.3, 'sine', 0.08, i * 0.12)); break;
   }
 }
@@ -1486,7 +1665,7 @@ class Wolf {
     this.hp -= dmg; this.flash = 0.15; burst(this.pos, 0x9aa3b0, 4);
     if (d2(this.pos, player.g.position) < 12) sfx('hit');
     if (this.hp <= 0) {
-      this.remove(); burst(this.pos, 0x6d7684, 10);
+      this.remove(); burst(this.pos, 0x6d7684, 10); questProgress('wolf');
       if (this.carry) dropGround(this.carryType, this.pos.clone());
       dropGround('meat', this.pos.clone());
     }
@@ -1534,7 +1713,7 @@ function updateDayNight(dt) {
   grillGlow.intensity = 1.9 * nightK; lantern.intensity = 1.4 * nightK;
   if (night && !wasNight) { toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!'); sfx('howl'); wolfTimer = 2; }
   if (!night && wasNight) {
-    repairGates();
+    repairGates(); newQuests(true);
     if ((Math.floor(dayT / CYCLE) + 1) % 3 === 0 && !bear) spawnBear();
     else { toast('Morning! The wolves ran off.'); sfx('dawn'); }
   }
@@ -1590,9 +1769,10 @@ let resetting = false;
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay })); } catch (e) {}
 }
 if (saved && saved.pads) {
+  if (Array.isArray(saved.quests)) { quests = saved.quests; questDay = saved.questDay || 0; }
   W.cash = saved.cash || 0; served = saved.served || 0; dayT = saved.dayT || 6; wasNight = isNight(); nightK = wasNight ? 1 : 0;
   for (const p of PADS) {
     const s = saved.pads[p.id]; if (!s) continue;
@@ -1600,7 +1780,7 @@ if (saved && saved.pads) {
     padState[p.id].paid = s.paid || 0;
   }
 }
-refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash();
+refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests();
 setInterval(save, 3000);
 addEventListener('pagehide', save);
 if (document.fonts) document.fonts.ready.then(() => { PADS.forEach(p => p.label3d.redraw()); maxLabel.redraw(); });
@@ -1617,7 +1797,7 @@ function frame() {
   for (const b of boars.slice()) b.update(dt);
   for (const rk of rocks) rk.update(dt);
   updateGrill(dt); updateSawmill(dt); updateTower(dt); updateCutter(dt); updateRiver(dt); updateDayNight(dt);
-  updateGates(dt); updateDock(dt); updateSmoke(dt); if (bear) bear.update(dt);
+  updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
   for (const w of workers) w.update(dt);
@@ -1648,7 +1828,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests };
 requestAnimationFrame(frame);
 })();
 </script>
