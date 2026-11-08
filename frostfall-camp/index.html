@@ -94,12 +94,25 @@
     position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
     border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 3px 8px rgba(0,0,0,.25);
   }
-  #shop { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
-  #shop .sheet { pointer-events: auto; width: min(560px, 100%); max-height: 58vh; overflow: auto; box-sizing: border-box;
+  #shop, #trophies { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
+  .sheet { pointer-events: auto; width: min(560px, 100%); max-height: 58vh; overflow: auto; box-sizing: border-box;
     background: #f7fafc; color: var(--ink); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25);
     padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px)); }
-  #shop header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  #shop h2 { font: 26px var(--font-display); margin: 0; }
+  .sheet header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .sheet h2 { font: 26px var(--font-display); margin: 0; }
+  #trophyx, #trophybtn { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  #trophybtn { pointer-events: auto; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 8px 12px; }
+  #trophybtn:focus-visible, #trophyx:focus-visible { outline: 3px solid var(--white); }
+  .tick { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #e3e9f0; color: #8a96a6; font: 18px var(--font-display); }
+  .tick.on { background: #ffd23a; color: var(--ink); }
+  .legacy p { margin: 10px 0; font: 700 14px/1.45 var(--font-body); }
+  .legacy .big { font: 30px var(--font-display); color: #c79a00; }
+  .legacy .row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .legacy button { border: 0; border-radius: 12px; padding: 11px 16px; font: 17px var(--font-display); cursor: pointer; }
+  .legacy .gold { background: #ffcc33; color: var(--ink); }
+  .legacy .gold:disabled { background: #e3e9f0; color: #8a96a6; cursor: default; }
+  .legacy .no { background: #e3e9f0; color: var(--ink); }
+  .legacy .red { background: #d84a3a; color: var(--white); }
   #shopx { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
   #shop .tabs { display: flex; gap: 8px; margin: 10px 0 4px; }
   #shop .tabs button { flex: 1; border: 0; border-radius: 10px; padding: 9px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
@@ -130,12 +143,13 @@
 <body>
 <div id="hud">
   <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
-  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><canvas id="map" width="240" height="150" aria-label="Map of the area"></canvas></div>
+  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
 <div id="joy" hidden><div id="knob"></div></div>
-<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button></div><div id="shoplist"></div></div></div>
+<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
+<div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -173,6 +187,12 @@ const W = { cash: 0, cap: 8, speed: 5 };
 const UP = {};
 const U = id => UP[id] || 0;
 const SAVE_KEY = 'frostfall-camp-v1';
+const LEGACY_KEY = 'frostfall-camp-legacy';
+let legacy = { stars: 0, ach: {}, stats: {} };
+try { const l = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null'); if (l) legacy = Object.assign(legacy, l); } catch (e) {}
+function saveLegacy() { try { localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy)); } catch (e) {} }
+const stat = id => legacy.stats[id] || 0;
+const bump = (id, k = 1) => { legacy.stats[id] = stat(id) + k; };
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { saved = null; }
 
@@ -344,6 +364,12 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'board') {
     c.fillStyle = W_; c.beginPath(); c.moveTo(-48, -18); c.lineTo(0, -46); c.lineTo(48, -18); c.closePath(); c.fill();
     for (const x of [-34, -12, 12, 34]) c.fillRect(x - 5, -14, 10, 44); c.fillRect(-48, 32, 96, 10);
+  } else if (icon === 'pick') {
+    c.strokeStyle = W_; c.lineWidth = 9; c.beginPath(); c.moveTo(-30, 40); c.lineTo(20, -10); c.stroke();
+    c.beginPath(); c.moveTo(-10, -40); c.quadraticCurveTo(30, -36, 46, 4); c.stroke();
+    c.fillStyle = '#ffcc33'; c.beginPath(); c.arc(30, 30, 12, 0, 2 * PI); c.fill();
+  } else if (icon === 'exit') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-40, -12); c.lineTo(6, -12); c.lineTo(6, -36); c.lineTo(46, 0); c.lineTo(6, 36); c.lineTo(6, 12); c.lineTo(-40, 12); c.closePath(); c.fill();
   } else if (icon === 'fire') {
     c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
     c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
@@ -425,11 +451,13 @@ const GEO = {
   steak: new THREE.CylinderGeometry(0.26, 0.28, 0.12, 10),
   cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
   gem: new THREE.OctahedronGeometry(0.2, 0),
+  gold: new THREE.DodecahedronGeometry(0.18, 0),
   fish: new THREE.SphereGeometry(0.2, 10, 8).scale(1.5, 0.55, 0.75),
   lantern: new THREE.CylinderGeometry(0.15, 0.19, 0.3, 6),
   wool: new THREE.DodecahedronGeometry(0.2, 1),
 };
-const H = { log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x5a4000 });
+const H = { gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
@@ -438,6 +466,7 @@ function makeItem(t) {
   else if (t === 'meat') m = new THREE.Mesh(GEO.meat, mat(0xe2666f));
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
+  else if (t === 'gold') m = new THREE.Mesh(GEO.gold, goldMat);
   else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
   else if (t === 'lantern') m = new THREE.Mesh(GEO.lantern, lanternMat);
   else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
@@ -519,6 +548,7 @@ class CashPile extends Pile {
   addValue(v, from) {
     if (boost.cash > 0) v *= 2;
     if (UP.statue) v = Math.round(v * 1.1);
+    if (legacy.stars) v = Math.round(v * (1 + 0.1 * legacy.stars));
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
     for (let i = 0; i < bills && this.free() > 0; i++) this.receive(makeItem('cash'), from.clone().add(new V3(0, i * 0.1, 0)));
@@ -634,7 +664,15 @@ const RUBBLE_GEO = merge([
   [new THREE.DodecahedronGeometry(0.35, 0), 0x8d97a6, 0, 0.15, 0],
   [new THREE.DodecahedronGeometry(0.25, 0), 0xa4adba, 0.35, 0.1, 0.2],
 ]);
+const GOLD_GEO = merge([
+  [new THREE.DodecahedronGeometry(0.8, 0), 0x55607a, 0, 0.45, 0],
+  [new THREE.DodecahedronGeometry(0.22, 0), 0xffcc33, 0.35, 0.9, 0.3],
+  [new THREE.DodecahedronGeometry(0.18, 0), 0xffd84d, -0.3, 1.0, 0.1],
+  [new THREE.DodecahedronGeometry(0.2, 0), 0xffcc33, 0.05, 1.2, -0.25],
+  [new THREE.DodecahedronGeometry(0.15, 0), 0xffe680, -0.45, 0.6, 0.4],
+]);
 const NODE = {
+  gold: { geo: GOLD_GEO, stump: RUBBLE_GEO, item: 'gold', hp: 5, regrow: 30, color: 0xffcc33, r: 0.75, sound: 'mine' },
   tree: { geo: TREE_GEO, stump: STUMP_GEO, item: 'log', hp: 3, regrow: 18, color: 0x4b8ccc, r: 0.45, sound: 'chop' },
   rock: { geo: ROCK_GEO, stump: RUBBLE_GEO, item: 'gem', hp: 4, regrow: 25, color: 0x7fe3f5, r: 0.7, sound: 'mine' },
 };
@@ -681,6 +719,7 @@ for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
 }
 for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
   if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 37) continue;
+  if (Math.abs(x - 45) < 3.8 && z > -16 && z < -6) continue;
   if (x > RIDGE.x0 - 2 && x < RIDGE.x1 + 2 && z > RIDGE.z0 - 2.4 && z < RIDGE.z1 + 2.4) continue;
   const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8);
   if (z < -9 && x > 45) { if (Math.random() < 0.6) trees.push(new Tree(px, pz)); }
@@ -1217,7 +1256,7 @@ class Bear {
       this.alive = false; scene.remove(this.g); bear = null; burst(this.pos, 0xeaf2fb, 24); camShake = 0.4;
       for (let i = 0; i < 8; i++) dropGround('meat', this.pos.clone());
       for (let i = 0; i < 6; i++) dropGround('cash', this.pos.clone());
-      toast('You beat the Ice Bear! Grab the loot.'); sfx('buy');
+      toast('You beat the Ice Bear! Grab the loot.'); sfx('buy'); bump('bear');
     }
   }
   update(dt) {
@@ -1386,6 +1425,7 @@ function newQuests(announce) {
   if (announce) setTimeout(() => toast('New daily goals!'), 4200);
 }
 function questProgress(id, k = 1) {
+  bump(id, k);
   let changed = false;
   for (const q of quests) {
     if (q.id !== id || q.done) continue;
@@ -1599,7 +1639,7 @@ function updateRank(celebrate) {
   const xp = campXP();
   let i = 0; while (i + 1 < RANKS.length && xp >= RANKS[i + 1][0]) i++;
   const lo = RANKS[i][0], hi = RANKS[i + 1] ? RANKS[i + 1][0] : lo;
-  rankName.textContent = RANKS[i][1];
+  rankName.textContent = RANKS[i][1] + (legacy.stars ? ' ★' + legacy.stars : '');
   rankFill.style.width = (hi > lo ? (xp - lo) / (hi - lo) * 100 : 100) + '%';
   if (celebrate && lastRank >= 0 && i > lastRank) {
     const reward = i * 100;
@@ -1617,6 +1657,17 @@ const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - M
 let mapT = 0;
 function drawMap(dt) {
   mapT -= dt; if (mapT > 0) return; mapT = 0.2;
+  if (inMine(player.g.position)) {
+    Object.assign(MAP, { x0: MINE.x0 - 1, x1: MINE.x1 + 1, z0: MINE.z0 - 1, z1: MINE.z1 + 1 });
+    const c = mapX; c.fillStyle = '#1c2333'; c.fillRect(0, 0, mapCv.width, mapCv.height);
+    const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
+    for (const gn of golds) if (!gn.down) dot(gn.pos.x, gn.pos.z, 3, '#ffcc33');
+    dot(mine.exitZone.x, mine.exitZone.z, 4, '#8fe8f8');
+    for (const gm of mine.golems) dot(gm.pos.x, gm.pos.z, gm.king ? 7 : 4, gm.king ? '#c08cff' : '#e8433a');
+    const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    return;
+  }
+  Object.assign(MAP, { x0: -26, x1: 59, z0: -30, z1: 23 });
   const c = mapX, W_ = mapCv.width, H_ = mapCv.height;
   c.clearRect(0, 0, W_, H_);
   c.fillStyle = nightK > 0.5 ? '#2a3a58' : '#e9f0f6'; c.fillRect(0, 0, W_, H_);
@@ -1828,6 +1879,7 @@ const UPGRADES = [
   { id: 'husky', name: 'Husky Training', desc: 'Your husky bites twice as hard', costs: [400], req: () => husky.owned },
   { id: 'lantern', name: 'Golden Lanterns', desc: '+$8 for every lantern', costs: [800, 2000], req: () => market.built },
   { id: 'coat', name: 'Fine Wool', desc: '+$5 for every coat', costs: [700, 1800], req: () => tailor.built },
+  { id: 'goldp', name: 'Gold Polish', desc: '+$10 for every gold nugget', costs: [1500, 4000], req: () => smith.built },
   { id: 'yak', name: 'Happy Yaks', desc: 'Yaks grow wool 35% faster', costs: [600, 1500], req: () => pen.level > 0 },
 ];
 const DECOS = [
@@ -1860,6 +1912,7 @@ const shopEl = document.getElementById('shop'), shopList = document.getElementBy
 let shopTab = 'up';
 function renderShop() {
   if (shopEl.hidden) return;
+  if (shopTab === 'legacy') { renderLegacy(); return; }
   const rows = shopTab === 'up'
     ? UPGRADES.filter(u => !u.req || u.req()).map(u => {
       const lvl = U(u.id), cost = u.costs[lvl];
@@ -1878,7 +1931,7 @@ function refreshShopButtons() {
 }
 shopList.addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b && !b.disabled) buyItem(b.dataset.id); });
 for (const t of document.querySelectorAll('#shop .tabs button')) t.addEventListener('click', () => {
-  shopTab = t.dataset.tab; for (const o of document.querySelectorAll('#shop .tabs button')) o.classList.toggle('on', o === t); renderShop();
+  shopTab = t.dataset.tab; legacyConfirm = false; for (const o of document.querySelectorAll('#shop .tabs button')) o.classList.toggle('on', o === t); renderShop();
 });
 document.getElementById('shopx').addEventListener('click', () => { shopEl.hidden = true; });
 function openShop() { shopEl.hidden = false; renderShop(); }
@@ -1946,6 +1999,244 @@ function buildDeco(id, instant) {
   if (!instant && at) { burst(at, 0xffd23a, 16); firework(at.clone()); }
 }
 const decoAnim = [];
+
+// ================= Frost Mine =================
+const MINE = { x0: 99, x1: 133, z0: -15, z1: 15 };
+const inMine = p => p.x > 90;
+const golds = [];
+const mine = { built: false, entrance: new V3(45, 0, -10.6), exitZone: new V3(102.2, 0, 0), start: new V3(104.6, 0, 0), back: new V3(45, 0, -8.2), wasIn: false, golems: [], king: null, kingT: 3, golemT: 2 };
+function teleport(p) {
+  player.g.position.copy(p); camTarget.copy(p); burst(p, 0x8fe8f8, 12); sfx('whoosh');
+  if (husky.owned) husky.g.position.copy(p).add(new V3(1, 0, 1));
+}
+function unlockMine(instant) {
+  if (mine.built) return;
+  mine.built = true;
+  // cave mouth on the surface
+  const m = stationGroup(45, -12.2);
+  mesh(new THREE.DodecahedronGeometry(2.0, 0), 0x6b7488, -2.2, 1.2, 0, m); mesh(new THREE.DodecahedronGeometry(2.0, 0), 0x6b7488, 2.2, 1.2, 0, m);
+  mesh(new THREE.DodecahedronGeometry(2.2, 0), 0x7a8498, 0, 3.0, -0.3, m);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.4, 16), new THREE.MeshBasicMaterial({ color: 0x0b0f18 })); hole.position.set(0, 1.2, 0.9); m.add(hole);
+  for (const x of [-0.9, 0.9]) mesh(new THREE.BoxGeometry(0.2, 2.2, 0.2), 0x7d4a26, x, 1.1, 1.1, m);
+  mesh(new THREE.BoxGeometry(2.2, 0.22, 0.25), 0x7d4a26, 0, 2.25, 1.1, m);
+  colliders.push({ x0: 42, x1: 48, z0: -14.4, z1: -11.4 });
+  zoneMarker(45, -10.6, 'pick', '#ffcc33');
+  // the cavern
+  const cx = (MINE.x0 + MINE.x1) / 2, cz = (MINE.z0 + MINE.z1) / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MINE.x1 - MINE.x0 + 8, MINE.z1 - MINE.z0 + 8), mat(0x323b4f));
+  floor.rotation.x = -PI / 2; floor.position.set(cx, 0.01, cz); floor.receiveShadow = true; scene.add(floor);
+  const wallGeo = new THREE.DodecahedronGeometry(1.8, 0), spots = [];
+  for (let x = MINE.x0; x <= MINE.x1; x += 2.2) { spots.push([x, MINE.z0 - 1]); spots.push([x, MINE.z1 + 1]); }
+  for (let z = MINE.z0; z <= MINE.z1; z += 2.2) { spots.push([MINE.x0 - 1, z]); spots.push([MINE.x1 + 1, z]); }
+  const walls = new THREE.InstancedMesh(wallGeo, mat(0x4a5568), spots.length), o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x + rand(-0.4, 0.4), rand(0.6, 1.4), z + rand(-0.4, 0.4)); o.rotation.set(rand(0, 3), rand(0, 3), 0); o.scale.setScalar(rand(0.9, 1.5)); o.updateMatrix(); walls.setMatrixAt(i, o.matrix); });
+  walls.castShadow = true; scene.add(walls);
+  const cMats = [new THREE.MeshBasicMaterial({ color: 0x7ff0f0 }), new THREE.MeshBasicMaterial({ color: 0xc08cff })];
+  for (let i = 0; i < 26; i++) {
+    const side = i % 4, t = rand(0, 1);
+    const x = side < 2 ? MINE.x0 + t * (MINE.x1 - MINE.x0) : side === 2 ? MINE.x0 + 0.3 : MINE.x1 - 0.3;
+    const z = side === 0 ? MINE.z0 + 0.3 : side === 1 ? MINE.z1 - 0.3 : MINE.z0 + t * (MINE.z1 - MINE.z0);
+    const cr = new THREE.Mesh(new THREE.OctahedronGeometry(rand(0.25, 0.5), 0), cMats[i % 2]);
+    cr.position.set(x, rand(0.3, 1.2), z); cr.rotation.set(rand(0, 3), rand(0, 3), 0); cr.scale.y = 1.8; scene.add(cr);
+  }
+  for (const [x, z] of [[110, -6], [114, 7], [119, -3]]) { const pil = mesh(new THREE.CylinderGeometry(0.9, 1.2, 4, 7), 0x4a5568, x, 2, z); circles.push({ x, z, r: 1.1, on: () => true }); }
+  for (const [x, z, c] of [[108, 0, 0x7ff0f0], [118, 0, 0xc08cff], [127, 0, 0x7ff0f0]]) { const L = new THREE.PointLight(c, 1.3, 16, 1.5); L.position.set(x, 3, z); scene.add(L); }
+  // arena ring for the king
+  const ring = new THREE.Mesh(new THREE.RingGeometry(4.2, 4.6, 32), new THREE.MeshBasicMaterial({ color: 0xc08cff, transparent: true, opacity: 0.6 }));
+  ring.rotation.x = -PI / 2; ring.position.set(126, 0.03, 0); scene.add(ring);
+  zoneMarker(mine.exitZone.x, mine.exitZone.z, 'exit', '#8fe8f8');
+  for (let i = 0; i < 18; i++) {
+    let x, z, tries = 0;
+    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4)));
+    golds.push(new Tree(x, z, 'gold'));
+  }
+  mine.wasIn = !instant;
+  if (!instant) { popIn(m); burst(new V3(45, 0, -11), 0xffcc33, 18); toast('The Frost Mine is open! Gold awaits below.'); }
+}
+// Goldsmith inside the mine
+const GOLD_PRICE = 40;
+const smith = { built: false, pos: new V3(106, 0, 8), input: new Pile(103.6, 8, 3, 3, 27, 0.6, 0.6, 0.3), cash: null, t: 0 };
+function unlockSmith(instant) {
+  if (smith.built) return;
+  smith.built = true;
+  const g = stationGroup(106, 8); smith.g = g;
+  mesh(new THREE.BoxGeometry(1.8, 1.0, 1.4), 0x5a3a2a, 0, 0.5, 0, g);
+  mesh(new THREE.BoxGeometry(0.9, 0.3, 0.5), 0x2b3442, 0, 1.15, 0, g); mesh(new THREE.BoxGeometry(0.4, 0.25, 0.3), 0x2b3442, 0.5, 1.15, 0, g);
+  smith.fire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 7), new THREE.MeshBasicMaterial({ color: 0xff9a3c })); smith.fire.position.set(-0.6, 1.3, 0.3); g.add(smith.fire);
+  colliders.push({ x0: 105, x1: 107, z0: 7.2, z1: 8.8 });
+  zoneMarker(103.6, 8, 'pick', '#ffcc33');
+  smith.cash = new CashPile(108.6, 8);
+  if (!instant) { popIn(g); burst(smith.pos, 0xffcc33, 14); }
+}
+function updateSmith(dt) {
+  if (!smith.built) return;
+  smith.fire.scale.y = 1 + Math.sin(performance.now() / 80) * 0.2;
+  smith.t += dt;
+  if (smith.t > 1.4 && smith.input.n > 0) {
+    smith.t = 0; const m = smith.input.take(), top = new V3(106, 1.3, 8);
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); burst(top, 0xffcc33, 4); sfx('anvil'); smith.cash.addValue(GOLD_PRICE + 10 * U('goldp'), top); });
+  }
+}
+// Ice golems and the Crystal King
+class Golem {
+  constructor(x, z, king = false) {
+    this.king = king; const s = king ? 2.2 : 1;
+    this.g = new THREE.Group(); this.g.position.set(x, 0, z); scene.add(this.g);
+    this.mat = new THREE.MeshLambertMaterial({ color: king ? 0x8a7ad8 : 0x7c98b8, emissive: 0x000000 });
+    const spike = new THREE.MeshBasicMaterial({ color: king ? 0xd9b3ff : 0x9ff0ff });
+    mesh(new THREE.BoxGeometry(1.1 * s, 1.1 * s, 0.8 * s), this.mat, 0, 1.25 * s, 0, this.g);
+    mesh(new THREE.BoxGeometry(0.6 * s, 0.5 * s, 0.55 * s), this.mat, 0, 2.05 * s, 0.05 * s, this.g);
+    for (const ex of [-0.13, 0.13]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.07 * s, 0.04), spike); e.position.set(ex * s, 2.1 * s, 0.33 * s); this.g.add(e); }
+    this.arms = [-1, 1].map(sd => { const a = new THREE.Group(); a.position.set(sd * 0.72 * s, 1.65 * s, 0); this.g.add(a); mesh(new THREE.BoxGeometry(0.35 * s, 1.0 * s, 0.4 * s), this.mat, 0, -0.45 * s, 0, a); return a; });
+    this.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * 0.3 * s, 0.7 * s, 0); this.g.add(l); mesh(new THREE.BoxGeometry(0.38 * s, 0.7 * s, 0.4 * s), this.mat, 0, -0.35 * s, 0, l); return l; });
+    for (let i = 0; i < (king ? 7 : 3); i++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.18 * s, 0), spike); c.position.set(rand(-0.4, 0.4) * s, (1.7 + rand(0, 0.3)) * s, -0.45 * s); c.scale.y = 2; this.g.add(c); }
+    if (king) for (let k = 0; k < 5; k++) { const a = k / 5 * 2 * PI, c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.35 * s, 4), new THREE.MeshBasicMaterial({ color: 0xffd23a })); c.position.set(Math.cos(a) * 0.22 * s, 2.45 * s, Math.sin(a) * 0.22 * s + 0.05 * s); this.g.add(c); }
+    this.max = king ? 120 : 8; this.hp = this.max; this.reach = king ? 3.6 : 2.0; this.speed = king ? 2.4 : 2.1;
+    this.flash = 0; this.spawn = 0; this.cd = 1; this.phase = 0; this.target = null; this.alive = true;
+    if (king) {
+      const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
+      this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+      this.sprite.scale.set(2.6, 0.4, 1); this.sprite.position.set(0, 6.4, 0); this.sprite.renderOrder = 6; this.g.add(this.sprite); this.drawBar();
+    }
+    this.g.scale.setScalar(0.01);
+  }
+  get pos() { return this.g.position; }
+  drawBar() {
+    if (!this.bar) return;
+    const x = this.bar.getContext('2d'); x.clearRect(0, 0, 256, 40);
+    x.fillStyle = 'rgba(20,28,48,.85)'; roundRect(x, 0, 0, 256, 40, 12); x.fill();
+    x.fillStyle = '#c08cff'; roundRect(x, 5, 5, 246 * Math.max(0, this.hp / this.max), 30, 9); x.fill();
+    this.sprite.material.map.needsUpdate = true;
+  }
+  hit(dmg) {
+    if (!this.alive) return;
+    this.hp -= dmg; this.flash = 0.15; this.drawBar(); burst(this.pos.clone().add(new V3(0, 1, 0)), 0x9ff0ff, 4); sfx('mine');
+    if (this.hp > 0) return;
+    this.alive = false; scene.remove(this.g); mine.golems.splice(mine.golems.indexOf(this), 1);
+    burst(this.pos, this.king ? 0xc08cff : 0x9ff0ff, this.king ? 30 : 12);
+    if (this.king) {
+      mine.king = null; mine.kingT = 180; bump('king'); camShake = 0.5;
+      for (let i = 0; i < 20; i++) dropGround('cash', this.pos.clone());
+      for (let i = 0; i < 8; i++) dropGround('gold', this.pos.clone());
+      toast('The Crystal King is defeated! Grab the treasure!'); sfx('buy');
+      for (let k = 0; k < 5; k++) setTimeout(() => firework(this.pos.clone()), k * 250);
+    } else { bump('golem'); dropGround('gold', this.pos.clone()); dropGround('gold', this.pos.clone()); dropGround('cash', this.pos.clone()); }
+  }
+  update(dt) {
+    this.spawn = Math.min(1, this.spawn + dt * 1.5); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn)));
+    if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
+    this.cd -= dt;
+    const pp = player.g.position, dp = d2(pp, this.pos), home = this.king ? new V3(126, 0, 0) : null;
+    let moving = true;
+    if (inMine(pp) && dp < (this.king ? 11 : 6.5) && pp.x > 104.5) {
+      moving = !stepToward(this.g, pp, this.speed, dt, this.reach - 0.4);
+      if (dp < this.reach + 0.2 && this.cd <= 0) {
+        this.cd = this.king ? 1.3 : 1.8;
+        this.arms.forEach(a => { a.rotation.x = -2.2; });
+        const dir = new V3(pp.x - this.pos.x, 0, pp.z - this.pos.z).normalize();
+        player.kb.set(dir.x * (this.king ? 16 : 10), 0, dir.z * (this.king ? 16 : 10));
+        dropFromCarrier(player.c, this.king ? 4 : 2); camShake = this.king ? 0.45 : 0.25; sfx('roar');
+      }
+    } else {
+      if (!this.target) this.target = home ? home.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))) : new V3(rand(108, 121), 0, rand(-12, 12));
+      if (stepToward(this.g, this.target, this.speed * 0.5, dt, 0.2)) this.target = null;
+    }
+    this.arms.forEach(a => { a.rotation.x += (0 - a.rotation.x) * Math.min(1, dt * 5); });
+    if (moving) this.phase += dt * 6;
+    this.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(this.phase + i * PI) * 0.5 : 0; });
+  }
+}
+function updateMine(dt) {
+  if (!mine.built) return;
+  for (const gn of golds) gn.update(dt);
+  for (const gm of mine.golems.slice()) gm.update(dt);
+  const normal = mine.golems.filter(g => !g.king).length;
+  mine.golemT -= dt;
+  if (mine.golemT <= 0 && normal < 4) { mine.golemT = 12; mine.golems.push(new Golem(rand(110, 120), rand(-11, 11))); }
+  if (!mine.king) { mine.kingT -= dt; if (mine.kingT <= 0) { mine.king = new Golem(126, 0, true); mine.golems.push(mine.king); if (inMine(player.g.position)) toast('The Crystal King has risen!'); } }
+}
+function applyMineEnv() {
+  const m = inMine(player.g.position); snow.visible = !m;
+  if (!m) return;
+  scene.background.setHex(0x121826); scene.fog.color.setHex(0x121826); scene.fog.near = 14; scene.fog.far = 42;
+  hemi.intensity = 0.55; hemi.color.setHex(0xa8bcff); sun.intensity = 0.2;
+}
+
+// ================= Trophies =================
+const ACH = [
+  ['first', 'Open for Business', 'Sell your first steak', () => stat('steak') >= 1],
+  ['steak100', 'Steak House', 'Sell 100 steaks', () => stat('steak') >= 100],
+  ['steak1000', 'Grill Master', 'Sell 1,000 steaks', () => stat('steak') >= 1000],
+  ['boar25', 'Boar Hunter', 'Hunt 25 boars', () => stat('boar') >= 25],
+  ['wolf10', 'Wolf Warden', 'Defeat 10 wolves', () => stat('wolf') >= 10],
+  ['wolf50', 'Pack Breaker', 'Defeat 50 wolves', () => stat('wolf') >= 50],
+  ['log100', 'Timber!', 'Chop 100 logs yourself', () => stat('log') >= 100],
+  ['gem100', 'Crystal Clear', 'Mine 100 crystals yourself', () => stat('gem') >= 100],
+  ['fish50', 'Gone Fishing', 'Catch 50 fish yourself', () => stat('fish') >= 50],
+  ['guest25', 'Spa Day', 'Host 25 spa guests', () => stat('guest') >= 25],
+  ['gold50', 'Gold Rush', 'Mine 50 gold nuggets', () => stat('gold') >= 50],
+  ['golem10', 'Rock Breaker', 'Smash 10 ice golems', () => stat('golem') >= 10],
+  ['bear', 'Bear Necessities', 'Defeat the Ice Bear', () => stat('bear') >= 1],
+  ['king', 'Kingslayer', 'Defeat the Crystal King', () => stat('king') >= 1],
+  ['earn1k', 'Pocket Money', 'Earn $1,000', () => stat('earned') >= 1000],
+  ['earn10k', 'Big Earner', 'Earn $10,000', () => stat('earned') >= 10000],
+  ['earn100k', 'Fortune', 'Earn $100,000', () => stat('earned') >= 100000],
+  ['earn1m', 'Millionaire', 'Earn $1,000,000', () => stat('earned') >= 1000000],
+  ['crew10', 'Full Crew', 'Have 10 workers at once', () => workers.length >= 10],
+  ['ridge', 'New Frontier', 'Found Ridge Camp', () => ridge.unlocked],
+  ['mine', 'Into the Deep', 'Enter the Frost Mine', () => stat('mine') >= 1],
+  ['day7', 'One Week Strong', 'Reach day 7', () => Math.floor(dayT / CYCLE) + 1 >= 7],
+  ['village', 'Village Elder', 'Reach Village rank', () => lastRank >= 3],
+  ['legend', 'Legend of the North', 'Reach the top camp rank', () => lastRank >= RANKS.length - 1],
+  ['castle', 'King of the Castle', 'Build the Snow Castle', () => !!UP.castle],
+  ['fashion', 'Fashionista', 'Unlock every outfit', () => padLevel('wardrobe') >= 4],
+  ['star', 'Golden Legacy', 'Earn a Golden Star', () => legacy.stars >= 1],
+  ['star5', 'Star Collector', 'Hold 5 Golden Stars', () => legacy.stars >= 5],
+];
+const trophyBtn = document.getElementById('trophybtn'), trophiesEl = document.getElementById('trophies'), trophyList = document.getElementById('trophylist');
+function trophyCount() { return ACH.filter(a => legacy.ach[a[0]]).length; }
+function renderTrophies() {
+  trophyBtn.textContent = `Trophies ${trophyCount()}/${ACH.length}`;
+  if (trophiesEl.hidden) return;
+  document.getElementById('trophytitle').textContent = `Trophies ${trophyCount()}/${ACH.length}`;
+  trophyList.innerHTML = ACH.slice().sort((a, b) => (legacy.ach[b[0]] ? 1 : 0) - (legacy.ach[a[0]] ? 1 : 0)).map(([id, name, desc]) => `<div class="urow"><div><b>${name}</b><small>${desc}</small></div><span class="tick${legacy.ach[id] ? ' on' : ''}" aria-label="${legacy.ach[id] ? 'Unlocked' : 'Locked'}">${legacy.ach[id] ? '★' : '·'}</span></div>`).join('');
+}
+trophyBtn.addEventListener('click', () => { trophiesEl.hidden = false; renderTrophies(); });
+document.getElementById('trophyx').addEventListener('click', () => { trophiesEl.hidden = true; });
+let achT = 0;
+function checkTrophies(dt) {
+  achT -= dt; if (achT > 0) return; achT = 1.2;
+  for (const [id, name, , ok] of ACH) {
+    if (legacy.ach[id] || !ok()) continue;
+    legacy.ach[id] = Date.now(); W.cash += 100; setCash(); saveLegacy();
+    toast(`Trophy: ${name}! +$100`); sfx('buy');
+    firework(player.g.position.clone()); renderTrophies();
+    return;
+  }
+}
+
+// ================= Golden Restart (legacy) =================
+let legacyConfirm = false;
+const starsFor = xp => Math.floor(Math.sqrt(xp / 2500));
+function renderLegacy() {
+  const gain = starsFor(campXP());
+  shopList.innerHTML = `<div class="legacy">
+    <p class="big">★ ${legacy.stars} Golden Star${legacy.stars === 1 ? '' : 's'}</p>
+    <p>Every star adds <b>+10% to all money you earn</b> and <b>$100 of starting cash</b>, forever. Trophies stay with you.</p>
+    <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. The more you have built, the more stars you get.</p>
+    <p>You would earn <b>${gain} star${gain === 1 ? '' : 's'}</b> now.${gain < 1 ? ' Build more to earn your first star.' : ''}</p>
+    <div class="row2">${legacyConfirm
+      ? `<button type="button" class="red" id="lgo">Yes, restart for ${gain} ★</button><button type="button" class="no" id="lno">Not yet</button>`
+      : `<button type="button" class="gold" id="lask" ${gain < 1 ? 'disabled' : ''}>Golden Restart</button>`}</div></div>`;
+  const q = id => document.getElementById(id);
+  if (q('lask')) q('lask').onclick = () => { legacyConfirm = true; renderLegacy(); };
+  if (q('lno')) q('lno').onclick = () => { legacyConfirm = false; renderLegacy(); };
+  if (q('lgo')) q('lgo').onclick = () => {
+    legacy.stars += gain; bump('prestige'); saveLegacy();
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    resetting = true; location.reload();
+  };
+}
 
 // ---------------- workers ----------------
 const workers = [];
@@ -2058,6 +2349,8 @@ const PADS = [
   { id: 'tailor', label: 'Tailor', icon: 'coat', costs: [900], x: 50, z: 4.8, req: () => pen.level > 0, apply: unlockTailor },
   { id: 'crafter', label: 'Hire Crafter', icon: 'person', costs: [600, 1200], x: 40.2, z: 1.2, req: () => workshop.built, apply: () => new Worker('crafter', 40.2, 1.2) },
   { id: 'shepherd', label: 'Hire Shepherd', icon: 'person', costs: [500, 1000], x: 44.8, z: 1.2, req: () => tailor.built, apply: () => new Worker('shepherd', 44.8, 1.2) },
+  { id: 'mine', label: 'Frost Mine', icon: 'pick', costs: [3000], x: 45, z: -10.6, req: () => ridge.unlocked, apply: unlockMine },
+  { id: 'smith', label: 'Goldsmith', icon: 'pick', costs: [1500], x: 106, z: 8, req: () => mine.built, apply: unlockSmith },
   { id: 'runner', label: 'Hire Runner', icon: 'person', costs: [500], x: 49.4, z: 1.2, req: () => market.built, apply: () => new Worker('runner', 49.4, 1.2) },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
@@ -2171,7 +2464,8 @@ function collide(pos, r) {
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
     if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
   }
-  pos.x = clamp(pos.x, BOUNDS.x0, BOUNDS.x1); pos.z = clamp(pos.z, BOUNDS.z0, BOUNDS.z1);
+  const B = pos.x > 90 ? MINE : BOUNDS;
+  pos.x = clamp(pos.x, B.x0 + 0.6, B.x1 - 0.6); pos.z = clamp(pos.z, B.z0 + 0.6, B.z1 - 0.6);
 }
 const inZone = (pos, x, z, half = 1.05) => Math.abs(pos.x - x) < half && Math.abs(pos.z - z) < half;
 
@@ -2191,13 +2485,23 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of cashPiles()) {
+  for (const cp of cashPiles().concat(smith.cash ? [smith.cash] : [])) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
     if (m) fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); sfx('coin'); });
     else { W.cash += share; setCash(); }
     return;
+  }
+  // frost mine entrance / exit
+  if (mine.built) {
+    const atEnt = inZone(pos, mine.entrance.x, mine.entrance.z, 1.0), atExit = inZone(pos, mine.exitZone.x, mine.exitZone.z, 1.0);
+    if (atEnt && !mine.wasIn) { teleport(mine.start); bump('mine'); toast('The Frost Mine. Beware of ice golems!'); return; }
+    if (atExit && !mine.wasIn) { teleport(mine.back); return; }
+    mine.wasIn = atEnt || atExit;
+  }
+  if (smith.built && inZone(pos, smith.input.x, smith.input.z) && smith.input.free() > 0) {
+    const it = c.take('gold'); if (it) { smith.input.receive(it.m, it.pos); sfx('drop'); return; }
   }
   // town hall shop
   if (hall.built) {
@@ -2272,12 +2576,12 @@ function updatePlayer(dt) {
   // auto chop / hunt
   player.atk -= dt;
   if (player.atk <= 0) {
-    const b = nearest(boars.concat(wolves, bear ? [bear] : []), pos, b => b.pos);
+    const b = nearest(boars.concat(wolves, bear ? [bear] : [], mine.golems), pos, b => b.pos);
     if (b && d2(b.pos, pos) < (b.reach || 1.9)) {
       player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
-      const t = nearest(trees.concat(rocks).filter(t => !t.down), pos);
+      const t = nearest(trees.concat(rocks, golds).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
         player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
@@ -2361,6 +2665,8 @@ function sfx(name) {
     case 'wind': tone(200, 90, 1.4, 'sawtooth', 0.03); tone(260, 120, 1.2, 'triangle', 0.04, 0.2); break;
     case 'pop': tone(900, 300, 0.25, 'triangle', 0.06); break;
     case 'bell': [1568, 1976, 1568].forEach((f, i) => tone(f, f * 0.98, 0.18, 'sine', 0.06, i * 0.1)); break;
+    case 'whoosh': tone(300, 900, 0.25, 'sine', 0.06); break;
+    case 'anvil': tone(1800, 1500, 0.12, 'triangle', 0.06); break;
     case 'dawn': [392, 523, 659].forEach((f, i) => tone(f, f, 0.3, 'sine', 0.08, i * 0.12)); break;
   }
 }
@@ -2476,8 +2782,10 @@ function updateDayNight(dt) {
 // ---------------- HUD ----------------
 const cashEl = document.getElementById('cash'), cashV = document.getElementById('cashv');
 function fmt(n) { n = Math.max(0, Math.round(n)); return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
-let bumpT = 0;
-function setCash() { if (typeof refreshShopButtons === 'function') refreshShopButtons(); cashV.textContent = fmt(W.cash); cashEl.classList.add('bump'); clearTimeout(bumpT); bumpT = setTimeout(() => cashEl.classList.remove('bump'), 120); }
+let bumpT = 0, lastCashSeen = null;
+function setCash() {
+  if (lastCashSeen !== null && W.cash > lastCashSeen) bump('earned', W.cash - lastCashSeen);
+  lastCashSeen = W.cash; if (typeof refreshShopButtons === 'function') refreshShopButtons(); cashV.textContent = fmt(W.cash); cashEl.classList.add('bump'); clearTimeout(bumpT); bumpT = setTimeout(() => cashEl.classList.remove('bump'), 120); }
 
 // ---------------- input ----------------
 const joy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
@@ -2518,6 +2826,7 @@ let resetting = false;
 function save() {
   if (resetting) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, up: UP })); } catch (e) {}
+  saveLegacy();
 }
 if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
@@ -2529,8 +2838,9 @@ if (saved && saved.pads) {
     padState[p.id].paid = s.paid || 0;
   }
   if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
-}
-refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false);
+} else if (legacy.stars) { W.cash = 100 * legacy.stars; }
+refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false); renderTrophies();
+document.getElementById('rankname').title = legacy.stars ? legacy.stars + ' Golden Stars' : '';
 setInterval(save, 3000);
 addEventListener('pagehide', save);
 if (document.fonts) document.fonts.ready.then(() => { PADS.forEach(p => p.label3d.redraw()); maxLabel.redraw(); });
@@ -2550,6 +2860,7 @@ function frame() {
   updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); updateDepot(dt); drawMap(dt);
   updateWorkshop(dt); updateMarket(dt); updateTailor(dt); for (const y of pen.yaks) y.update(dt);
   for (const f of decoAnim) f(dt);
+  updateMine(dt); updateSmith(dt); checkTrophies(dt);
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
@@ -2578,11 +2889,12 @@ function frame() {
   }
   snowGeo.attributes.position.needsUpdate = true;
   snow.position.set(camTarget.x, 0, camTarget.z);
+  applyMineEnv();
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport };
 requestAnimationFrame(frame);
 })();
 </script>
