@@ -39,6 +39,8 @@ Blacksmith; the Ice Saw cuts river ice for the Ice Carver; snowblooms and aurora
 become potions at the Apothecary. **Market Town**, south of camp, has the General Store
 that buys jam, tools and potions. New workers (berry picker, store clerk, smelter hand,
 herbalist) and Town Hall haulers (Mine Cart, Ice Wagon, Potion Courier) automate it.
+Also in Market Town: a Bee Yard and Candle Maker, a Furniture Shop (logs into chairs) and
+a Jeweler (crystal + gold = rings); south of camp, a Pie Bakery (meat + berries).
 
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
