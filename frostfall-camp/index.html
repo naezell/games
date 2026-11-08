@@ -73,6 +73,15 @@
   #boosts span { background: rgba(122, 79, 200, .85); color: var(--white); border-radius: 999px; padding: 4px 10px; font: 800 12px var(--font-body); font-variant-numeric: tabular-nums; }
   #boosts span.storm { background: rgba(70, 110, 160, .9); }
   #map { width: 120px; height: 75px; border-radius: 12px; border: 2px solid rgba(255,255,255,.75); background: var(--panel); }
+  #bosscal { background: rgba(140, 40, 50, .82); color: var(--white); border-radius: 12px; padding: 4px 10px; font: 800 12px var(--font-body); }
+  #bosscal:empty { display: none; }
+  #welcome { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.5);
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #welcome > div { background: #f7fafc; color: var(--ink); border-radius: 18px; padding: 22px; max-width: 330px; text-align: center; font: 700 15px/1.45 var(--font-body); }
+  #welcome h2 { font: 28px var(--font-display); margin: 0 0 6px; }
+  #welcome .amt { font: 40px var(--font-display); color: var(--cash-dark); margin: 8px 0; }
+  #collect { border: 0; border-radius: 12px; padding: 12px 22px; font: 20px var(--font-display); background: var(--cash); color: var(--white); cursor: pointer; }
+  #collect:focus-visible { outline: 3px solid #3f7fc8; outline-offset: 2px; }
   #rank { display: flex; align-items: center; gap: 8px; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 5px 10px; font: 15px var(--font-display); letter-spacing: .4px; }
   #rankbar { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
   #rankfill { display: block; height: 100%; width: 0; background: #ffd23a; transition: width .3s; }
@@ -142,13 +151,14 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="bosscal"></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
   <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
 <div id="joy" hidden><div id="knob"></div></div>
 <div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
+<div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
 
@@ -368,6 +378,14 @@ function drawIcon(c, icon, cx, cy, s) {
     c.strokeStyle = W_; c.lineWidth = 9; c.beginPath(); c.moveTo(-30, 40); c.lineTo(20, -10); c.stroke();
     c.beginPath(); c.moveTo(-10, -40); c.quadraticCurveTo(30, -36, 46, 4); c.stroke();
     c.fillStyle = '#ffcc33'; c.beginPath(); c.arc(30, 30, 12, 0, 2 * PI); c.fill();
+  } else if (icon === 'boat') {
+    c.fillStyle = W_; c.beginPath(); c.moveTo(-50, 10); c.lineTo(50, 10); c.lineTo(34, 34); c.lineTo(-34, 34); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-4, 4); c.lineTo(-4, -46); c.lineTo(34, 4); c.closePath(); c.fill();
+  } else if (icon === 'owl') {
+    c.fillStyle = W_; c.beginPath(); c.ellipse(0, 6, 36, 40, 0, 0, 2 * PI); c.fill();
+    c.beginPath(); c.moveTo(-30, -24); c.lineTo(-22, -46); c.lineTo(-8, -30); c.moveTo(30, -24); c.lineTo(22, -46); c.lineTo(8, -30); c.fill();
+    c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(-14, -6, 10, 0, 2 * PI); c.arc(14, -6, 10, 0, 2 * PI); c.fill();
+    c.fillStyle = '#1d2a3a'; c.beginPath(); c.arc(-14, -6, 4, 0, 2 * PI); c.arc(14, -6, 4, 0, 2 * PI); c.fill();
   } else if (icon === 'exit') {
     c.fillStyle = W_; c.beginPath(); c.moveTo(-40, -12); c.lineTo(6, -12); c.lineTo(6, -36); c.lineTo(46, 0); c.lineTo(6, 36); c.lineTo(6, 12); c.lineTo(-40, 12); c.closePath(); c.fill();
   } else if (icon === 'fire') {
@@ -452,12 +470,14 @@ const GEO = {
   cash: new THREE.BoxGeometry(0.52, 0.07, 0.3),
   gem: new THREE.OctahedronGeometry(0.2, 0),
   gold: new THREE.DodecahedronGeometry(0.18, 0),
+  shard: new THREE.OctahedronGeometry(0.2, 0).scale(0.8, 1.5, 0.8),
   fish: new THREE.SphereGeometry(0.2, 10, 8).scale(1.5, 0.55, 0.75),
   lantern: new THREE.CylinderGeometry(0.15, 0.19, 0.3, 6),
   wool: new THREE.DodecahedronGeometry(0.2, 1),
 };
 const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x5a4000 });
-const H = { gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const shardMat = new THREE.MeshLambertMaterial({ color: 0xd08cff, emissive: 0x4a1d66 });
+const H = { shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
@@ -467,6 +487,7 @@ function makeItem(t) {
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
   else if (t === 'gold') m = new THREE.Mesh(GEO.gold, goldMat);
+  else if (t === 'shard') m = new THREE.Mesh(GEO.shard, shardMat);
   else if (t === 'fish') m = new THREE.Mesh(GEO.fish, mat(0x86aed0));
   else if (t === 'lantern') m = new THREE.Mesh(GEO.lantern, lanternMat);
   else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
@@ -672,6 +693,12 @@ const GOLD_GEO = merge([
   [new THREE.DodecahedronGeometry(0.15, 0), 0xffe680, -0.45, 0.6, 0.4],
 ]);
 const NODE = {
+  shard: { geo: merge([
+    [new THREE.DodecahedronGeometry(0.6, 0), 0xdfe9f5, 0, 0.3, 0],
+    [new THREE.OctahedronGeometry(0.3, 0).scale(0.7, 2.6, 0.7), 0xd08cff, 0, 1.2, 0],
+    [new THREE.OctahedronGeometry(0.22, 0).scale(0.7, 2.4, 0.7), 0x7ff0d0, 0.38, 0.85, 0.15],
+    [new THREE.OctahedronGeometry(0.2, 0).scale(0.7, 2.2, 0.7), 0xff9ad8, -0.35, 0.8, -0.1],
+  ]), stump: RUBBLE_GEO, item: 'shard', hp: 6, regrow: 40, color: 0xd08cff, r: 0.65, sound: 'mine' },
   gold: { geo: GOLD_GEO, stump: RUBBLE_GEO, item: 'gold', hp: 5, regrow: 30, color: 0xffcc33, r: 0.75, sound: 'mine' },
   tree: { geo: TREE_GEO, stump: STUMP_GEO, item: 'log', hp: 3, regrow: 18, color: 0x4b8ccc, r: 0.45, sound: 'chop' },
   rock: { geo: ROCK_GEO, stump: RUBBLE_GEO, item: 'gem', hp: 4, regrow: 25, color: 0x7fe3f5, r: 0.7, sound: 'mine' },
@@ -1223,9 +1250,10 @@ const BRG = {
   ear: new THREE.BoxGeometry(0.25, 0.25, 0.12), leg: new THREE.BoxGeometry(0.45, 0.9, 0.5), dot: new THREE.BoxGeometry(0.12, 0.12, 0.05),
 };
 class Bear {
-  constructor(x, z) {
+  constructor(x, z, kind = 'bear') {
+    this.kind = kind; this.size = kind === 'yeti' ? 1.35 : 1;
     this.g = new THREE.Group(); this.g.position.set(x, 0, z);
-    this.mat = new THREE.MeshLambertMaterial({ color: 0xeaf2fb, emissive: 0x000000 });
+    this.mat = new THREE.MeshLambertMaterial({ color: kind === 'yeti' ? 0xd8c8b0 : 0xeaf2fb, emissive: 0x000000 });
     mesh(BRG.body, this.mat, 0, 1.3, 0, this.g);
     mesh(BRG.head, this.mat, 0, 1.75, 1.45, this.g);
     mesh(BRG.snout, 0xd5dce6, 0, 1.6, 2.0, this.g);
@@ -1235,7 +1263,7 @@ class Bear {
     this.legs = [[-0.5, 0.75], [0.5, 0.75], [-0.5, -0.75], [0.5, -0.75]].map(([lx, lz]) => {
       const p = new THREE.Group(); p.position.set(lx, 0.9, lz); this.g.add(p); mesh(BRG.leg, this.mat, 0, -0.45, 0, p); return p;
     });
-    this.max = 30; this.hp = this.max; this.flash = 0; this.spawn = 0; this.phase = 0; this.cd = 0; this.target = null; this.reach = 2.7; this.alive = true;
+    this.max = kind === 'yeti' ? 60 : 30; this.hp = this.max; this.flash = 0; this.spawn = 0; this.phase = 0; this.cd = 0; this.target = null; this.reach = 2.7; this.alive = true;
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
     this.sprite.scale.set(2.4, 0.38, 1); this.sprite.position.set(0, 3.1, 0); this.sprite.renderOrder = 6; this.g.add(this.sprite);
@@ -1255,15 +1283,17 @@ class Bear {
     if (this.hp <= 0) {
       this.alive = false; scene.remove(this.g); bear = null; burst(this.pos, 0xeaf2fb, 24); camShake = 0.4;
       for (let i = 0; i < 8; i++) dropGround('meat', this.pos.clone());
-      for (let i = 0; i < 6; i++) dropGround('cash', this.pos.clone());
-      toast('You beat the Ice Bear! Grab the loot.'); sfx('buy'); bump('bear');
+      for (let i = 0; i < (this.kind === 'yeti' ? 15 : 6); i++) dropGround('cash', this.pos.clone());
+      sfx('buy');
+      if (this.kind === 'yeti') { bump('yeti'); toast('You beat the Yeti! Grab the loot.'); } else { bump('bear'); toast('You beat the Ice Bear! Grab the loot.'); }
     }
   }
   update(dt) {
-    this.spawn = Math.min(1, this.spawn + dt * 1.2); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn)));
+    this.spawn = Math.min(1, this.spawn + dt * 1.2); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn) * this.size));
     if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
     this.cd -= dt;
     const pp = player.g.position, dp = d2(pp, this.pos);
+    this.reach = 2.7 * this.size;
     let moving = true;
     if (dp < 8 && !inside(pp)) {
       this.target = null;
@@ -1283,10 +1313,10 @@ class Bear {
   }
 }
 let camShake = 0;
-function spawnBear() {
+function spawnBear(kind = 'bear') {
   if (bear) return;
-  bear = new Bear(rand(FIELD.x0 + 3, FIELD.x1 - 3), rand(FIELD.z0 + 2, FIELD.z0 + 6));
-  toast('A giant Ice Bear roams the north field!'); sfx('roar');
+  bear = new Bear(rand(FIELD.x0 + 3, FIELD.x1 - 3), rand(FIELD.z0 + 2, FIELD.z0 + 6), kind);
+  toast(kind === 'yeti' ? 'The Yeti has come down from the mountains!' : 'A giant Ice Bear roams the north field!'); sfx('roar');
 }
 
 // Hot springs
@@ -1657,6 +1687,18 @@ const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - M
 let mapT = 0;
 function drawMap(dt) {
   mapT -= dt; if (mapT > 0) return; mapT = 0.2;
+  if (inIsle(player.g.position)) {
+    Object.assign(MAP, { x0: ISLE.x0 - 2, x1: ISLE.x1 + 2, z0: ISLE.z0 - 2, z1: ISLE.z1 + 2 });
+    const c = mapX; c.fillStyle = '#3f8ad0'; c.fillRect(0, 0, mapCv.width, mapCv.height);
+    c.fillStyle = '#eef6ff'; c.fillRect(mx(ISLE.x0), mz(ISLE.z0), mx(ISLE.x1) - mx(ISLE.x0), mz(ISLE.z1) - mz(ISLE.z0));
+    const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
+    for (const sh of isle.shards) if (!sh.down) dot(sh.pos.x, sh.pos.z, 3, '#d08cff');
+    for (const pg of isle.penguins) dot(pg.g.position.x, pg.g.position.z, 2, '#1d2433');
+    if (hotel.built) dot(122, 61, 5, '#bfe4ff');
+    dot(isle.exitZone.x, isle.exitZone.z, 4, '#ffd23a');
+    const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    return;
+  }
   if (inMine(player.g.position)) {
     Object.assign(MAP, { x0: MINE.x0 - 1, x1: MINE.x1 + 1, z0: MINE.z0 - 1, z1: MINE.z1 + 1 });
     const c = mapX; c.fillStyle = '#1c2333'; c.fillRect(0, 0, mapCv.width, mapCv.height);
@@ -1879,6 +1921,12 @@ const UPGRADES = [
   { id: 'husky', name: 'Husky Training', desc: 'Your husky bites twice as hard', costs: [400], req: () => husky.owned },
   { id: 'lantern', name: 'Golden Lanterns', desc: '+$8 for every lantern', costs: [800, 2000], req: () => market.built },
   { id: 'coat', name: 'Fine Wool', desc: '+$5 for every coat', costs: [700, 1800], req: () => tailor.built },
+  { id: 'manager', name: 'Camp Manager', desc: 'Earns money while you are away: 25/40/60% of your income, for up to 2/4/8 hours', costs: [2000, 6000, 15000] },
+  { id: 'nets', name: 'Bigger Nets', desc: 'The fishing boat brings back 4 more fish', costs: [800, 2000], req: () => boat.owned },
+  { id: 'supply', name: 'Supply Ferry', desc: 'Ships lanterns from the Lantern Shop to the Ice Hotel', costs: [3000], req: () => hotel.built && workshop.built },
+  { id: 'hotelp', name: 'Silk Pillows', desc: '+$15 for every hotel guest', costs: [3000, 8000], req: () => hotel.built },
+  { id: 'shardp', name: 'Shard Polish', desc: '+$20 for every aurora shard', costs: [3000, 8000], req: () => exch.built },
+  { id: 'owlp', name: 'Owl Talons', desc: 'Your owl strikes twice as hard', costs: [2000], req: () => owl.owned },
   { id: 'goldp', name: 'Gold Polish', desc: '+$10 for every gold nugget', costs: [1500, 4000], req: () => smith.built },
   { id: 'yak', name: 'Happy Yaks', desc: 'Yaks grow wool 35% faster', costs: [600, 1500], req: () => pen.level > 0 },
 ];
@@ -2002,7 +2050,9 @@ const decoAnim = [];
 
 // ================= Frost Mine =================
 const MINE = { x0: 99, x1: 133, z0: -15, z1: 15 };
-const inMine = p => p.x > 90;
+const inMine = p => p.x > 90 && p.z <= 30;
+const ISLE = { x0: 100, x1: 132, z0: 40, z1: 68 };
+const inIsle = p => p.x > 90 && p.z > 30;
 const golds = [];
 const mine = { built: false, entrance: new V3(45, 0, -10.6), exitZone: new V3(102.2, 0, 0), start: new V3(104.6, 0, 0), back: new V3(45, 0, -8.2), wasIn: false, golems: [], king: null, kingT: 3, golemT: 2 };
 function teleport(p) {
@@ -2162,6 +2212,239 @@ function applyMineEnv() {
   hemi.intensity = 0.55; hemi.color.setHex(0xa8bcff); sun.intensity = 0.2;
 }
 
+// ================= Fishing boat =================
+const boat = { owned: false, state: 'dock', t: 4, pile: new Pile(23.2, -2.4, 3, 3, 40, 0.62, 0.62, 0.2), home: new V3(29.3, 0, -3.4) };
+function buyBoat(l, instant) {
+  if (boat.owned) return;
+  boat.owned = true;
+  const g = new THREE.Group(); boat.g = g; g.position.copy(boat.home); scene.add(g);
+  const hull = mesh(new THREE.BoxGeometry(1.1, 0.5, 2.4), 0xb8733d, 0, 0.2, 0, g);
+  mesh(new THREE.BoxGeometry(1.2, 0.12, 2.5), 0xd84a3a, 0, 0.48, 0, g);
+  const bow = mesh(new THREE.ConeGeometry(0.55, 0.8, 4), 0xb8733d, 0, 0.2, 1.5, g); bow.rotation.x = PI / 2; bow.rotation.y = PI / 4; bow.scale.set(1, 1, 0.5);
+  mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), 0x7d4a26, 0, 1.5, 0.1, g);
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.4), new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide })); sail.position.set(0, 1.6, -0.25); sail.rotation.y = PI / 2; g.add(sail);
+  boat.fisher = makePerson(0x2aa0b8, null, 0.7); scene.remove(boat.fisher.group); g.add(boat.fisher.group); boat.fisher.group.position.set(0, 0.3, -0.6);
+  hull.castShadow = true;
+  zoneMarker(23.2, -2.4, 'fish', '#9fd2f5');
+  if (!instant) { burst(boat.home, 0xb8733d, 14); toast('Your fishing boat sets sail! Catches land on the bank.'); }
+}
+function updateBoat(dt) {
+  if (!boat.owned) return;
+  const g = boat.g;
+  g.position.y = Math.sin(performance.now() / 500) * 0.06;
+  if (boat.state === 'dock') {
+    boat.t -= dt;
+    if (boat.t <= 0) { boat.state = 'out'; g.rotation.y = PI; }
+  } else if (boat.state === 'out') {
+    g.position.z -= dt * 5; if (g.position.z < -40) { boat.state = 'fish'; boat.t = 6; }
+  } else if (boat.state === 'fish') {
+    boat.t -= dt; boat.fisher.armR.rotation.x = -1 + Math.sin(boat.t * 4) * 0.3;
+    if (boat.t <= 0) { boat.state = 'back'; g.rotation.y = 0; }
+  } else {
+    g.position.z += dt * 5;
+    if (g.position.z >= boat.home.z) {
+      g.position.z = boat.home.z; boat.state = 'dock'; boat.t = 4;
+      const n = 8 + 4 * U('nets');
+      for (let i = 0; i < n; i++) setTimeout(() => { if (boat.pile.free() > 0) boat.pile.receive(makeItem('fish'), g.position.clone().add(new V3(0, 1, 0))); }, i * 80);
+    }
+  }
+}
+
+// ================= Snow owl =================
+const owl = { owned: false, t: 0, cd: 0 };
+function adoptOwl(instant) {
+  if (owl.owned) return;
+  owl.owned = true;
+  const g = new THREE.Group(); owl.g = g; scene.add(g);
+  const body = mesh(new THREE.SphereGeometry(0.3, 12, 10), 0xf6f8fb, 0, 0, 0, g); body.scale.set(1, 1.15, 0.9);
+  for (let i = 0; i < 6; i++) mesh(new THREE.BoxGeometry(0.06, 0.03, 0.03), 0x7d8796, rand(-0.18, 0.18), rand(-0.2, 0.15), 0.26, g);
+  for (const x of [-0.11, 0.11]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd23a })); e.position.set(x, 0.12, 0.24); g.add(e); mesh(new THREE.SphereGeometry(0.035, 6, 4), 0x111111, x, 0.12, 0.3, g); }
+  mesh(new THREE.ConeGeometry(0.04, 0.1, 4), 0x3a2a1a, 0, 0.03, 0.3, g).rotation.x = PI / 2;
+  for (const x of [-0.12, 0.12]) mesh(new THREE.ConeGeometry(0.05, 0.14, 4), 0xf6f8fb, x, 0.34, 0, g);
+  owl.wings = [-1, 1].map(sd => { const w = new THREE.Group(); w.position.set(sd * 0.26, 0.05, 0); g.add(w); mesh(new THREE.BoxGeometry(0.5, 0.05, 0.3), 0xe8edf3, sd * 0.25, 0, 0, w); return w; });
+  g.position.copy(player.g.position).add(new V3(0, 3, 0));
+  if (!instant) { burst(g.position, 0xffffff, 12); toast('A snow owl joins you! It swoops at enemies anywhere.'); }
+}
+const FEATHER_GEO = new THREE.BoxGeometry(0.08, 0.08, 0.35);
+function updateOwl(dt) {
+  if (!owl.owned) return;
+  owl.t += dt; owl.cd -= dt;
+  const pp = player.g.position, g = owl.g;
+  const tgt = pp.clone().add(new V3(Math.sin(owl.t * 0.9) * 1.6, 3 + Math.sin(owl.t * 2) * 0.2, Math.cos(owl.t * 0.9) * 1.6));
+  if (g.position.distanceTo(pp) > 25) g.position.copy(tgt);
+  g.position.lerp(tgt, Math.min(1, dt * 3));
+  g.lookAt(tgt.x + Math.cos(owl.t * 0.9), g.position.y, tgt.z - Math.sin(owl.t * 0.9));
+  owl.wings[0].rotation.z = Math.sin(owl.t * 14) * 0.6; owl.wings[1].rotation.z = -Math.sin(owl.t * 14) * 0.6;
+  if (owl.cd <= 0) {
+    const foes = wolves.concat(mine.golems, bear ? [bear] : []);
+    const f = nearest(foes, pp, x => x.pos);
+    if (f && d2(f.pos, pp) < 8 && f.spawn >= 1) {
+      owl.cd = 1.1;
+      const fe = new THREE.Mesh(FEATHER_GEO, mat(0xffffff));
+      fly(fe, g.position.clone(), () => f.pos.clone().add(new V3(0, 1, 0)), 0.3, () => { scene.remove(fe); f.hit(1 + U('owlp')); }, 0.3);
+      sfx('hoot');
+    }
+  }
+}
+
+// ================= Aurora Isle =================
+const isle = { built: false, ferry: new V3(21.4, 0, -7.6), back: new V3(19.2, 0, -7.6), exitZone: new V3(102.4, 0, 54), start: new V3(104.8, 0, 54), wasIn: false, shards: [], penguins: [] };
+function unlockIsle(instant) {
+  if (isle.built) return;
+  isle.built = true;
+  // ferry boat on the mainland
+  const fg = stationGroup(27.2, -8.6);
+  mesh(new THREE.BoxGeometry(1.6, 0.6, 3.2), 0xf2f6fb, 0, 0.25, 0, fg);
+  mesh(new THREE.BoxGeometry(1.7, 0.15, 3.3), 0x3f7fc8, 0, 0.6, 0, fg);
+  mesh(new THREE.BoxGeometry(1.2, 0.8, 1.2), 0xffd23a, 0, 1.05, -0.4, fg);
+  mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.6, 8), 0xd84a3a, 0, 1.7, -0.4, fg);
+  zoneMarker(isle.ferry.x, isle.ferry.z, 'boat', '#9fd2f5');
+  // the island
+  const cx = (ISLE.x0 + ISLE.x1) / 2, cz = (ISLE.z0 + ISLE.z1) / 2;
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(90, 70), mat(0x3f8ad0)); sea.rotation.x = -PI / 2; sea.position.set(cx, 0.02, cz); scene.add(sea);
+  const land = new THREE.Mesh(new THREE.CylinderGeometry(23, 24, 0.4, 40), mat(0xeef6ff)); land.position.set(cx, 0, cz); land.scale.z = 0.85; land.receiveShadow = true; scene.add(land);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(23.5, 0.5, 6, 40), mat(0xffffff)); rim.rotation.x = PI / 2; rim.scale.y = 0.85; rim.position.set(cx, 0.15, cz); scene.add(rim);
+  for (let i = 0; i < 14; i++) { const a = rand(0, 2 * PI), rr = rand(24, 33); const ice = mesh(new THREE.CylinderGeometry(rand(0.8, 1.8), rand(1, 2), 0.25, 6), 0xdff1ff, cx + Math.cos(a) * rr, 0.05, cz + Math.sin(a) * rr * 0.85); ice.castShadow = false; }
+  const dockG = stationGroup(101, 54);
+  for (let i = 0; i < 6; i++) mesh(new THREE.BoxGeometry(0.4, 0.12, 2.0), i % 2 ? 0xa86a3a : 0x8f582e, -1 + i * 0.42, 0.45, 0, dockG);
+  zoneMarker(isle.exitZone.x, isle.exitZone.z, 'boat', '#9fd2f5');
+  for (let i = 0; i < 14; i++) {
+    let x, z, tries = 0;
+    do { x = rand(104, 130); z = rand(42, 52); tries++; } while (tries < 20 && isle.shards.some(sh => d2(sh.pos, { x, z }) < 2.6));
+    isle.shards.push(new Tree(x, z, 'shard'));
+  }
+  for (let i = 0; i < 8; i++) isle.penguins.push(new Penguin(rand(106, 128), rand(55, 66)));
+  if (!instant) { burst(new V3(27.2, 0, -8.6), 0x3f7fc8, 16); toast('The Aurora Ferry is ready! Hop on at the river.'); }
+}
+class Penguin {
+  constructor(x, z) {
+    const g = new THREE.Group(); this.g = g; g.position.set(x, 0.2, z); scene.add(g);
+    const b = mesh(new THREE.SphereGeometry(0.3, 10, 8), 0x1d2433, 0, 0.4, 0, g); b.scale.set(0.9, 1.3, 0.85);
+    const belly = mesh(new THREE.SphereGeometry(0.24, 10, 8), 0xffffff, 0, 0.36, 0.1, g); belly.scale.set(0.85, 1.2, 0.8);
+    mesh(new THREE.SphereGeometry(0.18, 10, 8), 0x1d2433, 0, 0.82, 0, g);
+    mesh(new THREE.ConeGeometry(0.05, 0.14, 5), 0xff9a3c, 0, 0.8, 0.2, g).rotation.x = PI / 2;
+    for (const x2 of [-0.07, 0.07]) { mesh(new THREE.SphereGeometry(0.03, 6, 4), 0xffffff, x2, 0.87, 0.15, g); mesh(new THREE.BoxGeometry(0.1, 0.04, 0.14), 0xff9a3c, x2, 0.02, 0.06, g); }
+    this.wings = [-1, 1].map(sd => mesh(new THREE.BoxGeometry(0.05, 0.36, 0.18), 0x1d2433, sd * 0.28, 0.42, 0, g));
+    this.target = null; this.idle = rand(0, 3); this.phase = rand(0, 6);
+  }
+  update(dt) {
+    let moving = false;
+    if (this.idle > 0) this.idle -= dt;
+    else {
+      if (!this.target) this.target = new V3(rand(105, 129), 0, rand(55, 66));
+      moving = true;
+      if (stepToward(this.g, this.target, 0.9, dt, 0.1)) { this.target = null; this.idle = rand(1, 5); }
+    }
+    this.phase += dt * (moving ? 12 : 2);
+    this.g.rotation.z = moving ? Math.sin(this.phase) * 0.15 : 0;
+    this.wings[0].rotation.z = 0.3 + Math.sin(this.phase) * (moving ? 0.3 : 0.05); this.wings[1].rotation.z = -this.wings[0].rotation.z;
+  }
+}
+// Ice Hotel: guests use one lantern each
+const HOTEL_PRICE = 60;
+const hotel = { built: false, pos: new V3(122, 0, 60), input: new Pile(118.2, 60, 3, 3, 36, 0.6, 0.6, 0.32), cash: null, guests: [], spawnT: 2, supplyT: 0 };
+function unlockHotel(instant) {
+  if (hotel.built) return;
+  hotel.built = true;
+  const g = stationGroup(122, 61.2);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.4, 18, 10, 0, 2 * PI, 0, PI / 2), mat(0xe9f6ff)); dome.castShadow = dome.receiveShadow = true; g.add(dome);
+  const ice = new THREE.MeshLambertMaterial({ color: 0xbfe4ff });
+  for (let k = 1; k < 4; k++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4 * Math.cos(k * 0.38), 0.04, 4, 30), ice); ring.rotation.x = PI / 2; ring.position.y = 2.4 * Math.sin(k * 0.38); g.add(ring); }
+  const door = mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.6, 12, 1, false, 0, PI), 0xe9f6ff, 0, 0.6, -2.2, g); door.rotation.x = PI / 2;
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.6, 12, 0, PI), new THREE.MeshBasicMaterial({ color: 0x1b2a40 })); hole.position.set(0, 0.02, -3.0); g.add(hole);
+  for (const x of [-1.6, 1.6]) { const l = makeItem('lantern'); l.position.set(x, 0.3, -2.6); g.add(l); }
+  circles.push({ x: 122, z: 61.2, r: 2.5, on: () => hotel.built });
+  zoneMarker(118.2, 60, 'lantern', '#ffd23a');
+  hotel.cash = new CashPile(125.8, 57.4);
+  if (!instant) { popIn(g); burst(hotel.pos, 0xbfe4ff, 18); toast('Bring lanterns to light the Ice Hotel rooms!'); }
+}
+function updateHotel(dt) {
+  if (!hotel.built) return;
+  if (U('supply') && workshop.built) {
+    hotel.supplyT += dt;
+    if (hotel.supplyT > 15) { hotel.supplyT = 0; for (let i = 0; i < 6 && workshop.out.n > 0 && hotel.input.free() > 0; i++) { const m = workshop.out.take(); scene.remove(m); hotel.input.receive(makeItem('lantern'), hotel.input.center.clone().add(new V3(-3, 3, 0))); } }
+  }
+  hotel.spawnT -= dt;
+  if (hotel.spawnT <= 0 && hotel.input.n > 0 && hotel.guests.length < 4) {
+    hotel.spawnT = 4;
+    const m = hotel.input.take(), door = new V3(122, 0.6, 58.2);
+    fly(m, m.position.clone(), () => door, 0.35, () => scene.remove(m));
+    const p = makePerson(PARKAS[randi(0, PARKAS.length - 1)], null, 0.9);
+    p.group.position.set(104, 0, 56 + rand(-1, 1));
+    hotel.guests.push({ p, state: 'in', t: 7 });
+  }
+  for (let i = hotel.guests.length - 1; i >= 0; i--) {
+    const gu = hotel.guests[i], g = gu.p.group;
+    if (gu.state === 'in') {
+      const arr = stepToward(g, new V3(122, 0, 58.3), 3, dt, 0.1); animPerson(gu.p, !arr, dt);
+      if (arr) { gu.state = 'stay'; g.visible = false; }
+    } else if (gu.state === 'stay') {
+      gu.t -= dt;
+      if (gu.t <= 0) { gu.state = 'out'; g.visible = true; hotel.cash.addValue(HOTEL_PRICE + 15 * U('hotelp'), g.position.clone().add(new V3(0, 1.4, 0))); questProgress('hotel'); }
+    } else {
+      const done = stepToward(g, new V3(103.5, 0, 52 + (i % 3)), 3, dt, 0.3); animPerson(gu.p, true, dt);
+      if (done) { scene.remove(g); hotel.guests.splice(i, 1); }
+    }
+  }
+}
+// Shard Exchange
+const SHARD_PRICE = 80;
+const exch = { built: false, pos: new V3(112, 0, 64), input: new Pile(109.4, 64, 3, 3, 27, 0.6, 0.6, 0.5), cash: null, t: 0 };
+function unlockExch(instant) {
+  if (exch.built) return;
+  exch.built = true;
+  const g = stationGroup(112, 64.6);
+  mesh(new THREE.CylinderGeometry(1.1, 1.3, 1.2, 8), 0x5d4a7a, 0, 0.6, 0, g);
+  exch.orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), new THREE.MeshBasicMaterial({ color: 0xd08cff })); exch.orb.position.y = 1.9; g.add(exch.orb);
+  for (let k = 0; k < 4; k++) { const a = k * PI / 2; mesh(new THREE.BoxGeometry(0.15, 1.4, 0.15), 0x3d3050, Math.cos(a) * 1.0, 1.6, Math.sin(a) * 1.0, g); }
+  colliders.push({ x0: 110.8, x1: 113.2, z0: 63.4, z1: 65.8 });
+  zoneMarker(109.4, 64, 'gem', '#d08cff');
+  exch.cash = new CashPile(114.8, 63);
+  if (!instant) { popIn(g); burst(exch.pos, 0xd08cff, 16); }
+}
+function updateExch(dt) {
+  if (!exch.built) return;
+  exch.orb.rotation.y += dt * 2;
+  exch.t += dt;
+  if (exch.t > 1.4 && exch.input.n > 0) {
+    exch.t = 0; const m = exch.input.take(), top = new V3(112, 1.9, 64.6);
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); burst(top, 0xd08cff, 4); exch.cash.addValue(SHARD_PRICE + 20 * U('shardp'), top); });
+  }
+}
+function updateIsle(dt) {
+  if (!isle.built) return;
+  for (const sh of isle.shards) sh.update(dt);
+  for (const pg of isle.penguins) pg.update(dt);
+  updateHotel(dt); updateExch(dt);
+}
+
+// ================= Camp manager (offline income) =================
+let incomeRate = 0, lastEarned = null, incomeT = 0;
+function trackIncome(dt) {
+  incomeT += dt; if (incomeT < 1) return;
+  const e = stat('earned');
+  if (lastEarned !== null) incomeRate = incomeRate * 0.97 + (e - lastEarned) / incomeT * 0.03;
+  lastEarned = e; incomeT = 0;
+}
+function offlineReport(sv) {
+  const lvl = sv.up && sv.up.manager || 0;
+  if (!lvl || !sv.savedAt || !sv.rate) return;
+  const cap = [0, 2, 4, 8][lvl] * 3600, pct = [0, 0.25, 0.4, 0.6][lvl];
+  const away = Math.min(cap, (Date.now() - sv.savedAt) / 1000);
+  if (away < 60) return;
+  const amt = Math.round(sv.rate * away * pct);
+  if (amt < 1) return;
+  incomeRate = sv.rate;
+  const h = Math.floor(away / 3600), m = Math.floor(away % 3600 / 60);
+  document.getElementById('welcometext').textContent = `While you were away (${h ? h + 'h ' : ''}${m}m), your camp manager kept things running and earned:`;
+  document.getElementById('welcomeamt').textContent = '$' + fmt(amt);
+  const el = document.getElementById('welcome'); el.hidden = false;
+  document.getElementById('collect').onclick = () => {
+    el.hidden = true; W.cash += amt; setCash(); lastEarned = stat('earned'); sfx('buy'); save();
+    for (let k = 0; k < 3; k++) setTimeout(() => firework(player.g.position.clone()), k * 250);
+  };
+}
+
 // ================= Trophies =================
 const ACH = [
   ['first', 'Open for Business', 'Sell your first steak', () => stat('steak') >= 1],
@@ -2191,6 +2474,13 @@ const ACH = [
   ['castle', 'King of the Castle', 'Build the Snow Castle', () => !!UP.castle],
   ['fashion', 'Fashionista', 'Unlock every outfit', () => padLevel('wardrobe') >= 4],
   ['star', 'Golden Legacy', 'Earn a Golden Star', () => legacy.stars >= 1],
+  ['boat', 'Ahoy!', 'Buy the fishing boat', () => boat.owned],
+  ['isle', 'Island Hopper', 'Visit Aurora Isle', () => stat('isle') >= 1],
+  ['hotel25', 'Five-Star Igloo', 'Host 25 hotel guests', () => stat('hotel') >= 25],
+  ['shard50', 'Shard Seeker', 'Mine 50 aurora shards', () => stat('shard') >= 50],
+  ['alpha', 'Alpha Down', 'Defeat the Wolf Alpha', () => stat('alpha') >= 1],
+  ['yeti', 'Yeti Tamer', 'Defeat the Yeti', () => stat('yeti') >= 1],
+  ['pets', 'Animal Friends', 'Own the husky and the owl', () => husky.owned && owl.owned],
   ['star5', 'Star Collector', 'Hold 5 Golden Stars', () => legacy.stars >= 5],
 ];
 const trophyBtn = document.getElementById('trophybtn'), trophiesEl = document.getElementById('trophies'), trophyList = document.getElementById('trophylist');
@@ -2240,13 +2530,13 @@ function renderLegacy() {
 
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const WCOL = { digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
 const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
-    this.p = makePerson(WCOL[kind], kind === 'lumber' || kind === 'miner' || kind === 'crafter' ? 'axe' : kind === 'hunter' ? 'spear' : null);
+    this.p = makePerson(WCOL[kind] || 0x8a5a36, kind === 'lumber' || kind === 'miner' || kind === 'crafter' || kind === 'digger' || kind === 'sharder' ? 'axe' : kind === 'hunter' ? 'spear' : null, kind === 'digger' ? 0.75 : 1);
     this.g = this.p.group; this.g.position.set(x, 0, z);
     this.c = new Carrier(this.g, (kind === 'server' ? 8 : 6) + 2 * U('wcap'));
     this.state = 'gather'; this.t = 0; this.idle = 0; this.tree = null;
@@ -2260,16 +2550,16 @@ class Worker {
     if (this.state === 'deliver') {
       if (!this.dst) this.dst = this.kind === 'lumber' && springs.unlocked && springs.input.n < sawmill.input.n ? springs.input : null;
       if (this.kind === 'crafter') this.dst = this.want === 'gem' ? workshop.gems : workshop.logs;
-      const dst = this.dst || { shepherd: tailor.input, runner: market.input, lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
-      const type = this.kind === 'crafter' ? this.want : { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish', shepherd: 'wool', runner: 'lantern' }[this.kind];
+      const dst = this.dst || { digger: smith.input, sharder: exch.input, shepherd: tailor.input, runner: market.input, lumber: sawmill.input, hunter: grill.input, server: counter.input, miner: cutter.input, fisher: smoke.input }[this.kind];
+      const type = this.kind === 'crafter' ? this.want : { lumber: 'log', hunter: 'meat', server: 'steak', miner: 'gem', fisher: 'fish', shepherd: 'wool', runner: 'lantern', digger: 'gold', sharder: 'shard' }[this.kind];
       if (go(dst.center, 0.7) && this.t > 0.12) {
         this.t = 0;
         if (dst.free() > 0) { const it = this.c.take(type); if (it) dst.receive(it.m, it.pos); }
       }
       if (this.c.load === 0) { this.state = 'gather'; this.dst = null; this.want = null; this.tree = null; }
-    } else if (this.kind === 'lumber' || this.kind === 'miner' || this.kind === 'crafter') {
+    } else if (this.kind === 'lumber' || this.kind === 'miner' || this.kind === 'crafter' || this.kind === 'digger' || this.kind === 'sharder') {
       if (this.kind === 'crafter' && !this.want) this.want = workshop.logs.n + workshop.logs.pending <= workshop.gems.n + workshop.gems.pending ? 'log' : 'gem';
-      const pool = this.kind === 'lumber' ? trees.filter(t => t.pos.x < RIVER.x0) : this.kind === 'miner' ? rocks
+      const pool = this.kind === 'digger' ? golds : this.kind === 'sharder' ? isle.shards : this.kind === 'lumber' ? trees.filter(t => t.pos.x < RIVER.x0) : this.kind === 'miner' ? rocks
         : this.want === 'log' ? trees.filter(t => t.pos.x > RIVER.x1) : rocks;
       if (!this.tree || this.tree.down) this.tree = nearest(pool.filter(t => !t.down), pos);
       if (this.tree && go(this.tree.pos, 1.3) && this.t > 0.7) {
@@ -2299,6 +2589,9 @@ class Worker {
         if (m) fly(m, m.position.clone(), () => this.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); });
         else { W.cash += share; setCash(); }
       }
+    } else if (this.kind === 'fisher' && boat.owned && boat.pile.n > 0 && !this.c.full()) {
+      if (go(boat.pile.center, 0.6) && this.t > 0.15) { this.t = 0; this.c.receive('fish', boat.pile.take(), boat.pile.slot(boat.pile.n)); }
+      if (this.c.full()) this.state = 'deliver';
     } else if (this.kind === 'fisher') {
       if (go(dock.spot, 0.3)) { this.g.rotation.y = lerpAng(this.g.rotation.y, PI / 2, 0.2); tryFish(this.c, this, dt); }
       if (this.c.full()) this.state = 'deliver';
@@ -2349,6 +2642,13 @@ const PADS = [
   { id: 'tailor', label: 'Tailor', icon: 'coat', costs: [900], x: 50, z: 4.8, req: () => pen.level > 0, apply: unlockTailor },
   { id: 'crafter', label: 'Hire Crafter', icon: 'person', costs: [600, 1200], x: 40.2, z: 1.2, req: () => workshop.built, apply: () => new Worker('crafter', 40.2, 1.2) },
   { id: 'shepherd', label: 'Hire Shepherd', icon: 'person', costs: [500, 1000], x: 44.8, z: 1.2, req: () => tailor.built, apply: () => new Worker('shepherd', 44.8, 1.2) },
+  { id: 'boat', label: 'Fishing Boat', icon: 'fish', costs: [1200], x: 23.2, z: -2.4, req: () => dock.built, apply: buyBoat },
+  { id: 'ferry', label: 'Aurora Ferry', icon: 'boat', costs: [5000], x: 21.4, z: -7.6, req: () => ridge.unlocked, apply: unlockIsle },
+  { id: 'hotel', label: 'Ice Hotel', icon: 'house', costs: [6000], x: 122, z: 60, req: () => isle.built, apply: unlockHotel },
+  { id: 'exch', label: 'Shard Exchange', icon: 'gem', costs: [4000], x: 112, z: 64, req: () => isle.built, apply: unlockExch },
+  { id: 'sharder', label: 'Shard Miner', icon: 'person', costs: [3000, 6000], x: 114.5, z: 58.5, req: () => exch.built, apply: () => new Worker('sharder', 114.5, 58.5) },
+  { id: 'owl', label: 'Snow Owl', icon: 'owl', costs: [2500], x: 52.4, z: 1.2, req: () => ridge.unlocked, apply: adoptOwl },
+  { id: 'digger', label: 'Gold Digger', icon: 'person', costs: [1200, 2500], x: 106, z: -8, req: () => smith.built, apply: () => new Worker('digger', 106, -8) },
   { id: 'mine', label: 'Frost Mine', icon: 'pick', costs: [3000], x: 45, z: -10.6, req: () => ridge.unlocked, apply: unlockMine },
   { id: 'smith', label: 'Goldsmith', icon: 'pick', costs: [1500], x: 106, z: 8, req: () => mine.built, apply: unlockSmith },
   { id: 'runner', label: 'Hire Runner', icon: 'person', costs: [500], x: 49.4, z: 1.2, req: () => market.built, apply: () => new Worker('runner', 49.4, 1.2) },
@@ -2464,7 +2764,7 @@ function collide(pos, r) {
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
     if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
   }
-  const B = pos.x > 90 ? MINE : BOUNDS;
+  const B = inIsle(pos) ? ISLE : pos.x > 90 ? MINE : BOUNDS;
   pos.x = clamp(pos.x, B.x0 + 0.6, B.x1 - 0.6); pos.z = clamp(pos.z, B.z0 + 0.6, B.z1 - 0.6);
 }
 const inZone = (pos, x, z, half = 1.05) => Math.abs(pos.x - x) < half && Math.abs(pos.z - z) < half;
@@ -2485,13 +2785,24 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of cashPiles().concat(smith.cash ? [smith.cash] : [])) {
+  for (const cp of cashPiles().concat([smith.cash, hotel.cash, exch.cash].filter(Boolean))) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
     if (m) fly(m, m.position.clone(), () => player.g.position.clone().add(new V3(0, 1.2, 0)), 0.22, () => { scene.remove(m); W.cash += share; setCash(); sfx('coin'); });
     else { W.cash += share; setCash(); }
     return;
+  }
+  // aurora isle ferry
+  if (isle.built) {
+    const atF = inZone(pos, isle.ferry.x, isle.ferry.z, 1.0), atX = inZone(pos, isle.exitZone.x, isle.exitZone.z, 1.0);
+    if (atF && !isle.wasIn) { teleport(isle.start); bump('isle'); toast('All aboard! Welcome to Aurora Isle.'); return; }
+    if (atX && !isle.wasIn) { teleport(isle.back); return; }
+    isle.wasIn = atF || atX;
+  }
+  if (boat.owned && inZone(pos, boat.pile.x, boat.pile.z) && boat.pile.n > 0 && !c.full()) { c.receive('fish', boat.pile.take(), boat.pile.slot(boat.pile.n)); return; }
+  for (const [pile, type, ok] of [[hotel.input, 'lantern', hotel.built], [exch.input, 'shard', exch.built]]) {
+    if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
   // frost mine entrance / exit
   if (mine.built) {
@@ -2581,7 +2892,7 @@ function updatePlayer(dt) {
       player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
-      const t = nearest(trees.concat(rocks, golds).filter(t => !t.down), pos);
+      const t = nearest(trees.concat(rocks, golds, isle.shards).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
         player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
@@ -2667,6 +2978,7 @@ function sfx(name) {
     case 'bell': [1568, 1976, 1568].forEach((f, i) => tone(f, f * 0.98, 0.18, 'sine', 0.06, i * 0.1)); break;
     case 'whoosh': tone(300, 900, 0.25, 'sine', 0.06); break;
     case 'anvil': tone(1800, 1500, 0.12, 'triangle', 0.06); break;
+    case 'hoot': tone(520, 440, 0.12, 'sine', 0.05); tone(480, 400, 0.16, 'sine', 0.05, 0.15); break;
     case 'dawn': [392, 523, 659].forEach((f, i) => tone(f, f, 0.3, 'sine', 0.08, i * 0.12)); break;
   }
 }
@@ -2693,7 +3005,8 @@ const WG = {
 };
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 class Wolf {
-  constructor(x, z) {
+  constructor(x, z, alpha = false) {
+    this.alpha = alpha; this.size = alpha ? 1.8 : 1;
     this.home = new V3(x, 0, z);
     this.g = new THREE.Group(); this.g.position.set(x, 0, z);
     this.mat = new THREE.MeshLambertMaterial({ color: 0x6d7684, emissive: 0x000000 });
@@ -2706,7 +3019,7 @@ class Wolf {
     this.legs = [[-0.16, 0.36], [0.16, 0.36], [-0.16, -0.36], [0.16, -0.36]].map(([lx, lz]) => {
       const p = new THREE.Group(); p.position.set(lx, 0.42, lz); this.g.add(p); mesh(WG.leg, 0x555c68, 0, -0.21, 0, p); return p;
     });
-    this.hp = 2; this.bite = 0; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
+    this.hp = this.alpha ? 22 : 2; this.bite = 0; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
     this.g.scale.setScalar(0.01); scene.add(this.g); wolves.push(this);
   }
   get pos() { return this.g.position; }
@@ -2717,12 +3030,13 @@ class Wolf {
     if (d2(this.pos, player.g.position) < 12) sfx('hit');
     if (this.hp <= 0) {
       this.remove(); burst(this.pos, 0x6d7684, 10); questProgress('wolf');
+      if (this.alpha) { bump('alpha'); for (let i = 0; i < 8; i++) dropGround('cash', this.pos.clone()); toast('The Wolf Alpha is down! Grab the loot.'); sfx('buy'); }
       if (this.carry) dropGround(this.carryType, this.pos.clone());
       dropGround('meat', this.pos.clone());
     }
   }
   update(dt) {
-    this.spawn = Math.min(1, this.spawn + dt * 2); this.g.scale.setScalar(easeOutBack(this.spawn));
+    this.spawn = Math.min(1, this.spawn + dt * 2); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn) * this.size));
     if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
     let moving = true;
     if (this.state === 'raid') {
@@ -2748,10 +3062,20 @@ class Wolf {
     this.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(this.phase + (i % 2 ? PI : 0)) * 0.7 : 0; });
   }
 }
-function spawnWolf() {
+function bossFor(day) { const w = ((day - 1) % 7) + 1; return w === 3 || w === 6 ? 'Ice Bear' : w === 5 ? 'Wolf Alpha' : w === 7 ? 'Yeti' : null; }
+const bossEl = document.getElementById('bosscal');
+let bossText = '';
+function updateBossCal() {
+  const day = Math.floor(dayT / CYCLE) + 1, today = bossFor(day);
+  let t;
+  if (today) t = today === 'Wolf Alpha' ? 'Tonight: Wolf Alpha' : 'Today: ' + today;
+  else { let d = day + 1; while (!bossFor(d)) d++; t = `Next boss: ${bossFor(d)} (day ${d})`; }
+  if (t !== bossText) { bossText = t; bossEl.textContent = t; }
+}
+function spawnWolf(alpha = false) {
   const side = randi(0, 2);
   const p = side === 0 ? [-24, rand(-20, 18)] : side === 1 ? [rand(-20, 12), -28] : [rand(-20, -3), 21];
-  new Wolf(p[0], p[1]);
+  new Wolf(p[0], p[1], alpha);
 }
 const maxWolves = () => 2 + Math.min(4, Math.floor(dayT / CYCLE));
 function updateDayNight(dt) {
@@ -2762,13 +3086,18 @@ function updateDayNight(dt) {
   hemi.intensity = 1.05 - 0.55 * nightK; hemi.color.copy(DAY_SKY).lerp(NIGHT_SKY, nightK);
   sun.intensity = 0.62 - 0.5 * nightK;
   grillGlow.intensity = 1.9 * nightK; lantern.intensity = 1.4 * nightK;
-  if (night && !wasNight) { toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!'); sfx('howl'); wolfTimer = 2; }
+  if (night && !wasNight) {
+    sfx('howl'); wolfTimer = 2;
+    if (bossFor(Math.floor(dayT / CYCLE) + 1) === 'Wolf Alpha' && !wolves.some(w => w.alpha)) { spawnWolf(true); toast('The Wolf Alpha leads tonight\'s pack!'); }
+    else toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!');
+  }
   if (!night && wasNight) {
     repairGates(); newQuests(true);
     const dayN = Math.floor(dayT / CYCLE) + 1;
     if (dayN >= 2 && dayN % 2 === 0) setTimeout(traderArrive, 9000);
     if (dayN >= 2 && Math.random() < 0.45) storm.start = dayT + rand(20, 55);
-    if ((Math.floor(dayT / CYCLE) + 1) % 3 === 0 && !bear) spawnBear();
+    const bb = bossFor(dayN);
+    if ((bb === 'Ice Bear' || bb === 'Yeti') && !bear) spawnBear(bb === 'Yeti' ? 'yeti' : 'bear');
     else { toast('Morning! The wolves ran off.'); sfx('dawn'); }
   }
   wasNight = night;
@@ -2825,7 +3154,7 @@ let resetting = false;
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, up: UP })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, up: UP, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
 if (saved && saved.pads) {
@@ -2838,6 +3167,7 @@ if (saved && saved.pads) {
     padState[p.id].paid = s.paid || 0;
   }
   if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
+  setTimeout(() => offlineReport(saved), 600);
 } else if (legacy.stars) { W.cash = 100 * legacy.stars; }
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false); renderTrophies();
 document.getElementById('rankname').title = legacy.stars ? legacy.stars + ' Golden Stars' : '';
@@ -2861,6 +3191,7 @@ function frame() {
   updateWorkshop(dt); updateMarket(dt); updateTailor(dt); for (const y of pen.yaks) y.update(dt);
   for (const f of decoAnim) f(dt);
   updateMine(dt); updateSmith(dt); checkTrophies(dt);
+  updateBoat(dt); updateOwl(dt); updateIsle(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
@@ -2894,7 +3225,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport };
+window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate };
 requestAnimationFrame(frame);
 })();
 </script>

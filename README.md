@@ -27,6 +27,12 @@ roaming ice golems and the **Crystal King** boss. **Trophies** (28 of them) trac
 lifetime feats, and the Town Hall's **Legacy** tab offers a Golden Restart: start over
 for Golden Stars that permanently boost income.
 
+Take the **Aurora Ferry** to Aurora Isle (penguins, aurora shards, a Shard Exchange
+and an Ice Hotel that uses lanterns). Buy a **fishing boat**, adopt a **snow owl** that
+attacks enemies anywhere, hire **Gold Diggers** in the mine, follow the weekly **boss
+calendar** (Ice Bear, Wolf Alpha, Yeti), and hire a **Camp Manager** who earns money
+while you're away.
+
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
 - Chopping and attacking happen automatically when you walk next to a tree or boar.
