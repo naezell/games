@@ -111,6 +111,10 @@
   #bosscal:empty { display: none; }
   #contest { background: rgba(40, 90, 150, .85); color: var(--white); border-radius: 12px; padding: 4px 10px; font: 800 12px var(--font-body); max-width: 240px; font-variant-numeric: tabular-nums; }
   #contest:empty { display: none; }
+  #editbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); z-index: 5;
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px); box-sizing: border-box;
+    background: var(--panel); color: var(--white); border-radius: 16px; padding: 8px 10px; font: 800 13px var(--font-body); }
+  #editbar button { border: 0; border-radius: 10px; padding: 7px 12px; font: 800 13px var(--font-body); background: var(--white); color: var(--ink); cursor: pointer; }
   #storycard { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.55); z-index: 6;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   #storycard > div { background: #fbf6ea; color: var(--ink); border-radius: 18px; padding: 22px; max-width: 360px; font: 700 15px/1.5 var(--font-body); border: 3px solid #c8a050; }
@@ -231,14 +235,14 @@
 <div id="goal">Drag anywhere to move</div>
 <button id="droppack" type="button" hidden title="Drop everything in your pack (Q)">Drop pack</button>
 <div id="joy" hidden><div id="knob"></div></div>
-<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decor</button><button type="button" data-tab="tiers">Buildings</button><button type="button" data-tab="belts">Belts</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
+<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decor</button><button type="button" data-tab="tiers">Buildings</button><button type="button" data-tab="belts">Belts</button><button type="button" data-tab="garden">Garden</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
 <div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -571,12 +575,13 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0xf3f7fb));
 ground.rotation.x = -PI / 2; ground.receiveShadow = true; scene.add(ground);
 const colliders = [];   // {x0,x1,z0,z1,on}
 const circles = [];     // {x,z,r,on}
+let riverWater = null;
 // frozen river with drifting logs
 const riverLogs = [], riverStreaks = [];
 const bridge = { unlocked: false };
 {
   const cx = (RIVER.x0 + RIVER.x1) / 2, wdt = RIVER.x1 - RIVER.x0;
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(wdt, 180), mat(0x3f8ad0));
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(wdt, 180), new THREE.MeshLambertMaterial({ color: 0x3f8ad0 })); riverWater = water;
   water.rotation.x = -PI / 2; water.position.set(cx, 0.02, 0); water.receiveShadow = true; scene.add(water);
   const streakMat = new THREE.MeshBasicMaterial({ color: 0xa9d8f7, transparent: true, opacity: 0.55 });
   for (let i = 0; i < 46; i++) {
@@ -979,7 +984,7 @@ class Tree {
     if (this.down || carrier.full()) return false;
     this.hp--; this.shake = 0.3;
     carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.2, 0)));
-    if (carrier === player.c) { sfx(this.k.sound); questProgress(this.k.item); }
+    if (carrier === player.c) { sfx(this.k.sound); questProgress(this.k.item); if (wx.aurora && AURORA_DOUBLE.has(this.k.item) && !carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.5, 0))); }
     if (this.hp <= 0) { this.down = true; this.regrow = this.k.regrow; this.m.visible = false; this.stump.visible = true; burst(this.pos, this.k.color); }
     return true;
   }
@@ -1480,9 +1485,10 @@ function tryFish(carrier, who, dt) {
   who.fishT = (who.fishT || 0) + dt;
   if (who.fishT > 1.4 && !carrier.full()) {
     who.fishT = 0;
-    carrier.receive('fish', makeItem('fish'), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
+    const frozen = typeof wx !== 'undefined' && wx.kind === 'blizzard', ty = frozen ? 'ice' : 'fish';
+    carrier.receive(ty, makeItem(ty), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
     burst(dock.bobPos.clone().add(new V3(0, -0.6, 0)), 0xa9d8f7, 6);
-    if (carrier === player.c) { sfx('splash'); questProgress('fish'); }
+    if (carrier === player.c) { sfx('splash'); if (!frozen) { questProgress('fish'); catchSpecies('river', false); } }
   }
 }
 function updateDock(dt) {
@@ -1702,7 +1708,7 @@ function updateHusky(dt) {
   if (d2(pos, pp) > 22) { pos.copy(pp).add(new V3(1, 0, 1)); }
   if (wolf && d2(wolf.pos, pos) < 7) {
     moving = !navStep(g, wolf.pos, 6.5, dt, 1.0);
-    if (!moving && husky.t > 0.6) { husky.t = 0; wolf.hit(1 + U('husky')); sfx('bark'); }
+    if (!moving && husky.t > 0.6) { husky.t = 0; wolf.hit(1 + U('husky') + U('petlvl')); sfx('bark'); }
   } else if (loot) {
     if (navStep(g, loot.m.position, 6.5, dt, 0.5)) {
       const i = groundItems.indexOf(loot); groundItems.splice(i, 1);
@@ -2061,6 +2067,7 @@ function drawMap(dt) {
   const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
   for (const st of [grill, counter, sawmill.unlocked && sawmill, cutter.unlocked && cutter, smoke.unlocked && smoke, springs.unlocked && springs, depot.built && depot, workshop.built && workshop, market.built && market, tailor.built && tailor, pen.built && pen]) if (st) dot(st.pos.x, st.pos.z, 3, '#5a3a1e');
   for (const b of boars) dot(b.pos.x, b.pos.z, 2.5, '#ffffff');
+  if (sanct.hurt) { dot(sanct.hurt.g.position.x, sanct.hurt.g.position.z, 6, '#ffffff'); dot(sanct.hurt.g.position.x, sanct.hurt.g.position.z, 4, '#e8433a'); }
   for (const w of wolves) dot(w.pos.x, w.pos.z, 3, '#e8433a');
   if (bear) dot(bear.pos.x, bear.pos.z, 5, '#e8433a');
   if (trader.state !== 'away') dot(trader.g.position.x, trader.g.position.z, 3.5, '#7a4fc8');
@@ -2147,7 +2154,7 @@ function updateMarket(dt) {
   market.t += dt;
   if (market.t > 1.2 && market.input.n > 0) {
     market.t = 0; const m = market.input.take(), top = new V3(50, 1.2, -3.2);
-    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); market.cash.addValue(LANTERN_PRICE + 8 * U('lantern'), top); });
+    fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); market.cash.addValue((LANTERN_PRICE + 8 * U('lantern')) * (holidayToday() === 'lanterns' ? 2 : 1), top); });
   }
 }
 
@@ -2271,6 +2278,7 @@ const UPGRADES = [
   { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
   { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
   { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
+  { id: 'petlvl', name: 'Pet Treats', desc: 'All pets get stronger: harder bites, faster swoops, more carrying, more digging. Plus collars, then hats', costs: [3000, 8000, 20000], req: () => husky.owned || owl.owned || !!pets.penguin || !!pets.fox },
   { id: 'reindeer', name: 'Riding Reindeer', desc: 'Ride a reindeer and move 60% faster (switch it in the Menu)', costs: [15000] },
   { id: 'bladep', name: 'Dragonglass Edge', desc: '+$60 for every obsidian blade', costs: [10000, 25000], req: () => store.built && forge.built },
   { id: 'fsupply', name: 'Forge Supply', desc: 'Sends iron bars from the Smelter to the Lava Forge', costs: [8000], req: () => forge.built && smelter.built },
@@ -2332,6 +2340,7 @@ function renderShop() {
   if (shopTab === 'legacy') { renderLegacy(); return; }
   if (shopTab === 'tiers') { renderTiers(); return; }
   if (shopTab === 'belts') { renderBelts(); return; }
+  if (shopTab === 'garden') { renderGarden(); return; }
   const rows = shopTab === 'up'
     ? UPGRADES.filter(u => !u.req || u.req()).map(u => {
       const lvl = U(u.id), cost = u.costs[lvl];
@@ -2349,8 +2358,8 @@ function refreshShopButtons() {
   for (const b of shopList.querySelectorAll('button[data-cost]')) b.disabled = W.cash < +b.dataset.cost;
 }
 shopList.addEventListener('click', e => {
-  const b = e.target.closest('button[data-id], button[data-tier], button[data-belt]'); if (!b || b.disabled) return;
-  if (b.dataset.tier) buyTier(b.dataset.tier); else if (b.dataset.belt) buyBelt(b.dataset.belt); else buyItem(b.dataset.id);
+  const b = e.target.closest('button[data-id], button[data-tier], button[data-belt], button[data-garden]'); if (!b || b.disabled) return;
+  if (b.dataset.garden) buyGarden(b.dataset.garden); else if (b.dataset.tier) buyTier(b.dataset.tier); else if (b.dataset.belt) buyBelt(b.dataset.belt); else buyItem(b.dataset.id);
 });
 for (const t of document.querySelectorAll('#shop .tabs button')) t.addEventListener('click', () => {
   shopTab = t.dataset.tab; legacyConfirm = false; for (const o of document.querySelectorAll('#shop .tabs button')) o.classList.toggle('on', o === t); renderShop();
@@ -2830,6 +2839,7 @@ function updateStory(dt) {
   if (altar.orb) { altar.orb.rotation.y += dt * 1.5; altar.orb.position.y = 1.4 + Math.sin(performance.now() / 500) * 0.15; }
   for (let i = 0; i < auroraBands.length; i++) {
     const m = auroraBands[i], p = m.geometry.attributes.position;
+    m.visible = altar.done || wx.aurora;
     m.material.opacity = 0.12 + 0.4 * nightK;
     for (let k = 0; k < p.count; k++) p.setZ(k, Math.sin(performance.now() / 900 + p.getX(k) * 0.3 + i) * 1.2);
     p.needsUpdate = true;
@@ -2984,7 +2994,7 @@ function applyMineEnv() {
     scene.background.setHex(e.bg); scene.fog.color.setHex(e.bg); scene.fog.near = e.near; scene.fog.far = e.far;
     hemi.intensity = e.hemi; hemi.color.setHex(e.sky); sun.intensity = e.sun; return;
   }
-  const m = inMine(player.g.position), v = inVolcano(player.g.position), dg = inDungeon(player.g.position); snow.visible = !m && !v && !dg && springK < 0.5;
+  const m = inMine(player.g.position), v = inVolcano(player.g.position), dg = inDungeon(player.g.position); snow.visible = !m && !v && !dg && springK < 0.5 && wx.kind !== 'sunny';
   if (dg) {
     scene.background.setHex(0x0e1a24); scene.fog.color.setHex(0x0e1a24); scene.fog.near = 12; scene.fog.far = 38;
     hemi.intensity = 0.55; hemi.color.setHex(0x9fe8ff); sun.intensity = 0.2; return;
@@ -3075,7 +3085,8 @@ function adoptFox(instant) {
   if (!instant) { burst(g.position, fur, 10); toast('Treasure Fox joins you! It digs up treasure every minute.'); }
 }
 function updatePets(dt) {
-  player.c.cap = W.cap + (pets.penguin ? 6 : 0);
+  player.c.cap = W.cap + (pets.penguin ? 6 + 2 * U('petlvl') : 0);
+  applyPetLooks();
   if (pets.penguin) { const moving = petFollow(pets.penguin.g, -0.8, dt, W.speed * 1.1); pets.penguin.phase += dt * (moving ? 12 : 2); pets.penguin.g.rotation.z = moving ? Math.sin(pets.penguin.phase) * 0.15 : 0; }
   const f = pets.fox; if (!f) return;
   let moving = false;
@@ -3083,7 +3094,7 @@ function updatePets(dt) {
   else { f.g.rotation.x = 0; moving = petFollow(f.g, 0.9, dt, W.speed * 1.15); }
   f.phase += dt * 14; if (f.dig <= 0) f.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(f.phase + (i % 2 ? PI : 0)) * 0.8 : 0; });
   f.tail.rotation.z = Math.sin(performance.now() / 200) * 0.3;
-  pets.foxT -= dt; if (pets.foxT <= 0 && f.dig <= 0) { pets.foxT = 60; f.dig = 1.6; burst(f.g.position, 0xf3f7fb, 8); }
+  pets.foxT -= dt; if (pets.foxT <= 0 && f.dig <= 0) { pets.foxT = 60 - 15 * U('petlvl'); f.dig = 1.6; burst(f.g.position, 0xf3f7fb, 8); }
 }
 function foxTreasure() {
   const at = pets.fox.g.position.clone(); burst(at, 0xffd23a, 10); sfx('coin');
@@ -3164,7 +3175,7 @@ class Station {
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
-      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type]() * (m.userData.golden ? 5 : 1), top); if (m.userData.golden) burst(top, 0xffd23a, 14); });
+      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type]() * (m.userData.golden ? 5 : 1) * (holidayToday() === 'harvest' && HARVEST.has(type) ? 2 : 1), top); if (m.userData.golden) burst(top, 0xffd23a, 14); });
       return;
     }
     if (!this.ins.every(i => i.pile.n >= i.n)) return;
@@ -3511,6 +3522,266 @@ function deliverOrder(c, pos) {
   return false;
 }
 
+// ================= Weather variety =================
+const wx = { kind: null, t: 0, next: null, aurora: false };
+const AURORA_DOUBLE = new Set(['gem', 'shard', 'gold', 'obsidian', 'pearl']);
+function ensureAurora() {
+  if (auroraBands.length) return;
+  const cols = [0x5fffb0, 0x7ff0d0, 0xb08cff, 0x5fd0ff];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(26, 5, 12, 1), new THREE.MeshBasicMaterial({ color: cols[i % 4], transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.position.set(-24 + i * 14, 8, -34 + (i % 2) * 6); m.rotation.y = rand(-0.3, 0.3); scene.add(m); auroraBands.push(m);
+  }
+}
+function updateWeatherVariety(dt) {
+  if (wx.next && dayT >= wx.next[1]) {
+    wx.kind = wx.next[0]; wx.next = null; wx.t = 60;
+    if (wx.kind === 'sunny') toast('A sunny spell! Workers hurry about 70% faster while it lasts.');
+    else { storm.t = Math.max(storm.t, 60); toast('Blizzard! The river freezes over: the boat stays home and the dock catches ice.'); sfx('wind'); }
+  }
+  if (wx.t > 0) { wx.t -= dt; if (wx.t <= 0) wx.kind = null; }
+  if (wx.kind === 'sunny' && regionOf(player.g.position) === 'main') { hemi.intensity += 0.08; sun.intensity += 0.1; }
+  if (riverWater) riverWater.material.color.setHex(wx.kind === 'blizzard' ? 0xe6f2fa : 0x3f8ad0);
+}
+
+// ================= Holidays =================
+const HOLIDAYS = {
+  sculpt: { name: 'Snow Sculpture Contest', tip: 'Stand on the ice block in camp to carve a sculpture.' },
+  lanterns: { name: 'Lantern Night', tip: 'Lanterns sell for double at the Market Stall, and sky lanterns rise at night.' },
+  derby: { name: 'Fishing Derby', tip: 'Every fish you catch pays $20, and 15 fish wins the $3000 prize.' },
+  harvest: { name: 'Harvest Fair', tip: 'Jam, pies, bread, stew, cheese and quilts sell for double at the General Store.' },
+};
+const holidayFor = day => (day < 3 ? null : ({ 3: 'sculpt', 6: 'lanterns', 9: 'derby', 0: 'harvest' })[day % 12] || null);
+const holidayToday = () => holidayFor(Math.floor(dayT / CYCLE) + 1);
+const HARVEST = new Set(['jam', 'pie', 'bread', 'stew', 'cheese', 'quilt']);
+const derby = { count: 0, paid: false };
+const sculpt = { t: 0, done: false, zone: new V3(4.6, 0, -3.4), block: null, art: null };
+let skyT = 0; const skyLanterns = [];
+function updateHolidays(dt) {
+  const h = holidayToday(), pp = player.g.position;
+  // sculpture contest: a block of ice appears in camp for the day
+  if (h === 'sculpt' && !sculpt.done && !sculpt.block) {
+    sculpt.block = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 1.2), iceMat); sculpt.block.position.set(sculpt.zone.x, 0.8, sculpt.zone.z - 1.6); scene.add(sculpt.block);
+    sculpt.marker = zoneMarker(sculpt.zone.x, sculpt.zone.z, 'ice', '#bfe8ff');
+  }
+  if ((h !== 'sculpt' || sculpt.done) && sculpt.block) { scene.remove(sculpt.block); sculpt.block = null; if (sculpt.marker) { scene.remove(sculpt.marker); sculpt.marker = null; } }
+  if (h !== 'sculpt' && sculpt.art) { scene.remove(sculpt.art); sculpt.art = null; }
+  if (sculpt.block && inZone(pp, sculpt.zone.x, sculpt.zone.z, 1.05)) {
+    if (sculpt.t === 0) toast('Carving... stay on the square!');
+    sculpt.t += dt; player.p.swing = player.p.swing || 1;
+    if (Math.random() < dt * 8) burst(sculpt.block.position, 0xbfe8ff, 2);
+    if (sculpt.t > 8) {
+      sculpt.done = true; const stars = randi(1, 5), prize = 600 * stars;
+      W.cash += prize; setCash(); bump('sculpt' + stars); bump('sculpts'); sfx('buy');
+      const art = new THREE.Group(); art.position.copy(sculpt.block.position).setY(0); scene.add(art); sculpt.art = art;
+      const shapes = [[0.5, 0.9], [0.4, 1.5], [0.32, 2.0]]; shapes.forEach(([r, y]) => { const s2 = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), iceMat); s2.position.y = y; art.add(s2); });
+      for (let k = 0; k < stars; k++) { const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), new THREE.MeshBasicMaterial({ color: 0xffd23a })); st.position.set((k - (stars - 1) / 2) * 0.32, 2.6, 0); art.add(st); }
+      toast(`The judges give your sculpture ${stars} star${stars > 1 ? 's' : ''}! +$${fmt(prize)}`);
+      for (let k = 0; k < stars; k++) setTimeout(() => firework(art.position.clone()), k * 250);
+    }
+  } else if (sculpt.t > 0 && !sculpt.done) sculpt.t = 0;
+  // lantern night: sky lanterns float up over camp
+  if (h === 'lanterns' && nightK > 0.5 && regionOf(pp) === 'main') {
+    skyT -= dt; if (skyT <= 0) { skyT = 0.5; const l = new THREE.Mesh(GEO.lantern, lanternMat); l.position.set(rand(-9, 9), 0.5, rand(-5, 7)); scene.add(l); skyLanterns.push({ m: l, life: 9, dx: rand(-0.3, 0.3) }); }
+  }
+  for (let i = skyLanterns.length - 1; i >= 0; i--) { const l = skyLanterns[i]; l.life -= dt; l.m.position.y += dt * 1.4; l.m.position.x += l.dx * dt; if (l.life <= 0) { scene.remove(l.m); skyLanterns.splice(i, 1); } }
+}
+
+// ================= Fish collection =================
+const FISH = [
+  { id: 'trout', name: 'Snow Trout', page: 'River', w: 30, where: 'river', tip: 'Common at the dock.' },
+  { id: 'perch', name: 'River Perch', page: 'River', w: 30, where: 'river', tip: 'Common at the dock.' },
+  { id: 'minnow', name: 'Silver Minnow', page: 'River', w: 25, where: 'river', tip: 'Common at the dock.' },
+  { id: 'pike', name: 'Ice Pike', page: 'River', w: 10, where: 'river', tip: 'Uncommon at the dock.' },
+  { id: 'char', name: 'Spotted Char', page: 'River', w: 8, where: 'river', tip: 'Uncommon at the dock.' },
+  { id: 'grayling', name: 'Arctic Grayling', page: 'River', w: 6, where: 'river', tip: 'Rare at the dock.' },
+  { id: 'cod', name: 'Frost Cod', page: 'Lake', w: 30, where: 'lake', tip: 'Common through the lake ice.' },
+  { id: 'whitefish', name: 'Blue Whitefish', page: 'Lake', w: 28, where: 'lake', tip: 'Common through the lake ice.' },
+  { id: 'burbot', name: 'Lake Burbot', page: 'Lake', w: 18, where: 'lake', tip: 'Uncommon through the lake ice.' },
+  { id: 'smelt', name: 'Crystal Smelt', page: 'Lake', w: 18, where: 'lake', tip: 'Uncommon through the lake ice.' },
+  { id: 'sculpin', name: 'Bubble Sculpin', page: 'Lake', w: 10, where: 'lake', tip: 'Rare through the lake ice.' },
+  { id: 'glowfish', name: 'Glowfish', page: 'Lake', w: 0, where: 'lake', tip: 'Glows blue. Rare through the lake ice.' },
+  { id: 'moonminnow', name: 'Moon Minnow', page: 'Night', w: 20, where: 'any', night: true, tip: 'Only bites at night.' },
+  { id: 'starsculpin', name: 'Star Sculpin', page: 'Night', w: 12, where: 'any', night: true, tip: 'Only bites at night.' },
+  { id: 'shadowpike', name: 'Shadow Pike', page: 'Night', w: 8, where: 'any', night: true, tip: 'Only bites at night, rarely.' },
+  { id: 'lanternfish', name: 'Lanternfish', page: 'Night', w: 6, where: 'any', night: true, tip: 'Only bites at night, very rarely.' },
+  { id: 'goldcarp', name: 'Golden Carp', page: 'Legendary', w: 1.5, where: 'river', tip: 'A legend of the river.' },
+  { id: 'auroraeel', name: 'Aurora Eel', page: 'Legendary', w: 1.5, where: 'lake', tip: 'A legend of the lake.' },
+  { id: 'leviathan', name: 'Ice Leviathan Fry', page: 'Legendary', w: 4, where: 'any', cond: () => storm.t > 0, tip: 'Only appears during a storm.' },
+  { id: 'kingsalmon', name: 'King Salmon', page: 'Legendary', w: 4, where: 'river', cond: () => isSpring(), tip: 'Only runs in the spring thaw.' },
+];
+const FISH_PAGES = { River: 2000, Lake: 3000, Night: 4000, Legendary: 10000 };
+legacy.fish = legacy.fish || {}; legacy.fishPages = legacy.fishPages || {};
+function catchSpecies(where, glow) {
+  let f;
+  if (glow) f = FISH.find(x => x.id === 'glowfish');
+  else {
+    const pool = FISH.filter(x => x.w > 0 && (x.where === where || x.where === 'any') && (!x.night || isNight()) && (!x.cond || x.cond()));
+    let tot = pool.reduce((a, x) => a + x.w, 0), roll = Math.random() * tot;
+    f = pool.find(x => (roll -= x.w) < 0) || pool[0];
+  }
+  const first = !legacy.fish[f.id]; legacy.fish[f.id] = (legacy.fish[f.id] || 0) + 1;
+  if (first) {
+    const got = FISH.filter(x => legacy.fish[x.id]).length; toast(`New fish for your book: ${f.name}! (${got}/${FISH.length})`); sfx('bell');
+    for (const [page, reward] of Object.entries(FISH_PAGES)) {
+      if (legacy.fishPages[page] || !FISH.filter(x => x.page === page).every(x => legacy.fish[x.id])) continue;
+      legacy.fishPages[page] = 1; W.cash += reward; setCash(); setTimeout(() => toast(`Fish book page complete: ${page}! +$${fmt(reward)}`), 2500);
+    }
+  }
+  if (holidayToday() === 'derby') {
+    derby.count++; W.cash += 20; setCash();
+    if (derby.count >= 15 && !derby.paid) { derby.paid = true; W.cash += 3000; setCash(); bump('derby'); toast('You won the Fishing Derby! +$3000'); for (let k = 0; k < 3; k++) setTimeout(() => firework(player.g.position.clone()), k * 250); }
+  }
+  saveLegacy();
+}
+
+// ================= Animal sanctuary =================
+const CRITTERS = [
+  { k: 'fawn', name: 'fawn', body: 0xb0784a, head: 0xb0784a },
+  { k: 'fox', name: 'fox kit', body: 0xe0702a, head: 0xe0702a },
+  { k: 'seal', name: 'seal pup', body: 0xd8dde5, head: 0xc8ccd2 },
+  { k: 'owl', name: 'owl chick', body: 0xf6f8fb, head: 0xf6f8fb },
+  { k: 'hare', name: 'snow hare', body: 0xffffff, head: 0xffffff },
+];
+const sanct = { built: false, zone: new V3(12.2, 0, 9.2), hurt: null, follow: [], residents: [], spawnT: 25, cash: null, payT: 0 };
+const crossTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.beginPath(); x.arc(32, 32, 30, 0, 2 * PI); x.fill(); x.fillStyle = '#e8433a'; x.fillRect(26, 12, 12, 40); x.fillRect(12, 26, 40, 12); return new THREE.CanvasTexture(c); })();
+function makeCritter(def) {
+  const g = new THREE.Group();
+  const b = mesh(new THREE.SphereGeometry(0.26, 10, 8), def.body, 0, 0.3, 0, g); b.scale.set(0.9, 0.8, def.k === 'seal' ? 1.6 : 1.2);
+  mesh(new THREE.SphereGeometry(0.17, 10, 8), def.head, 0, 0.5, 0.26, g);
+  mesh(new THREE.SphereGeometry(0.03, 6, 4), 0x111111, -0.06, 0.55, 0.4, g); mesh(new THREE.SphereGeometry(0.03, 6, 4), 0x111111, 0.06, 0.55, 0.4, g);
+  if (def.k === 'hare') for (const x of [-0.06, 0.06]) mesh(new THREE.BoxGeometry(0.05, 0.25, 0.04), 0xffffff, x, 0.75, 0.22, g);
+  if (def.k === 'fox' || def.k === 'fawn') for (const x of [-0.08, 0.08]) mesh(new THREE.ConeGeometry(0.05, 0.14, 4), def.head, x, 0.7, 0.24, g);
+  scene.add(g); return g;
+}
+function unlockSanct(instant) {
+  if (sanct.built) return; sanct.built = true;
+  const g = stationGroup(12.2, 11.9);
+  const pg = new THREE.CylinderGeometry(0.06, 0.06, 0.6, 5);
+  for (let x = -1.8; x <= 1.81; x += 0.45) { mesh(pg, 0xa86a3a, x, 0.3, -1.2, g); mesh(pg, 0xa86a3a, x, 0.3, 1.2, g); }
+  for (let z = -1.2; z <= 1.21; z += 0.4) { mesh(pg, 0xa86a3a, -1.8, 0.3, z, g); mesh(pg, 0xa86a3a, 1.8, 0.3, z, g); }
+  const sign = mesh(new THREE.BoxGeometry(1.2, 0.5, 0.06), 0xffffff, 0, 0.9, 1.3, g);
+  const cr = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: crossTex, transparent: true })); cr.position.set(0, 0.9, 1.34); g.add(cr);
+  zoneMarker(sanct.zone.x, sanct.zone.z, 'house', '#ff8ab0');
+  sanct.cash = new CashPile(9.4, 10.8);
+  if (!instant) { popIn(g); burst(new V3(12.2, 0, 11.9), 0xff8ab0, 16); toast('Hurt animals will now turn up around the valley. Bring them here to heal!'); }
+}
+const HURT_SPOTS = [[-18, -14], [18, -18], [-6, -20], [16, -12], [-20, 12], [2, 18], [20, 16], [-14, -24]];
+function addResident(def, instant) {
+  const c = makeCritter(def); c.position.set(12.2 + rand(-1.3, 1.3), 0, 11.9 + rand(-0.8, 0.8));
+  sanct.residents.push({ def, g: c, target: null, idle: rand(0, 3) });
+}
+function updateSanct(dt) {
+  if (!sanct.built) return;
+  const pp = player.g.position;
+  sanct.spawnT -= dt;
+  if (!sanct.hurt && !sanct.follow.length && sanct.spawnT <= 0) {
+    sanct.spawnT = 120; const def = CRITTERS[randi(0, CRITTERS.length - 1)], [x, z] = HURT_SPOTS[randi(0, HURT_SPOTS.length - 1)];
+    const g = makeCritter(def); g.position.set(x, 0, z); g.rotation.z = 0.5;
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: crossTex, depthTest: false })); tag.scale.set(0.6, 0.6, 1); tag.position.y = 1.2; tag.renderOrder = 5; g.add(tag);
+    sanct.hurt = { def, g, tag }; toast(`A hurt ${def.name} needs help! Look for the red cross on the map.`);
+  }
+  if (sanct.hurt) {
+    const h = sanct.hurt; h.tag.position.y = 1.2 + Math.sin(performance.now() / 250) * 0.1;
+    if (d2(h.g.position, pp) < 1.4) { h.g.remove(h.tag); h.g.rotation.z = 0; sanct.follow.push({ def: h.def, g: h.g }); sanct.hurt = null; toast(`The ${h.def.name} will follow you. Take it to the Sanctuary.`); sfx('bell'); }
+  }
+  sanct.follow.forEach((f, i) => petFollow(f.g, -1.2 - i * 0.6, dt, W.speed * 1.1));
+  if (sanct.follow.length && inZone(pp, sanct.zone.x, sanct.zone.z, 1.3)) {
+    for (const f of sanct.follow) { scene.remove(f.g); addResident(f.def); bump('rescued'); W.cash += 500; setCash(); toast(`The ${f.def.name} is safe and healing. +$500, and visitors will pay to see it.`); }
+    sanct.follow = []; burst(sanct.zone, 0xff8ab0, 16); sfx('buy'); save();
+  }
+  for (const r2 of sanct.residents) {
+    if (r2.idle > 0) { r2.idle -= dt; continue; }
+    if (!r2.target) r2.target = new V3(12.2 + rand(-1.4, 1.4), 0, 11.9 + rand(-0.9, 0.9));
+    if (stepToward(r2.g, r2.target, 0.8, dt, 0.1)) { r2.target = null; r2.idle = rand(1, 4); }
+  }
+  sanct.payT += dt;
+  if (sanct.payT > 10 && sanct.residents.length) { sanct.payT = 0; sanct.cash.addValue(12 * sanct.residents.length, new V3(12.2, 1.2, 11.9)); }
+}
+
+// ================= Pet treats: stronger pets with collars and hats =================
+const PET_SLOTS = () => [
+  husky.owned && { g: husky.g, neck: [0, 0.66, 0.42], r: 0.2, hat: [0, 1.0, 0.46] },
+  owl.owned && { g: owl.g, neck: [0, -0.05, 0], r: 0.24, hat: [0, 0.42, 0] },
+  pets.penguin && { g: pets.penguin.g, neck: [0, 0.68, 0], r: 0.2, hat: [0, 1.02, 0] },
+  pets.fox && { g: pets.fox.g, neck: [0, 0.55, 0.42], r: 0.18, hat: [0, 0.9, 0.44] },
+].filter(Boolean);
+function applyPetLooks() {
+  const lvl = U('petlvl'); if (!lvl) return;
+  for (const s of PET_SLOTS()) {
+    if (s.g.userData.looks === lvl) continue;
+    if (s.g.userData.extra) for (const m of s.g.userData.extra) s.g.remove(m);
+    const extra = [];
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(s.r, 0.035, 6, 16), new THREE.MeshLambertMaterial({ color: lvl >= 3 ? 0xffcc33 : 0xe8433a, emissive: lvl >= 3 ? 0x4a3300 : 0 }));
+    collar.rotation.x = PI / 2; collar.position.set(...s.neck); s.g.add(collar); extra.push(collar);
+    if (lvl >= 2) { const hat = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 10), mat([0x3f7fc8, 0x7a4fc8, 0x2f8a5a][randi(0, 2)])); hat.position.set(...s.hat); s.g.add(hat); extra.push(hat); const pom = mesh(new THREE.SphereGeometry(0.05, 6, 4), 0xffffff, 0, 0.17, 0, hat); }
+    s.g.userData.extra = extra; s.g.userData.looks = lvl;
+  }
+}
+
+// ================= Garden: place and move your own decorations =================
+const GARDEN = [
+  { k: 'lamp', name: 'Garden Lamp', cost: 300, desc: 'Glows warmly at night' },
+  { k: 'path', name: 'Stone Path', cost: 60, desc: 'A round paving stone' },
+  { k: 'fence', name: 'Picket Fence', cost: 100, desc: 'A short white fence' },
+  { k: 'planter', name: 'Flower Planter', cost: 250, desc: 'Winter flowers in a box' },
+  { k: 'bench', name: 'Park Bench', cost: 400, desc: 'A spot to rest' },
+  { k: 'snowman', name: 'Little Snowman', cost: 150, desc: 'A cheerful little friend' },
+  { k: 'tree', name: 'Pine Tree', cost: 200, desc: 'A young blue pine' },
+];
+const placed = [];
+function buildPlaceable(k) {
+  const g = new THREE.Group(); scene.add(g);
+  if (k === 'lamp') { mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.8, 6), 0x2b3442, 0, 0.9, 0, g); const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a })); b.position.y = 1.9; g.add(b); mesh(new THREE.ConeGeometry(0.22, 0.16, 6), 0x2b3442, 0, 2.08, 0, g); }
+  else if (k === 'path') { const st = mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.05, 10), 0xa8b0bc, 0, 0.025, 0, g); st.castShadow = false; }
+  else if (k === 'fence') { for (let i = 0; i < 5; i++) mesh(new THREE.BoxGeometry(0.1, 0.7, 0.06), 0xffffff, -0.8 + i * 0.4, 0.35, 0, g); mesh(new THREE.BoxGeometry(1.8, 0.08, 0.05), 0xffffff, 0, 0.45, 0, g); }
+  else if (k === 'planter') { mesh(new THREE.BoxGeometry(1.0, 0.35, 0.5), 0xa86a3a, 0, 0.18, 0, g); for (let i = 0; i < 5; i++) mesh(new THREE.SphereGeometry(0.1, 6, 4), [0xe8433a, 0xffd23a, 0xd9b3ff, 0xff8ab0, 0xffffff][i], -0.36 + i * 0.18, 0.45, rand(-0.1, 0.1), g); }
+  else if (k === 'bench') { mesh(new THREE.BoxGeometry(1.3, 0.08, 0.45), 0xa86a3a, 0, 0.45, 0, g); mesh(new THREE.BoxGeometry(1.3, 0.35, 0.06), 0xa86a3a, 0, 0.7, -0.2, g); for (const x of [-0.55, 0.55]) mesh(new THREE.BoxGeometry(0.08, 0.45, 0.4), 0x2b3442, x, 0.22, 0, g); }
+  else if (k === 'snowman') { mesh(new THREE.SphereGeometry(0.35, 10, 8), 0xffffff, 0, 0.32, 0, g); mesh(new THREE.SphereGeometry(0.24, 10, 8), 0xffffff, 0, 0.8, 0, g); mesh(new THREE.ConeGeometry(0.04, 0.18, 5), 0xff8a2a, 0, 0.8, 0.26, g).rotation.x = PI / 2; mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.2, 8), 0x222222, 0, 1.08, 0, g); }
+  else if (k === 'tree') { const t = new THREE.Mesh(TREE_GEO, vcMat); t.scale.setScalar(0.75); t.castShadow = true; g.add(t); }
+  return g;
+}
+function addPlaced(k, x, z, r = 0) {
+  const g = buildPlaceable(k); g.position.set(x, 0, z); g.rotation.y = r;
+  const it = { k, g }; placed.push(it); return it;
+}
+function buyGarden(k) {
+  const d = GARDEN.find(x => x.k === k); if (!d || W.cash < d.cost) return;
+  W.cash -= d.cost; setCash(); sfx('buy'); bump('garden');
+  const pp = player.g.position, fwd = new V3(Math.sin(player.g.rotation.y), 0, Math.cos(player.g.rotation.y));
+  const it = addPlaced(k, pp.x + fwd.x * 1.8, pp.z + fwd.z * 1.8); popIn(it.g);
+  toast(`${d.name} placed in front of you. Use Menu, Move things to arrange it.`); save(); renderShop();
+}
+function renderGarden() {
+  shopList.innerHTML = `<p class="tabnote">Buy garden pieces to decorate your camp. Each one appears right in front of you; move them any time with Menu → Move things.</p>` +
+    GARDEN.map(d => `<div class="urow"><div><b>${d.name}</b><small>${d.desc} · you own ${placed.filter(p => p.k === d.k).length}</small></div><button class="buy" type="button" data-garden="${d.k}" data-cost="${d.cost}">$${fmt(d.cost)}</button></div>`).join('');
+  refreshShopButtons();
+}
+const edit = { on: false, sel: null };
+const editBar = document.createElement('div'); editBar.id = 'editbar'; editBar.hidden = true;
+editBar.innerHTML = '<span>Tap a garden piece, then tap where it goes.</span><button type="button" data-a="rot">Turn</button><button type="button" data-a="del">Remove</button><button type="button" data-a="done">Done</button>';
+document.body.appendChild(editBar);
+editBar.addEventListener('click', e => {
+  const a = e.target.dataset.a; if (!a) return;
+  if (a === 'done') { edit.on = false; editBar.hidden = true; if (edit.sel) edit.sel.g.scale.setScalar(1); edit.sel = null; save(); }
+  if (a === 'rot' && edit.sel) { edit.sel.g.rotation.y += PI / 4; save(); }
+  if (a === 'del' && edit.sel) { scene.remove(edit.sel.g); placed.splice(placed.indexOf(edit.sel), 1); const d = GARDEN.find(x => x.k === edit.sel.k); W.cash += Math.round(d.cost / 2); setCash(); edit.sel = null; editBar.querySelector('span').textContent = 'Removed (half refunded). Tap another piece.'; save(); }
+});
+function startEdit() {
+  if (!placed.length) { toast('Buy garden pieces at the Town Hall (Garden tab) first.'); return; }
+  edit.on = true; edit.sel = null; editBar.hidden = false; editBar.querySelector('span').textContent = 'Tap a garden piece, then tap where it goes.';
+}
+const rayc = new THREE.Raycaster(), groundPlane = new THREE.Plane(new V3(0, 1, 0), 0);
+function groundAt(x, y) { rayc.setFromCamera({ x: x / innerWidth * 2 - 1, y: -(y / innerHeight) * 2 + 1 }, camera); const v = new V3(); return rayc.ray.intersectPlane(groundPlane, v) ? v : null; }
+function editTap(x, y) {
+  let best = null, bd = 50;
+  for (const it of placed) { const s = toScreen(it.g.position.x, 0.5, it.g.position.z); if (s.behind) continue; const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = it; } }
+  if (best && best !== edit.sel) { if (edit.sel) edit.sel.g.scale.setScalar(1); edit.sel = best; best.g.scale.setScalar(1.15); editBar.querySelector('span').textContent = 'Now tap where it should go.'; sfx('pop'); return; }
+  if (!edit.sel) return;
+  const at = groundAt(x, y); if (!at || regionOf(at) !== 'main') return;
+  edit.sel.g.position.set(at.x, 0, at.z); burst(at, 0xffffff, 6); sfx('drop'); save();
+}
+
 // ================= Far places: Sky Peak, Frozen Lake, Steam Caves, Shipwreck Cove =================
 Object.assign(FAR.peak, { env: { bg: 0xcfe6ff, near: 30, far: 80, hemi: 1.15, sky: 0xffffff, sun: 0.7, snow: true }, floor: 0xf6fbff, wall: 0xdfeaf5, entrance: new V3(41.8, 0, -8.4), pad: 'cablecar' });
 Object.assign(FAR.lake, { env: { bg: 0xdbe7f2, near: 30, far: 75, hemi: 1.05, sky: 0xffffff, sun: 0.62, snow: true }, floor: 0xcfeaf7, wall: null, entrance: new V3(-23.6, 0, 5.4), pad: 'laketrail' });
@@ -3583,7 +3854,8 @@ function updateLakeFishing(dt, moving) {
     lake.fishT = 0; const glow = Math.random() < 0.15, type = glow ? 'glowfish' : 'fish';
     player.c.receive(type, makeItem(type), h.clone().add(new V3(0, 0.3, 0)));
     burst(h.clone().add(new V3(0, -0.4, 0)), glow ? 0x5ff0ff : 0xa9d8f7, 6); sfx('splash'); questProgress('fish');
-    if (glow) { bump('glowfish'); toast('A rare glowfish!'); }
+    if (glow) { bump('glowfish'); }
+    catchSpecies('lake', glow);
   }
 }
 function buildRink(instant) {
@@ -3806,7 +4078,7 @@ function buyBoat(l, instant) {
   if (!instant) { burst(boat.home, 0xb8733d, 14); toast('Your fishing boat sets sail! Catches land on the bank.'); }
 }
 function updateBoat(dt) {
-  if (!boat.owned) return;
+  if (!boat.owned || (typeof wx !== 'undefined' && wx.kind === 'blizzard')) return;
   const g = boat.g;
   g.position.y = Math.sin(performance.now() / 500) * 0.06;
   if (boat.state === 'dock') {
@@ -3856,9 +4128,9 @@ function updateOwl(dt) {
     const foes = wolves.concat(mine.golems, bear ? [bear] : []);
     const f = nearest(foes, pp, x => x.pos);
     if (f && d2(f.pos, pp) < 8 && f.spawn >= 1) {
-      owl.cd = 1.1;
+      owl.cd = 1.1 * (1 - 0.2 * U('petlvl'));
       const fe = new THREE.Mesh(FEATHER_GEO, mat(0xffffff));
-      fly(fe, g.position.clone(), () => f.pos.clone().add(new V3(0, 1, 0)), 0.3, () => { scene.remove(fe); f.hit(1 + U('owlp')); }, 0.3);
+      fly(fe, g.position.clone(), () => f.pos.clone().add(new V3(0, 1, 0)), 0.3, () => { scene.remove(fe); f.hit(1 + U('owlp') + U('petlvl')); }, 0.3);
       sfx('hoot');
     }
   }
@@ -4079,6 +4351,12 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['rescue5', 'Animal Friend', 'Rescue 5 hurt animals', () => stat('rescued') >= 5],
+  ['fishbook', 'Master Angler', 'Fill the whole fish book', () => FISH.every(f => legacy.fish[f.id])],
+  ['derby', 'Derby Champ', 'Win a Fishing Derby', () => stat('derby') >= 1],
+  ['sculpt5', 'Ice Artist Supreme', 'Carve a 5-star snow sculpture', () => stat('sculpt5') >= 1],
+  ['garden10', 'Landscaper', 'Place 10 garden pieces', () => stat('garden') >= 10],
+  ['petmax', 'Pampered Pets', 'Max out Pet Treats', () => U('petlvl') >= 3],
   ['peak', 'Top of the World', 'Ride the cable car to Sky Peak', () => stat('visit_peak') >= 1],
   ['glow10', 'Glow Getter', 'Catch 10 glowfish', () => stat('glowfish') >= 10],
   ['skate100', 'Figure Eight', 'Skaters finish 100 laps', () => stat('skate') >= 100],
@@ -4171,7 +4449,7 @@ class Worker {
   }
   update(dt) {
     const pos = this.g.position; let moving = false;
-    const rush = boost.work > 0 ? 1.7 : 1;
+    const rush = boost.work > 0 || wx.kind === 'sunny' ? 1.7 : 1;
     this.t += dt * rush;
     const go = (target, stop) => { const arr = navStep(this.g, target, 3.6 * rush * (1 + 0.15 * U('wspeed')) * (1 - 0.2 * stormK), dt, stop); moving = !arr; return arr; };
     if (JOBS[this.kind]) runJob(this, JOBS[this.kind], go);
@@ -4293,6 +4571,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'sanctuary', label: 'Animal Sanctuary', icon: 'house', costs: [6000], x: 12.2, z: 9.2, req: () => town.built, apply: unlockSanct },
   { id: 'cablecar', label: 'Cable Car', icon: 'cable', costs: [15000], x: 41.8, z: -8.4, req: () => ridge.unlocked, apply: (l, i) => buildFar('peak', i) },
   { id: 'weather', label: 'Weather Station', icon: 'board', costs: [12000], x: 180, z: 6, req: () => FAR.peak.built, apply: (l, i) => buildWeather(i) },
   { id: 'downshop', label: 'Down Workshop', icon: 'quilt', costs: [10000], x: 176, z: -6, req: () => FAR.peak.built, apply: (l, i) => downshop.unlock(i) },
@@ -4609,7 +4888,7 @@ function playerInteract() {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
   // cash
-  for (const cp of cashPiles().concat([smith.cash, hotel.cash, exch.cash, ...STATIONS.filter(st => st.x >= 90).map(st => st.cash)].filter(Boolean))) {
+  for (const cp of cashPiles().concat([sanct.cash, smith.cash, hotel.cash, exch.cash, ...STATIONS.filter(st => st.x >= 90).map(st => st.cash)].filter(Boolean))) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
     const m = cp.take(); const share = m ? Math.round(cp.value / (cp.n + 1)) : cp.value;
     cp.value -= share;
@@ -4951,6 +5230,8 @@ function updateBossCal() {
   const ev = eventFor(day);
   if (ev === 'festival') t = 'Winter Festival (+25%) · ' + t;
   else if (ev === 'siege') t = 'Siege night tonight · ' + t;
+  const hol = HOLIDAYS[holidayFor(day)]; if (hol) t = hol.name + ' · ' + t;
+  if (wx.kind === 'sunny') t = 'Sunny spell · ' + t; else if (wx.kind === 'blizzard') t = 'Blizzard! · ' + t; else if (wx.aurora) t = 'Aurora night · ' + t;
   if (t !== bossText) { bossText = t; bossEl.textContent = t; }
 }
 function spawnWolf(alpha = false) {
@@ -4977,12 +5258,19 @@ function updateDayNight(dt) {
   grillGlow.intensity = 1.9 * nightK; lantern.intensity = 1.4 * nightK;
   if (night && !wasNight) {
     sfx('howl'); wolfTimer = 2;
+    if (Math.floor(dayT / CYCLE) + 1 >= 2 && Math.random() < 0.25) { wx.aurora = true; ensureAurora(); setTimeout(() => toast('An aurora night! Crystals, gold, shards and pearls drop double while it lasts.'), 8500); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'siege') { siege.active = true; siege.stolen = 0; setTimeout(() => toast('Siege night! Twice the wolves. Keep your food safe until morning.'), 4200); }
     if (bossFor(Math.floor(dayT / CYCLE) + 1) === 'Wolf Alpha' && !wolves.some(w => w.alpha)) { spawnWolf(true); toast('The Wolf Alpha leads tonight\'s pack!'); }
     else toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!');
   }
   if (!night && wasNight) {
     repairGates(); newQuests(true);
+    wx.aurora = false;
+    { const dN = Math.floor(dayT / CYCLE) + 1;
+      if (dN >= 3 && Math.random() < 0.2) wx.next = ['sunny', dayT + rand(10, 50)];
+      else if (dN >= 5 && Math.random() < 0.15) wx.next = ['blizzard', dayT + rand(20, 60)];
+      const hol = HOLIDAYS[holidayFor(dN)]; if (hol) setTimeout(() => toast(`Holiday: ${hol.name}! ${hol.tip}`), 11000);
+      derby.count = 0; derby.paid = false; sculpt.done = false; sculpt.t = 0; }
     if (siege.active) {
       siege.active = false;
       const day = Math.floor(dayT / CYCLE), reward = Math.max(200, Math.round((1500 + day * 60) * Math.max(0.2, 1 - siege.stolen * 0.1) / 10) * 10);
@@ -5228,6 +5516,7 @@ function tapTargets() {
   return out;
 }
 function onTap(x, y) {
+  if (edit.on) { editTap(x, y); return; }
   let best = null, bd = 1e9;
   for (const t of tapTargets()) {
     const s = toScreen(t.p.x, t.y, t.p.z); if (s.behind) continue;
@@ -5316,11 +5605,35 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people']]) document.getElementById(id).classList.toggle('on', v === key);
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people'], ['fishbtn', 'fish'], ['calbtn', 'cal']]) document.getElementById(id).classList.toggle('on', v === key);
+  if (v === 'fish') { renderFishBook(); return; }
+  if (v === 'cal') { renderCalendar(); return; }
   if (v === 'recipes') { renderRecipes(); return; }
   if (v === 'story') { renderStory(); return; }
   if (v === 'people') { renderPeople(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+}
+document.getElementById('fishbtn').onclick = () => showMenuView(menuView === 'fish' ? '' : 'fish');
+document.getElementById('calbtn').onclick = () => showMenuView(menuView === 'cal' ? '' : 'cal');
+document.getElementById('movebtn').onclick = () => { closeMenu(); startEdit(); };
+function renderFishBook() {
+  const got = FISH.filter(f => legacy.fish[f.id]).length;
+  let h = `<h4>Fish book (${got}/${FISH.length})</h4><p>Fish at the dock or the Frozen Lake. Some fish only bite at night, in storms or in spring. Finish a page for a reward.</p>`;
+  for (const [page, reward] of Object.entries(FISH_PAGES)) {
+    const list = FISH.filter(f => f.page === page), done = list.every(f => legacy.fish[f.id]);
+    h += `<div class="wh-area">${page} ${done ? '· complete' : `· $${fmt(reward)} reward`}</div>`;
+    h += list.map(f => legacy.fish[f.id] ? `<div class="wh"><b>${f.name}</b><span class="chip ok">x${legacy.fish[f.id]}</span><small>${f.tip}</small></div>` : `<div class="wh"><b>???</b><span class="chip warn">Not caught</span><small>${f.tip}</small></div>`).join('');
+  }
+  menuBody.innerHTML = h;
+}
+function renderCalendar() {
+  const day = Math.floor(dayT / CYCLE) + 1;
+  let h = '<h4>Calendar</h4><p>What is coming up over the next 12 days.</p>';
+  for (let d = day; d < day + 12; d++) {
+    const bits = [bossFor(d) && 'Boss: ' + bossFor(d), eventFor(d) === 'festival' && 'Winter Festival', eventFor(d) === 'siege' && 'Siege night', d % 4 === 0 && 'Spring thaw', HOLIDAYS[holidayFor(d)] && HOLIDAYS[holidayFor(d)].name].filter(Boolean);
+    h += `<div class="wh"><b>Day ${d}${d === day ? ' (today)' : ''}</b><span class="chip ${bits.length ? 'warn' : 'ok'}">${bits.length ? bits.length + ' event' + (bits.length > 1 ? 's' : '') : 'Quiet'}</span><small>${bits.join(' · ') || 'A normal day.'}</small></div>`;
+  }
+  menuBody.innerHTML = h;
 }
 document.getElementById('storybtn').onclick = () => showMenuView(menuView === 'story' ? '' : 'story');
 document.getElementById('peoplebtn').onclick = () => showMenuView(menuView === 'people' ? '' : 'people');
@@ -5502,7 +5815,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay,
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -5510,6 +5823,8 @@ if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
   if (saved.ride === false) W.ride = false;
   dung.lastDay = saved.dungDay || 0; FAR.cove.lastDay = saved.coveDay || 0;
+  if (Array.isArray(saved.garden)) setTimeout(() => { for (const [k, x, z, r2] of saved.garden) addPlaced(k, x, z, r2); }, 0);
+  if (Array.isArray(saved.sanct)) setTimeout(() => { for (const k of saved.sanct) { const d = CRITTERS.find(c => c.k === k); if (d) addResident(d, true); } }, 0);
   villSaved = saved.vill || {};
   if (saved.story) { story.ch = saved.story.ch || 0; story.seen = saved.story.seen ?? -1; Object.assign(light.have, saved.story.lh || {}); light.done = !!saved.story.ld; Object.assign(altar.have, saved.story.ah || {}); altar.done = !!saved.story.ad; }
   if (saved.rival) Object.assign(rival, saved.rival);
@@ -5557,7 +5872,8 @@ function frame() {
   for (const n of blooms) n.update(dt);
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
-  for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -5593,7 +5909,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>

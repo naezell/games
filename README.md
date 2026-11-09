@@ -61,3 +61,10 @@ optional music. Villager orders at the Order Board, a Farm (wheat and carrots in
 stew), spring thaws every fourth day, the Ember Volcano (through a lava tunnel in the Frost
 Mine) with obsidian, fire golems and a Lava Forge for obsidian blades, Winter Festivals
 (+25% income) and siege nights, a riding reindeer, and Penguin Pal and Treasure Fox pets.
+
+**Even more:** building tiers (Silver, Gold) and golden pieces worth 5x, conveyor belts, a
+Tinker Bench with hidden recipes, an Armory for weapons and armor, the Ice Cave dungeon with
+the Frost Wraith, bosses that level up, villagers who move in, a six-chapter story, weekly
+contests against a rival camp, Sky Peak, the Frozen Lake, the Steam Caves and Shipwreck Cove,
+an animal sanctuary, pet treats, a 20-fish collection book, garden pieces you can place and
+move, sunny spells, blizzards and aurora nights, and four holidays.
