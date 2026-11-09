@@ -632,7 +632,7 @@ function updateRiver(dt) {
   for (const m of riverLogs) {
     m.position.z += dt * 1.4; if (m.position.z > 70) m.position.z -= 132;
     const near = clamp(1 - (Math.abs(m.position.z - BRIDGE_Z) - 1.6) / 2.2, 0, 1);
-    const nearShip = ship.here ? clamp(1 - (Math.abs(m.position.z + 24) - 4.2) / 2, 0, 1) : 0;
+    const nearShip = Math.max(ship.here ? clamp(1 - (Math.abs(m.position.z + 24) - 4.2) / 2, 0, 1) : 0, mill.built ? clamp(1 - (Math.abs(m.position.z - mill.at.z) - 1.8) / 1.5, 0, 1) : 0);
     m.position.y = 0.2 - Math.max(near, nearShip) * 1.1; m.rotation.x = Math.sin(m.position.z * 0.4) * 0.08;
   }
   for (const st of riverStreaks) { st.position.z += dt * 2.2; if (st.position.z > 80) st.position.z -= 160; }
@@ -819,8 +819,9 @@ class Pile {
   }
   take() { return this.items.pop(); }
 }
+const ALLCASH = [];
 class CashPile extends Pile {
-  constructor(x, z) { super(x, z, 2, 3, 48, 0.6, 0.36, 0.08); this.value = 0; this.icon = zoneMarker(x, z, 'cash', '#7be38a'); }
+  constructor(x, z) { super(x, z, 2, 3, 48, 0.6, 0.36, 0.08); this.value = 0; this.icon = zoneMarker(x, z, 'cash', '#7be38a'); ALLCASH.push(this); }
   addValue(v, from) {
     if (boost.cash > 0) v *= 2;
     if (UP.statue) v = Math.round(v * 1.1);
@@ -2321,6 +2322,9 @@ const UPGRADES = [
   { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
   { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
   { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
+  { id: 'mgr_town', name: 'Town Manager', desc: 'Collects every cash pile in Market Town for you', costs: [20000], req: () => town.built },
+  { id: 'mgr_ridge', name: 'Ridge Manager', desc: 'Collects every cash pile at Ridge Camp for you', costs: [30000], req: () => ridge.unlocked },
+  { id: 'mgr_far', name: 'Far Lands Manager', desc: 'Collects cash in the Mine, Volcano, Isle, Harbor and other far places', costs: [50000], req: () => mine.built },
   { id: 'petlvl', name: 'Pet Treats', desc: 'All pets get stronger: harder bites, faster swoops, more carrying, more digging. Plus collars, then hats', costs: [3000, 8000, 20000], req: () => husky.owned || owl.owned || !!pets.penguin || !!pets.fox },
   { id: 'reindeer', name: 'Riding Reindeer', desc: 'Ride a reindeer and move 60% faster (switch it in the Menu)', costs: [15000] },
   { id: 'bladep', name: 'Dragonglass Edge', desc: '+$60 for every obsidian blade', costs: [10000, 25000], req: () => store.built && forge.built },
@@ -2489,7 +2493,7 @@ const FAR = {
   steam: { name: 'Steam Caves', rect: { x0: 160, x1: 192, z0: -62, z1: -34 }, test: p => p.x > 150 && p.z <= -25 },
   cove: { name: 'Shipwreck Cove', rect: { x0: 160, x1: 192, z0: 76, z1: 104 }, test: p => p.x > 150 && p.z > 72 },
 };
-const farOf = p => (p.x > 196 ? 'home' : p.x > 150 ? Object.keys(FAR).find(k => k !== 'home' && FAR[k].test(p)) : null);
+const farOf = p => (p.x > 216 ? 'harbor' : p.x > 196 ? 'home' : p.x > 150 ? Object.keys(FAR).find(k => k !== 'home' && k !== 'harbor' && FAR[k].test(p)) : null);
 const golds = [];
 const mine = { built: false, entrance: new V3(45, 0, -10.6), exitZone: new V3(102.2, 0, 0), start: new V3(104.6, 0, 0), back: new V3(45, 0, -8.2), wasIn: false, golems: [], king: null, kingT: 3, golemT: 2 };
 function teleport(p) {
@@ -4465,6 +4469,10 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['balloon', 'Up, Up and Away', 'The balloon carries 100 goods home', () => stat('balloonGoods') >= 100],
+  ['harbor', 'Sea Breeze', 'Open the Harbor District', () => FAR.harbor.built],
+  ['newprod', 'Product Line', 'Build the Boot Maker, Sled Works and Ski Shop', () => bootmk.built && sledworks.built && skishop.built],
+  ['managers', 'Delegator', 'Hire all three area managers', () => U('mgr_town') && U('mgr_ridge') && U('mgr_far')],
   ['cook5', 'Home Chef', 'Discover 5 Cooking Pot recipes', () => Object.keys(legacy.cook || {}).length >= 5],
   ['yeti50', 'Little Lumberjack', 'Your Baby Yeti chops 50 times', () => stat('yetichops') >= 50],
   ['aqua10', 'Fish Keeper', 'Show 10 kinds of fish in the Aquarium', () => aquarium.built && aquaSpecies() >= 10],
@@ -4472,7 +4480,7 @@ const ACH = [
   ['favor6', 'Good Neighbor', 'Finish 6 villager favors', () => stat('favors') >= 6],
   ['ship3', 'Ahoy!', 'Buy 3 things from the merchant ship', () => stat('shipbuys') >= 3],
   ['duel3', 'Fastest Axe', 'Win 3 duels against Captain Brisk', () => stat('duelwins') >= 3],
-  ['sculptwin', 'Master Carver', 'Win a prize at the Ice Sculpture Contest', () => stat('sculptwins') >= 1],
+  ['sculptwin', 'Master Carver', 'Win a prize at the Carving Cup', () => stat('sculptwins') >= 1],
   ['mail10', 'Pen Pal', 'Read 10 letters', () => stat('letters') >= 10],
   ['depth5', 'Into the Deep', 'Reach Floor 5 of the Endless Depths', () => stat('deepest') >= 5],
   ['titan', 'Titan Toppler', 'Defeat a Frost Titan', () => stat('titan') >= 1],
@@ -4582,7 +4590,7 @@ function renderLegacy() {
 const workers = [];
 const WCOL = { obsminer: 0x2a1a3a, farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
-const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, train.cash, aquarium.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
+const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, train.cash, aquarium.cash, balloon.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
@@ -4716,6 +4724,15 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'balloon', label: 'Cargo Balloon', icon: 'cart', costs: [16000, 30000], x: -17.5, z: 17.2, req: () => ridge.unlocked, apply: (l, i) => buildBalloon(l, i) },
+  { id: 'mill', label: 'Water Mill', icon: 'saw', costs: [12000, 24000], x: 24, z: 11.5, req: () => bridge.unlocked, apply: (l, i) => buildMill(l, i) },
+  { id: 'harbor', label: 'Harbor District', icon: 'boat', costs: [30000], x: 13, z: 21, req: () => town.built && STATIONS.filter(st => st.built).length >= 6, apply: (l, i) => buildHarbor(i) },
+  { id: 'fishmkt', label: 'Fish Market', icon: 'fish', costs: [12000], x: 230, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => fishmkt.unlock(i) },
+  { id: 'shipyard', label: 'Shipyard', icon: 'boat', costs: [18000], x: 238, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => shipyard.unlock(i) },
+  { id: 'cafe', label: 'Harbor Café', icon: 'milk', costs: [15000], x: 230, z: 8.8, req: () => FAR.harbor.built, apply: (l, i) => cafe.unlock(i) },
+  { id: 'bootmk', label: 'Boot Maker', icon: 'boot', costs: [20000], x: 246, z: -8.8, req: () => FAR.harbor.built && RS('boots'), apply: (l, i) => bootmk.unlock(i) },
+  { id: 'sledworks', label: 'Sled Works', icon: 'sled', costs: [22000], x: 238, z: 8.8, req: () => FAR.harbor.built && RS('sleds'), apply: (l, i) => sledworks.unlock(i) },
+  { id: 'skishop', label: 'Ski Shop', icon: 'tool', costs: [22000], x: 246, z: 8.8, req: () => FAR.harbor.built && RS('skis'), apply: (l, i) => skishop.unlock(i) },
   { id: 'hare', label: 'Snow Hare', icon: 'dog', costs: [7000], x: -9.6, z: -13.4, req: () => husky.owned || owl.owned || !!pets.penguin || !!pets.fox, apply: (l, i) => adoptHare(i) },
   { id: 'yetipet', label: 'Baby Yeti', icon: 'dog', costs: [14000], x: -9.6, z: -11.0, req: () => !!pets.hare, apply: (l, i) => adoptYeti(i) },
   { id: 'pot', label: 'Cooking Pot', icon: 'stew', costs: [2500], x: 13.4, z: -22.6, req: () => padLevel('hall') > 0, apply: (l, i) => buildPot(i) },
@@ -5428,8 +5445,8 @@ function updateBossCal() {
   const ev = eventFor(day);
   if (ev === 'festival') t = 'Winter Festival (+25%) · ' + t;
   else if (ev === 'siege') t = 'Siege night tonight · ' + t;
-  else if (ev === 'lanterns') t = 'Lantern Night (+15% tonight) · ' + t;
-  else if (ev === 'sculpt') t = 'Ice Sculpture Contest · ' + t;
+  else if (ev === 'lanterns') t = 'Lantern Parade (+15% tonight) · ' + t;
+  else if (ev === 'sculpt') t = 'Carving Cup · ' + t;
   const hol = HOLIDAYS[holidayFor(day)]; if (hol) t = hol.name + ' · ' + t;
   if (wx.kind === 'sunny') t = 'Sunny spell · ' + t; else if (wx.kind === 'blizzard') t = 'Blizzard! · ' + t; else if (wx.aurora) t = 'Aurora night · ' + t;
   if (t !== bossText) { bossText = t; bossEl.textContent = t; }
@@ -5579,6 +5596,15 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  balloon: 'Flies to Ridge Camp and the far lands, picks up their finished goods, and sells them here at home.',
+  mill: 'A water wheel on the river. Every building works 15% faster, forever, no fuel needed. Level 2 makes it 20%.',
+  harbor: 'Opens a new district by the sea with a fish market, shipyard and café. Research unlocks more shops there.',
+  fishmkt: 'Buys fish, glowfish and pearls.',
+  shipyard: '3 logs + 2 iron bars = a rowboat worth $320.',
+  cafe: 'Milk + honeycomb = cocoa worth $80.',
+  bootmk: 'Yak wool + meat = snow boots worth $140. Needs the Boot Patterns research.',
+  sledworks: '2 logs + an iron bar = a sled worth $200. Needs the Sled Blueprints research.',
+  skishop: 'A log + honeycomb wax = skis worth $150. Needs the Ski Design research.',
   hare: 'A fluffy pet that makes you walk 10% faster and digs up snacks and coins.',
   yetipet: 'A little yeti that chops trees near you and hands you the logs.',
   pot: 'Drop in two different ingredients to cook a dish. Each recipe gives a short buff, like faster chopping or bigger tips.',
@@ -5818,6 +5844,9 @@ const RESEARCH = [
   { id: 'belts', name: 'Cheap Belts', cost: 15, desc: 'Conveyor belts cost 40% less.' },
   { id: 'slot1', name: 'Second Expedition', cost: 20, desc: 'Run two expeditions at once.' },
   { id: 'slot2', name: 'Third Expedition', cost: 40, desc: 'Run three expeditions at once.', req: 'slot1' },
+  { id: 'boots', name: 'Boot Patterns', cost: 20, desc: 'Unlocks the Boot Maker in the Harbor District.' },
+  { id: 'sleds', name: 'Sled Blueprints', cost: 25, desc: 'Unlocks the Sled Works in the Harbor District.' },
+  { id: 'skis', name: 'Ski Design', cost: 25, desc: 'Unlocks the Ski Shop in the Harbor District.' },
   { id: 'lures', name: 'Lucky Lures', cost: 20, desc: 'Rare fish bite far more often.' },
   { id: 'hearts', name: 'Warm Hearts', cost: 25, desc: 'Gifts to villagers count double.' },
   { id: 'nightowl', name: 'Night Owl', cost: 30, desc: '+15% income at night.' },
@@ -6316,7 +6345,7 @@ function buildShed(l, instant) {
 
 // ================= Power plant =================
 const power = { built: false, lvl: 0, fuel: 0, input: new Pile(-3.4, -16.0, 3, 3, 30, 0.6, 0.6, H.log + 0.02), wires: null, dirty: true, smokeT: 0, on: false };
-const powerMul = () => (power.fuel > 0 ? (power.lvl >= 2 ? 0.7 : 0.8) : 1);
+const powerMul = () => Math.min(power.fuel > 0 ? (power.lvl >= 2 ? 0.7 : 0.8) : 1, mill.built ? (mill.lvl >= 2 ? 0.8 : 0.85) : 1);
 function buildPower(l, instant) {
   power.lvl = l + 1; if (power.built) { if (!instant) toast('Power Plant upgraded: buildings now work 30% faster while it runs.'); return; }
   power.built = true;
@@ -6632,18 +6661,18 @@ function updateShip(dt) {
   });
 }
 
-// ================= Festivals: Lantern Night and the Ice Sculpture Contest =================
+// ================= Festivals: Lantern Parade and the Carving Cup =================
 const fest = { lanterns: [], lt: 0, sculptStart: null, sculptDay: -1 };
 function festivalDawn() {
   const day = Math.floor(dayT / CYCLE) + 1, prev = day - 1;
   if (eventFor(prev) === 'sculpt' && fest.sculptDay === prev && fest.sculptStart !== null) {
     const made = stat('sculpt') - fest.sculptStart, tier = made >= 20 ? 3 : made >= 10 ? 2 : made >= 5 ? 1 : 0;
     fest.sculptStart = null;
-    if (tier) { const prize = Math.round(tier * Math.max(2500, incomeRate * 60) / 50) * 50; W.cash += prize; setCash(); bump('sculptwins'); setTimeout(() => toast(`Ice Sculpture Contest: ${MEDAL[tier]} prize for ${made} sculptures! +$${fmt(prize)}`), 7000); }
-    else setTimeout(() => toast(`Ice Sculpture Contest: ${made} sculptures. Carve 5 next time for a prize!`), 7000);
+    if (tier) { const prize = Math.round(tier * Math.max(2500, incomeRate * 60) / 50) * 50; W.cash += prize; setCash(); bump('sculptwins'); setTimeout(() => toast(`Carving Cup: ${MEDAL[tier]} prize for ${made} sculptures! +$${fmt(prize)}`), 7000); }
+    else setTimeout(() => toast(`Carving Cup: ${made} sculptures. Carve 5 next time for a prize!`), 7000);
   }
-  if (eventFor(day) === 'sculpt') { fest.sculptStart = stat('sculpt'); fest.sculptDay = day; setTimeout(() => toast(carver.built ? 'Ice Sculpture Contest today! Every sculpture the Ice Carver makes counts. 5, 10 and 20 win prizes at dawn.' : 'Ice Sculpture Contest today! Build the Ice Carver in Market Town to take part.'), 9500); }
-  if (eventFor(day) === 'lanterns') setTimeout(() => toast('Lantern Night tonight: sky lanterns and +15% on everything after dark.'), 9500);
+  if (eventFor(day) === 'sculpt') { fest.sculptStart = stat('sculpt'); fest.sculptDay = day; setTimeout(() => toast(carver.built ? 'Carving Cup today! Every sculpture the Ice Carver makes counts. 5, 10 and 20 win prizes at dawn.' : 'Carving Cup today! Build the Ice Carver in Market Town to take part.'), 9500); }
+  if (eventFor(day) === 'lanterns') setTimeout(() => toast('Lantern Parade tonight: sky lanterns and +15% on everything after dark.'), 9500);
 }
 const skyLanternMat = new THREE.MeshBasicMaterial({ color: 0xffb04a });
 function updateLanterns(dt) {
@@ -6923,6 +6952,137 @@ function updateAmbience(dt) {
   }
 }
 
+// ================= Area managers =================
+const MGR = { mgr_town: cp => cp.z > 18 && cp.x > -30 && cp.x < 26, mgr_ridge: cp => cp.x > 30 && cp.x < 90, mgr_far: cp => cp.x >= 90 };
+const mgr = { t: 0, sum: 0, toastT: 20 };
+function updateManagers(dt) {
+  mgr.t -= dt; mgr.toastT -= dt; if (mgr.t > 0) return; mgr.t = 3;
+  for (const id in MGR) {
+    if (!U(id)) continue;
+    for (const cp of ALLCASH) {
+      if (cp.value <= 0 || !MGR[id](cp)) continue;
+      W.cash += cp.value; mgr.sum += cp.value; cp.value = 0;
+      for (const m of cp.items) scene.remove(m); cp.items.length = 0;
+    }
+  }
+  if (mgr.sum > 0) { setCash(); if (mgr.toastT <= 0) { mgr.toastT = 150; toast(`Your managers collected $${fmt(Math.round(mgr.sum))} for you.`); mgr.sum = 0; } }
+}
+
+// ================= Cargo balloon =================
+const balloon = { built: false, lvl: 0, at: new V3(-17.5, 0, 20.5), t: 0, phase: 'home', cargo: 0, value: 0, cash: null, first: true };
+function buildBalloon(l, instant) {
+  balloon.lvl = l + 1;
+  if (balloon.built) { if (!instant) toast('Bigger balloon: it carries more goods each trip.'); return; }
+  balloon.built = true;
+  const base = stationGroup(balloon.at.x, balloon.at.z); const pad = mesh(new THREE.CylinderGeometry(1.7, 1.8, 0.16, 16), 0xa86a3a, 0, 0.08, 0, base); pad.castShadow = false;
+  const g = new THREE.Group(); g.position.copy(balloon.at); scene.add(g); balloon.g = g;
+  mesh(new THREE.BoxGeometry(1.2, 0.8, 1.2), 0x8a5a36, 0, 0.55, 0, g); mesh(new THREE.BoxGeometry(1.3, 0.1, 1.3), 0x5a3a1e, 0, 0.95, 0, g);
+  for (const [x, z] of [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]]) mesh(new THREE.BoxGeometry(0.04, 2.0, 0.04), 0x3a2a1a, x, 1.95, z, g);
+  const env = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12), new THREE.MeshLambertMaterial({ color: 0xe8433a })); env.position.y = 4.4; env.scale.y = 1.15; env.castShadow = true; g.add(env);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1.92, 0.18, 6, 24), mat(0xffd23a)); band.rotation.x = PI / 2; band.position.y = 4.4; g.add(band);
+  const band2 = new THREE.Mesh(new THREE.TorusGeometry(1.55, 0.15, 6, 24), mat(0xffffff)); band2.rotation.x = PI / 2; band2.position.y = 5.5; g.add(band2);
+  balloon.flame = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 6), new THREE.MeshBasicMaterial({ color: 0xffa23a })); balloon.flame.position.y = 2.2; g.add(balloon.flame);
+  balloon.crates = mesh(new THREE.BoxGeometry(0.8, 0.35, 0.8), 0xc88a40, 0, 1.15, 0, g); balloon.crates.visible = false;
+  balloon.cash = new CashPile(balloon.at.x + 3.6, balloon.at.z);
+  if (!instant) { popIn(g); toast('The Cargo Balloon flies to Ridge Camp and the far lands, collects their goods, and sells them here.'); }
+}
+function balloonLoad() {
+  let cap = 16 + 12 * balloon.lvl, got = 0, value = 0;
+  const list = STATIONS.filter(st => st.built && st.outPile && st.x >= 30 && st.outPile.n > 0).sort((a, b) => b.outPile.n - a.outPile.n);
+  for (const st of list) while (cap > 0 && st.outPile.n > 0) { const m = st.outPile.take(); if (!m) break; scene.remove(m); cap--; got++; value += (SHIP_PRICE[st.out[0]] || 25) * (m.userData.golden ? 5 : 1) * 0.9; }
+  for (const [pl, t] of [[workshop.out, 'lantern'], [pen.out, 'wool']]) while (pl && cap > 0 && pl.n > 0) { const m = pl.take(); if (!m) break; scene.remove(m); cap--; got++; value += (SHIP_PRICE[t] || 20) * 0.9; }
+  balloon.cargo = got; balloon.value = Math.round(value);
+}
+function updateBalloon(dt) {
+  if (!balloon.built) return;
+  const b = balloon, g = b.g, at = b.at; b.t += dt;
+  b.flame.scale.y = 1 + Math.sin(performance.now() / 70) * 0.3;
+  if (b.phase === 'home') { g.position.set(at.x, Math.abs(Math.sin(b.t * 1.5)) * 0.06, at.z); if (b.t > 10) { b.phase = 'up'; b.t = 0; } }
+  else if (b.phase === 'up') { const k = Math.min(1, b.t / 6); g.position.set(at.x + k * k * 34, k * 20, at.z - k * 8); if (k >= 1) { b.phase = 'away'; b.t = 0; g.visible = false; } }
+  else if (b.phase === 'away') { if (b.t > 18) { balloonLoad(); b.crates.visible = b.cargo > 0; b.phase = 'down'; b.t = 0; g.visible = true; } }
+  else if (b.phase === 'down') {
+    const k = Math.max(0, 1 - b.t / 6); g.position.set(at.x + k * k * 34, k * 20, at.z - k * 8);
+    if (k <= 0) {
+      b.phase = 'home'; b.t = 0; burst(at.clone().setY(0.5), 0xffffff, 8);
+      if (b.value > 0) { b.cash.addValue(b.value, at.clone().setY(1.4)); bump('balloonGoods', b.cargo); if (b.first) { b.first = false; toast(`The balloon brought back ${b.cargo} goods worth $${fmt(b.value)}!`); } }
+      b.value = 0; b.cargo = 0; setTimeout(() => { b.crates.visible = false; }, 3000);
+    }
+  }
+}
+
+// ================= Water mill =================
+const mill = { built: false, lvl: 0, at: new V3(24, 0, 11.5) };
+function buildMill(l, instant) {
+  mill.lvl = l + 1;
+  if (mill.built) { if (!instant) toast('Bigger water wheel: buildings now work 20% faster.'); return; }
+  mill.built = true;
+  const g = stationGroup(mill.at.x, mill.at.z); mill.g = g;
+  mesh(new THREE.BoxGeometry(2.4, 2.0, 2.2), 0xa86a3a, 0, 1.0, 0, g);
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(2.45, 0.08, 2.25), 0x8a5a36, 0, 0.35 + i * 0.45, 0, g);
+  const rf = mesh(new THREE.ConeGeometry(1.9, 1.2, 4), 0x9a3b2a, 0, 2.6, 0, g); rf.rotation.y = PI / 4;
+  const ax = mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.0, 6), 0x5a3a1e, 1.9, 1.2, 0, g); ax.rotation.z = PI / 2;
+  const w = new THREE.Group(); w.position.set(2.75, 1.2, 0); g.add(w); mill.wheel = w;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.08, 6, 20), mat(0x6b4428)); rim.rotation.y = PI / 2; w.add(rim);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * 2 * PI, pd = mesh(new THREE.BoxGeometry(0.45, 0.06, 0.5), 0x8a5a36, 0, Math.cos(a) * 1.15, Math.sin(a) * 1.15, w); pd.rotation.x = a; mesh(new THREE.BoxGeometry(0.06, 2.3, 0.06), 0x6b4428, 0, 0, 0, w).rotation.x = a; }
+  colliders.push({ x0: mill.at.x - 1.3, x1: mill.at.x + 1.3, z0: mill.at.z - 1.2, z1: mill.at.z + 1.2 });
+  if (!instant) { popIn(g); toast('The Water Mill turns day and night: every building works 15% faster, no logs needed.'); }
+}
+function updateMill(dt) { if (mill.built) mill.wheel.rotation.x -= dt * 1.3; }
+
+// ================= Harbor District =================
+FAR.harbor = { name: 'Harbor District', rect: { x0: 220, x1: 252, z0: -14, z1: 14 }, test: p => p.x > 216, env: { bg: 0xa8d4ec, near: 30, far: 80, hemi: 1.05, sky: 0xffffff, sun: 0.66, snow: true }, floor: 0xd8cdb8, wall: 0x8d97a6,
+  entrance: new V3(13, 0, 21), pad: 'harbor', start: new V3(224.6, 0, 0), exit: new V3(222.2, 0, 0), built: false, wasIn: false, lastDay: 0 };
+function buildHarbor(instant) {
+  const f = FAR.harbor; if (f.built) return; f.built = true;
+  const { x0, x1, z0, z1 } = f.rect, cx = (x0 + x1) / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 10, z1 - z0 + 10), mat(f.floor)); floor.rotation.x = -PI / 2; floor.position.set(cx, 0.012, 0); floor.receiveShadow = true; scene.add(floor);
+  const walk = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 4.4), mat(0xa86a3a)); walk.rotation.x = -PI / 2; walk.position.set(cx, 0.016, 0); walk.receiveShadow = true; scene.add(walk);
+  for (let x = x0; x <= x1; x += 1.2) { const pl = mesh(new THREE.BoxGeometry(0.06, 0.02, 4.4), 0x8a5a36, x, 0.02, 0); pl.castShadow = false; }
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(30, 60), new THREE.MeshLambertMaterial({ color: 0x3f8fc8, emissive: 0x0a2a44 })); sea.rotation.x = -PI / 2; sea.position.set(x1 + 15.5, 0.02, 0); scene.add(sea);
+  const o = new THREE.Object3D(), spots = [];
+  for (let x = x0; x <= x1; x += 2.2) { spots.push([x, z0 - 1.2]); spots.push([x, z1 + 1.2]); }
+  for (let z = z0; z <= z1; z += 2.2) spots.push([x0 - 1.2, z]);
+  const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.6, 0), mat(f.wall), spots.length);
+  spots.forEach(([x, z], i) => { o.position.set(x + rand(-0.3, 0.3), rand(0.4, 1.0), z); o.rotation.set(rand(0, 3), rand(0, 3), 0); o.scale.setScalar(rand(0.9, 1.3)); o.updateMatrix(); rocks.setMatrixAt(i, o.matrix); });
+  rocks.castShadow = true; scene.add(rocks);
+  const lh = stationGroup(250.4, -12.4);
+  for (let i = 0; i < 5; i++) mesh(new THREE.CylinderGeometry(0.75 - i * 0.07, 0.8 - i * 0.07, 1.2, 12), i % 2 ? 0xe8433a : 0xffffff, 0, 0.6 + i * 1.2, 0, lh);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff2a0 })); lamp.position.y = 6.5; lh.add(lamp);
+  mesh(new THREE.ConeGeometry(0.7, 0.7, 12), 0x2b3442, 0, 7.2, 0, lh);
+  colliders.push({ x0: 249.5, x1: 251.3, z0: -13.3, z1: -11.5 });
+  for (const z of [-11, 11]) { const pier = mesh(new THREE.BoxGeometry(5, 0.2, 1.4), 0xa86a3a, x1 + 2.6, 0.12, z); const bt = new THREE.Group(); bt.position.set(x1 + 3.6, 0, z + (z < 0 ? 1.6 : -1.6)); scene.add(bt); mesh(new THREE.BoxGeometry(1.0, 0.5, 2.6), 0xffffff, 0, 0.2, 0, bt); mesh(new THREE.BoxGeometry(1.05, 0.12, 2.65), 0x3f6f9f, 0, 0.45, 0, bt); }
+  zoneMarker(f.exit.x, f.exit.z, 'exit', '#ffffff');
+  const e = f.entrance, eg = stationGroup(e.x, e.z - 2);
+  mesh(new THREE.BoxGeometry(0.15, 2.2, 0.15), 0x6b4428, -0.9, 1.1, 0, eg); mesh(new THREE.BoxGeometry(0.15, 2.2, 0.15), 0x6b4428, 0.9, 1.1, 0, eg);
+  mesh(new THREE.BoxGeometry(2.3, 0.6, 0.12), 0x3f6f9f, 0, 2.0, 0, eg);
+  const anc = mesh(new THREE.TorusGeometry(0.2, 0.05, 6, 12), 0xffffff, 0, 2.0, 0.08, eg);
+  colliders.push({ x0: e.x - 1.1, x1: e.x + 1.1, z0: e.z - 2.2, z1: e.z - 1.8 });
+  zoneMarker(e.x, e.z, 'boat', '#7fd8ff');
+  if (!instant) toast('The Harbor District is open! Step on the anchor sign to go there and build its shops.');
+}
+const HSIGN = 0x3f8fc8;
+const fishmkt = new Station({ id: 'fishmkt', x: 230, z: -8.8, inputs: [['*', 230, -5.4]], cashAt: [233.6, -5.4], time: 0.8, fx: 0x5fd0e6,
+  accepts: { fish: () => 16, glowfish: () => 120, pearl: () => 100 }, hint: 'The Fish Market buys fish, glowfish and pearls.',
+  build: g => { hut(g, 0xdff1ff, HSIGN, 2.6, 1.8); mesh(new THREE.BoxGeometry(2.4, 0.1, 0.9), 0x3f6f9f, 0, 1.5, 1.2, g); } });
+const shipyard = new Station({ id: 'shipyard', x: 238, z: -8.8, size: [2.8, 1.8], inputs: [['log', 236.6, -5.4, 3], ['bar', 239.4, -5.4, 2]], cashAt: [242.2, -5.4], time: 8, sell: () => 320, fx: 0xa86a3a, stat: 'boatsBuilt',
+  hint: 'Shipyard: 3 logs and 2 iron bars make a rowboat worth $320.',
+  build: g => { hut(g, 0xc8a070, 0x6b4428, 2.8, 1.8); const hull = mesh(new THREE.BoxGeometry(0.9, 0.45, 2.0), 0xffffff, -1.9, 0.3, 0.2, g); mesh(new THREE.BoxGeometry(0.95, 0.1, 2.05), 0xd84a3a, -1.9, 0.55, 0.2, g); } });
+const bootmk = new Station({ id: 'bootmk', x: 246, z: -8.8, inputs: [['wool', 244.6, -5.4], ['meat', 247.4, -5.4]], cashAt: [249.8, -5.4], time: 4, sell: () => 140, fx: 0x8a5a36, stat: 'bootsMade',
+  hint: 'Boot Maker: yak wool and a hide make warm snow boots worth $140.',
+  build: g => { hut(g, 0xe8d6b0, 0x8a5a36); mesh(new THREE.BoxGeometry(0.35, 0.4, 0.6), 0x6b4428, 0.6, 1.6, 0.9, g); } });
+const cafe = new Station({ id: 'cafe', x: 230, z: 8.8, inputs: [['milk', 228.6, 5.4], ['comb', 231.4, 5.4]], cashAt: [233.6, 5.4], time: 3, sell: () => 80, fx: 0x7a4a2a, stat: 'cocoas',
+  hint: 'Harbor Café: milk and honey make cocoa worth $80 a cup.',
+  build: g => { hut(g, 0xfff0e0, 0xd84a6a, 2.6, 1.8); for (const x of [-1.6, 1.6]) { mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.06, 10), 0xffffff, x, 0.7, -1.4, g); mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 5), 0x2b3442, x, 0.35, -1.4, g); } } });
+const sledworks = new Station({ id: 'sledworks', x: 238, z: 8.8, inputs: [['log', 236.6, 5.4, 2], ['bar', 239.4, 5.4]], cashAt: [242.2, 5.4], time: 5, sell: () => 200, fx: 0xd84a3a, stat: 'sledsMade',
+  hint: 'Sled Works: 2 logs and an iron bar make a sled worth $200.',
+  build: g => { hut(g, 0xd8e4f0, 0xd84a3a); const sl = mesh(new THREE.BoxGeometry(0.7, 0.2, 1.4), 0xd84a3a, 1.6, 0.25, 0.9, g); } });
+const skishop = new Station({ id: 'skishop', x: 246, z: 8.8, inputs: [['log', 244.6, 5.4], ['comb', 247.4, 5.4]], cashAt: [249.8, 5.4], time: 4, sell: () => 150, fx: 0x3f8fc8, stat: 'skisMade',
+  hint: 'Ski Shop: a log and some wax make skis worth $150.',
+  build: g => { hut(g, 0xf0f6ff, 0x3f8fc8); for (const x of [1.4, 1.6]) { const sk = mesh(new THREE.BoxGeometry(0.1, 1.8, 0.05), 0xffcc33, x, 0.9, 0.9, g); sk.rotation.z = 0.1; } } });
+for (const st of [fishmkt, shipyard, bootmk, cafe, sledworks, skishop]) VENDORS.push({ name: padLabel(st.id), pos: st.pos, ok: () => st.built, station: st, about: PAD_INFO[st.id] || st.hint || '',
+  needs: st.accepts ? [{ pile: st.ins[0].pile, types: Object.keys(st.accepts), n: 1 }] : st.ins.map(i => ({ pile: i.pile, type: i.type, n: i.n })), makes: null,
+  pays: st.accepts ? t => st.accepts[t]() : () => st.sell(), payWord: st.accepts ? '' : 'each', cash: () => st.cash });
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -7026,7 +7186,7 @@ function renderCalendar() {
   const day = Math.floor(dayT / CYCLE) + 1;
   let h = '<h4>Calendar</h4><p>What is coming up over the next 12 days.</p>';
   for (let d = day; d < day + 12; d++) {
-    const bits = [bossFor(d) && 'Boss: ' + bossFor(d), eventFor(d) === 'festival' && 'Winter Festival', eventFor(d) === 'siege' && 'Siege night', eventFor(d) === 'lanterns' && 'Lantern Night', eventFor(d) === 'sculpt' && 'Ice Sculpture Contest', d % 4 === 0 && 'Spring thaw', HOLIDAYS[holidayFor(d)] && HOLIDAYS[holidayFor(d)].name].filter(Boolean);
+    const bits = [bossFor(d) && 'Boss: ' + bossFor(d), eventFor(d) === 'festival' && 'Winter Festival', eventFor(d) === 'siege' && 'Siege night', eventFor(d) === 'lanterns' && 'Lantern Parade', eventFor(d) === 'sculpt' && 'Carving Cup', d % 4 === 0 && 'Spring thaw', HOLIDAYS[holidayFor(d)] && HOLIDAYS[holidayFor(d)].name].filter(Boolean);
     h += `<div class="wh"><b>Day ${d}${d === day ? ' (today)' : ''}</b><span class="chip ${bits.length ? 'warn' : 'ok'}">${bits.length ? bits.length + ' event' + (bits.length > 1 ? 's' : '') : 'Quiet'}</span><small>${bits.join(' · ') || 'A normal day.'}</small></div>`;
   }
   menuBody.innerHTML = h;
@@ -7085,6 +7245,7 @@ const PLACES = [
   { name: 'Frost Mine', sub: 'Gold, coal, iron and golems', at: () => mine.start, ok: () => mine.built },
   { name: 'Farm', sub: 'Wheat, carrots, oven and soup', at: () => new V3(16.1, 0, 23.0), ok: () => farm.built },
   { name: 'Aurora Isle', sub: 'Shards, hotel and Apothecary', at: () => isle.start, ok: () => isle.built },
+  { name: 'Harbor District', sub: 'Shipyard, café and fish market', at: () => FAR.harbor.start, ok: () => FAR.harbor.built },
   { name: 'Your Cabin', sub: 'Furnish it for bonuses', at: () => FAR.home.start, ok: () => home.built },
   { name: 'Sky Peak', sub: 'Nests, feathers and the Weather Station', at: () => FAR.peak.start, ok: () => FAR.peak.built },
   { name: 'Frozen Lake', sub: 'Ice fishing and the skating rink', at: () => FAR.lake.start, ok: () => FAR.lake.built },
@@ -7103,7 +7264,7 @@ function renderTravel() {
 }
 
 // warehouse: every building, its stock and whether it's stuck
-const AREA_NAME = { home: 'Your Cabin', main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave', peak: 'Sky Peak', lake: 'Frozen Lake', steam: 'Steam Caves', cove: 'Shipwreck Cove' };
+const AREA_NAME = { harbor: 'Harbor District', home: 'Your Cabin', main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave', peak: 'Sky Peak', lake: 'Frozen Lake', steam: 'Steam Caves', cove: 'Shipwreck Cove' };
 function vendorStatus(v) {
   const st = v.station;
   const missing = v.needs.filter(n => n.pile.n < (n.n || 1)).map(n => n.types ? 'goods' : itemName(n.type, 2));
@@ -7294,7 +7455,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -7331,7 +7492,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
