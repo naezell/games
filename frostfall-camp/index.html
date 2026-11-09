@@ -508,6 +508,12 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'ornament') {
     c.fillStyle = '#e8433a'; c.beginPath(); c.arc(0, 8, 30, 0, 2 * PI); c.fill();
     c.fillStyle = '#ffd23a'; c.fillRect(-8, -32, 16, 12); c.fillRect(-30, 4, 60, 6);
+  } else if (icon === 'obsidian') {
+    c.fillStyle = '#2a1a3a'; c.beginPath(); c.moveTo(0, -46); c.lineTo(26, 0); c.lineTo(0, 46); c.lineTo(-26, 0); c.closePath(); c.fill();
+    c.strokeStyle = '#ff7a2a'; c.lineWidth = 4; c.stroke();
+  } else if (icon === 'blade') {
+    c.fillStyle = '#2a1a3a'; c.beginPath(); c.moveTo(-6, 20); c.lineTo(6, 20); c.lineTo(4, -44); c.lineTo(0, -50); c.lineTo(-4, -44); c.closePath(); c.fill();
+    c.fillStyle = '#ffcc33'; c.fillRect(-20, 18, 40, 7); c.fillStyle = '#8a5a36'; c.fillRect(-4, 25, 8, 20);
   } else if (icon === 'wheat') {
     c.strokeStyle = '#e8c060'; c.lineWidth = 6; for (const x of [-16, 0, 16]) { c.beginPath(); c.moveTo(x, 40); c.lineTo(x * 0.6, -20); c.stroke(); }
     c.fillStyle = '#f0c860'; for (const x of [-16, 0, 16]) { c.beginPath(); c.ellipse(x * 0.6, -30, 8, 16, 0, 0, 2 * PI); c.fill(); }
@@ -610,6 +616,8 @@ const GEO = {
   gem: new THREE.OctahedronGeometry(0.2, 0),
   gold: new THREE.DodecahedronGeometry(0.18, 0),
   berry: new THREE.SphereGeometry(0.13, 8, 6),
+  obsidian: new THREE.OctahedronGeometry(0.19, 0).scale(0.9, 1.4, 0.9),
+  blade: merge([[new THREE.BoxGeometry(0.08, 0.08, 0.5), 0x1d1a24, 0, 0, 0.12], [new THREE.BoxGeometry(0.3, 0.06, 0.05), 0xffcc33, 0, 0, -0.14], [new THREE.CylinderGeometry(0.035, 0.035, 0.18, 6).rotateX(PI / 2), 0x5a3a1e, 0, 0, -0.26]]),
   wheat: merge([[new THREE.CylinderGeometry(0.1, 0.13, 0.42, 8), 0xe8c060, 0, 0, 0], [new THREE.CylinderGeometry(0.135, 0.135, 0.06, 8), 0x9a6a2a, 0, 0, 0], [new THREE.SphereGeometry(0.12, 8, 6), 0xf0d070, 0, 0.24, 0]]),
   carrot: merge([[new THREE.ConeGeometry(0.09, 0.36, 8).rotateX(PI), 0xff8a2a, 0, 0, 0], [new THREE.ConeGeometry(0.07, 0.18, 5), 0x3f8f4a, 0, 0.26, 0]]),
   bread: merge([[new THREE.SphereGeometry(0.2, 10, 8).scale(1.35, 0.6, 0.85), 0xc88a40, 0, 0, 0], ...[-0.12, 0, 0.12].map(x => [new THREE.BoxGeometry(0.03, 0.02, 0.2), 0xe8b870, x, 0.11, 0])]),
@@ -644,7 +652,8 @@ const GEO = {
 const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x5a4000 });
 const shardMat = new THREE.MeshLambertMaterial({ color: 0xd08cff, emissive: 0x4a1d66 });
 const iceMat = new THREE.MeshLambertMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.85, emissive: 0x1d3a55 });
-const H = { wheat: 0.34, carrot: 0.22, bread: 0.24, stew: 0.2, milk: 0.34, cheese: 0.22, toy: 0.4, ornament: 0.34, comb: 0.18, candle: 0.36, chair: 0.48, ring: 0.14, pie: 0.15, berry: 0.24, coal: 0.3, ore: 0.32, bar: 0.16, ice: 0.32, tool: 0.16, jam: 0.32, bloom: 0.18, potion: 0.36, shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
+const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1d1a24, emissive: 0x2a0a3a });
+const H = { obsidian: 0.4, blade: 0.12, wheat: 0.34, carrot: 0.22, bread: 0.24, stew: 0.2, milk: 0.34, cheese: 0.22, toy: 0.4, ornament: 0.34, comb: 0.18, candle: 0.36, chair: 0.48, ring: 0.14, pie: 0.15, berry: 0.24, coal: 0.3, ore: 0.32, bar: 0.16, ice: 0.32, tool: 0.16, jam: 0.32, bloom: 0.18, potion: 0.36, shard: 0.5, gold: 0.3, log: 0.34, meat: 0.17, steak: 0.14, cash: 0.08, gem: 0.34, fish: 0.2, lantern: 0.32, wool: 0.36 };
 const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
 const gemMat = new THREE.MeshLambertMaterial({ color: 0x8fe8f8, emissive: 0x1d5a66 });
 function makeItem(t) {
@@ -653,6 +662,8 @@ function makeItem(t) {
   else if (t === 'meat') m = new THREE.Mesh(GEO.meat, mat(0xe2666f));
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
+  else if (t === 'obsidian') m = new THREE.Mesh(GEO.obsidian, obsidianMat);
+  else if (t === 'blade') m = new THREE.Mesh(GEO.blade, vcMat);
   else if (t === 'gold') m = new THREE.Mesh(GEO.gold, goldMat);
   else if (t === 'shard') m = new THREE.Mesh(GEO.shard, shardMat);
   else if (t === 'berry') m = new THREE.Mesh(GEO.berry, mat(0xd2365a));
@@ -742,6 +753,7 @@ class CashPile extends Pile {
   addValue(v, from) {
     if (boost.cash > 0) v *= 2;
     if (UP.statue) v = Math.round(v * 1.1);
+    if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
     if (legacy.stars) v = Math.round(v * (1 + 0.1 * legacy.stars));
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
@@ -865,7 +877,7 @@ const GOLD_GEO = merge([
   [new THREE.DodecahedronGeometry(0.2, 0), 0xffcc33, 0.05, 1.2, -0.25],
   [new THREE.DodecahedronGeometry(0.15, 0), 0xffe680, -0.45, 0.6, 0.4],
 ]);
-const berries = [], coals = [], irons = [], blooms = [], crops = [];
+const berries = [], coals = [], irons = [], blooms = [], crops = [], obsidians = [];
 const lumpRock = (c1, c2) => merge([
   [new THREE.DodecahedronGeometry(0.8, 0), 0x55607a, 0, 0.45, 0],
   [new THREE.DodecahedronGeometry(0.25, 0), c1, 0.38, 0.85, 0.3], [new THREE.DodecahedronGeometry(0.2, 0), c2, -0.32, 1.0, 0.1],
@@ -874,6 +886,9 @@ const lumpRock = (c1, c2) => merge([
 const GROWS = { berry: 1, wheat: 1, carrot: 1, bloom: 1 };
 const soil = [new THREE.BoxGeometry(1.1, 0.12, 1.1), 0x6b4428, 0, 0.06, 0];
 const NODE_EXTRA = {
+  obsidian: { geo: merge([[new THREE.DodecahedronGeometry(0.8, 0), 0x3a2a2a, 0, 0.4, 0], [new THREE.OctahedronGeometry(0.3, 0).scale(0.8, 2.2, 0.8), 0x1d1a24, 0.1, 1.1, 0],
+    [new THREE.OctahedronGeometry(0.24, 0).scale(0.8, 2, 0.8), 0x2a1a3a, -0.4, 0.85, 0.2], [new THREE.OctahedronGeometry(0.2, 0).scale(0.8, 1.8, 0.8), 0x1d1a24, 0.4, 0.8, -0.3]]),
+    stump: null, item: 'obsidian', hp: 6, regrow: 35, color: 0x3a2a4a, r: 0.75, sound: 'mine' },
   wheat: { geo: merge([soil, ...[[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0, 0]].flatMap(([x, z]) => [[new THREE.CylinderGeometry(0.03, 0.03, 0.9, 4), 0xd8b050, x, 0.55, z], [new THREE.CylinderGeometry(0.07, 0.04, 0.3, 6), 0xf0c860, x, 1.05, z]])]),
     stump: merge([soil, ...[[-0.3, -0.3], [0.3, 0.3], [0.3, -0.3]].map(([x, z]) => [new THREE.ConeGeometry(0.06, 0.25, 4), 0x6ac06a, x, 0.24, z])]), item: 'wheat', hp: 1, regrow: 16, color: 0xf0c860, r: 0.3, sound: 'chop' },
   carrot: { geo: merge([soil, ...[[-0.28, 0], [0.28, 0], [0, 0.3], [0, -0.3]].flatMap(([x, z]) => [[new THREE.ConeGeometry(0.1, 0.42, 5), 0x4aa04a, x, 0.33, z], [new THREE.CylinderGeometry(0.08, 0.08, 0.06, 6), 0xff8a2a, x, 0.14, z]])]),
@@ -899,7 +914,7 @@ const NODE = {
   rock: { geo: ROCK_GEO, stump: RUBBLE_GEO, item: 'gem', hp: 4, regrow: 25, color: 0x7fe3f5, r: 0.7, sound: 'mine' },
 };
 const trees = [], rocks = [];
-Object.assign(NODE, NODE_EXTRA); NODE.coal.stump = NODE.iron.stump = RUBBLE_GEO;
+Object.assign(NODE, NODE_EXTRA); NODE.coal.stump = NODE.iron.stump = NODE.obsidian.stump = RUBBLE_GEO;
 class Tree {
   constructor(x, z, kind = 'tree') {
     this.k = NODE[kind]; this.kind = kind;
@@ -1791,7 +1806,7 @@ function updateTrader(dt) {
 }
 
 // Reindeer sled: ship goods to a faraway town for better prices
-const SHIP_PRICE = { steak: 9, gem: 14, fish: 10, jam: 24, tool: 95, potion: 140, pie: 42, candle: 52, chair: 85, ring: 200, cheese: 70, toy: 115, ornament: 95, bread: 34, stew: 50 };
+const SHIP_PRICE = { steak: 9, gem: 14, fish: 10, jam: 24, tool: 95, potion: 140, pie: 42, candle: 52, chair: 85, ring: 200, cheese: 70, toy: 115, ornament: 95, bread: 34, stew: 50, blade: 380 };
 const depot = { built: false, pos: new V3(9, 0, 15), input: new Pile(6.8, 15, 3, 3, 20, 0.62, 0.62, 0.3), types: [], state: 'load', t: 0, idle: 0, cash: null, load: 0 };
 function unlockDepot(instant) {
   if (depot.built) return;
@@ -1895,6 +1910,17 @@ const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - M
 let mapT = 0;
 function drawMap(dt) {
   mapT -= dt; if (mapT > 0) return; mapT = 0.2;
+  if (inVolcano(player.g.position)) {
+    Object.assign(MAP, { x0: VOLC.x0 - 1, x1: VOLC.x1 + 1, z0: VOLC.z0 - 1, z1: VOLC.z1 + 1 });
+    const c = mapX; c.fillStyle = '#2a1410'; c.fillRect(0, 0, mapCv.width, mapCv.height);
+    const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
+    for (const [x, z, rr] of [[118, -47, 2.2], [124, -40, 1.6], [112, -55, 1.8], [128, -52, 2.0]]) dot(x, z, rr * 3, '#ff6a1a');
+    for (const n of obsidians) if (!n.down) dot(n.pos.x, n.pos.z, 3, '#b08cff');
+    for (const gm of mine.golems) if (gm.fire) dot(gm.pos.x, gm.pos.z, 4, '#ffb03a');
+    dot(volc.exitZone.x, volc.exitZone.z, 4, '#8fe8f8');
+    const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    return;
+  }
   if (inIsle(player.g.position)) {
     Object.assign(MAP, { x0: ISLE.x0 - 2, x1: ISLE.x1 + 2, z0: ISLE.z0 - 2, z1: ISLE.z1 + 2 });
     const c = mapX; c.fillStyle = '#3f8ad0'; c.fillRect(0, 0, mapCv.width, mapCv.height);
@@ -2150,6 +2176,9 @@ const UPGRADES = [
   { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
   { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
   { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
+  { id: 'reindeer', name: 'Riding Reindeer', desc: 'Ride a reindeer and move 60% faster (switch it in the Menu)', costs: [15000] },
+  { id: 'bladep', name: 'Dragonglass Edge', desc: '+$60 for every obsidian blade', costs: [10000, 25000], req: () => store.built && forge.built },
+  { id: 'fsupply', name: 'Forge Supply', desc: 'Sends iron bars from the Smelter to the Lava Forge', costs: [8000], req: () => forge.built && smelter.built },
   { id: 'breadp', name: 'Honey Glaze', desc: '+$6 for every loaf of bread', costs: [1500, 4000], req: () => store.built && oven.built },
   { id: 'stewp', name: 'Secret Spices', desc: '+$9 for every bowl of stew', costs: [2000, 5000], req: () => store.built && soup.built },
   { id: 'ssupply', name: 'Stew Supply', desc: 'Sends raw meat from the grill to the Soup Kitchen', costs: [2500], req: () => soup.built },
@@ -2175,13 +2204,18 @@ const DECOS = [
   { id: 'statue', name: 'Golden Statue', desc: 'A statue of you. +10% on all cash earned', cost: 8000 },
   { id: 'beacon', name: 'Aurora Beacon', desc: 'A crystal pillar that earns $10 every 5s', cost: 25000 },
   { id: 'castle', name: 'Snow Castle', desc: 'The grandest sight in the north', cost: 60000 },
+  { id: 'penguinpet', name: 'Penguin Pal', desc: 'A pet penguin that follows you and carries 6 extra items', cost: 6000 },
+  { id: 'foxpet', name: 'Treasure Fox', desc: 'A pet fox that digs up cash and treasure near you every minute', cost: 9000 },
 ];
 function upgradeCost(u) { return u.costs[U(u.id)]; }
 function applyUpgrade(id, instant) {
   if (id === 'wcap') for (const w of workers) w.c.cap = (w.kind === 'server' ? 8 : 6) + 2 * U('wcap');
   if (id === 'gatehp') for (const g of GATES) if (!g.broken) g.hp = 8 + 6 * U('gatehp');
   if (id === 'sled') depot.input.max = 20 + 10 * U('sled');
-  if (DECOS.some(d => d.id === id)) buildDeco(id, instant);
+  if (id === 'penguinpet') adoptPenguin(instant);
+  else if (id === 'foxpet') adoptFox(instant);
+  else if (id === 'reindeer') buildMount(instant);
+  else if (DECOS.some(d => d.id === id)) buildDeco(id, instant);
 }
 function buyItem(id) {
   const u = UPGRADES.find(x => x.id === id), d = DECOS.find(x => x.id === id);
@@ -2287,7 +2321,9 @@ const decoAnim = [];
 
 // ================= Frost Mine =================
 const MINE = { x0: 99, x1: 133, z0: -15, z1: 15 };
-const inMine = p => p.x > 90 && p.z <= 30;
+const inMine = p => p.x > 90 && p.z > -25 && p.z <= 30;
+const VOLC = { x0: 100, x1: 132, z0: -62, z1: -34 };
+const inVolcano = p => p.x > 90 && p.z <= -25;
 const ISLE = { x0: 100, x1: 132, z0: 40, z1: 68 };
 const inIsle = p => p.x > 90 && p.z > 30;
 const golds = [];
@@ -2334,14 +2370,14 @@ function unlockMine(instant) {
   zoneMarker(mine.exitZone.x, mine.exitZone.z, 'exit', '#8fe8f8');
   for (let i = 0; i < 18; i++) {
     let x, z, tries = 0;
-    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5)));
+    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (x > 127 && z < -8)));
     golds.push(new Tree(x, z, 'gold'));
   }
   mine.wasIn = !instant;
   for (const [list, kind] of [[coals, 'coal'], [irons, 'iron']]) for (let i = 0; i < 8; i++) {
     let x, z, tries = 0;
     const taken = () => golds.concat(coals, irons).some(n => d2(n.pos, { x, z }) < 2.4);
-    do { x = rand(106, 131); z = rand(-12.5, 12.5); tries++; } while (tries < 30 && ((x > 121 && Math.abs(z) < 5.5) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 116.5) < 2 && Math.abs(z - 4.5) < 2) || taken()));
+    do { x = rand(106, 131); z = rand(-12.5, 12.5); tries++; } while (tries < 30 && ((x > 121 && Math.abs(z) < 5.5) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 116.5) < 2 && Math.abs(z - 4.5) < 2) || (x > 127 && z < -8) || taken()));
     list.push(new Tree(x, z, kind));
   }
   if (!instant) { popIn(m); burst(new V3(45, 0, -11), 0xffcc33, 18); toast('The Frost Mine is open! Gold awaits below.'); }
@@ -2372,11 +2408,12 @@ function updateSmith(dt) {
 }
 // Ice golems and the Crystal King
 class Golem {
-  constructor(x, z, king = false) {
+  constructor(x, z, king = false, fire = false) {
+    this.fire = fire;
     this.king = king; const s = king ? 2.2 : 1;
     this.g = new THREE.Group(); this.g.position.set(x, 0, z); scene.add(this.g);
-    this.mat = new THREE.MeshLambertMaterial({ color: king ? 0x8a7ad8 : 0x7c98b8, emissive: 0x000000 });
-    const spike = new THREE.MeshBasicMaterial({ color: king ? 0xd9b3ff : 0x9ff0ff });
+    this.mat = new THREE.MeshLambertMaterial({ color: fire ? 0x4a2a24 : king ? 0x8a7ad8 : 0x7c98b8, emissive: 0x000000 });
+    const spike = new THREE.MeshBasicMaterial({ color: fire ? 0xff7a2a : king ? 0xd9b3ff : 0x9ff0ff });
     mesh(new THREE.BoxGeometry(1.1 * s, 1.1 * s, 0.8 * s), this.mat, 0, 1.25 * s, 0, this.g);
     mesh(new THREE.BoxGeometry(0.6 * s, 0.5 * s, 0.55 * s), this.mat, 0, 2.05 * s, 0.05 * s, this.g);
     for (const ex of [-0.13, 0.13]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.07 * s, 0.04), spike); e.position.set(ex * s, 2.1 * s, 0.33 * s); this.g.add(e); }
@@ -2384,7 +2421,7 @@ class Golem {
     this.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * 0.3 * s, 0.7 * s, 0); this.g.add(l); mesh(new THREE.BoxGeometry(0.38 * s, 0.7 * s, 0.4 * s), this.mat, 0, -0.35 * s, 0, l); return l; });
     for (let i = 0; i < (king ? 7 : 3); i++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.18 * s, 0), spike); c.position.set(rand(-0.4, 0.4) * s, (1.7 + rand(0, 0.3)) * s, -0.45 * s); c.scale.y = 2; this.g.add(c); }
     if (king) for (let k = 0; k < 5; k++) { const a = k / 5 * 2 * PI, c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.35 * s, 4), new THREE.MeshBasicMaterial({ color: 0xffd23a })); c.position.set(Math.cos(a) * 0.22 * s, 2.45 * s, Math.sin(a) * 0.22 * s + 0.05 * s); this.g.add(c); }
-    this.max = king ? 120 : 8; this.hp = this.max; this.reach = king ? 3.6 : 2.0; this.speed = king ? 2.4 : 2.1;
+    this.max = king ? 120 : fire ? 14 : 8; this.hp = this.max; this.reach = king ? 3.6 : 2.0; this.speed = king ? 2.4 : 2.1;
     this.flash = 0; this.spawn = 0; this.cd = 1; this.phase = 0; this.target = null; this.alive = true;
     if (king) {
       const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
@@ -2413,7 +2450,8 @@ class Golem {
       for (let i = 0; i < 8; i++) dropGround('gold', this.pos.clone());
       toast('The Crystal King is defeated! Grab the treasure!'); sfx('buy');
       for (let k = 0; k < 5; k++) setTimeout(() => firework(this.pos.clone()), k * 250);
-    } else { bump('golem'); dropGround('gold', this.pos.clone()); dropGround('gold', this.pos.clone()); dropGround('cash', this.pos.clone()); }
+    } else if (this.fire) { bump('firegolem'); dropGround('obsidian', this.pos.clone()); dropGround('obsidian', this.pos.clone()); dropGround('cash', this.pos.clone()); dropGround('cash', this.pos.clone()); }
+    else { bump('golem'); dropGround('gold', this.pos.clone()); dropGround('gold', this.pos.clone()); dropGround('cash', this.pos.clone()); }
   }
   update(dt) {
     this.spawn = Math.min(1, this.spawn + dt * 1.5); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn)));
@@ -2421,7 +2459,7 @@ class Golem {
     this.cd -= dt;
     const pp = player.g.position, dp = d2(pp, this.pos), home = this.king ? new V3(126, 0, 0) : null;
     let moving = true;
-    if (inMine(pp) && dp < (this.king ? 11 : 6.5) && pp.x > 104.5) {
+    if ((this.fire ? inVolcano(pp) && pp.x > 104.5 : inMine(pp) && pp.x > 104.5) && dp < (this.king ? 11 : 6.5)) {
       moving = !stepToward(this.g, pp, this.speed, dt, this.reach - 0.4);
       if (dp < this.reach + 0.2 && this.cd <= 0) {
         this.cd = this.king ? 1.3 : 1.8;
@@ -2431,7 +2469,7 @@ class Golem {
         dropFromCarrier(player.c, this.king ? 4 : 2); camShake = this.king ? 0.45 : 0.25; sfx('roar');
       }
     } else {
-      if (!this.target) this.target = home ? home.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))) : new V3(rand(108, 121), 0, rand(-12, 12));
+      if (!this.target) this.target = home ? home.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))) : this.fire ? new V3(rand(112, 130), 0, rand(-58, -38)) : new V3(rand(108, 121), 0, rand(-12, 12));
       if (stepToward(this.g, this.target, this.speed * 0.5, dt, 0.2)) this.target = null;
     }
     this.arms.forEach(a => { a.rotation.x += (0 - a.rotation.x) * Math.min(1, dt * 5); });
@@ -2443,17 +2481,144 @@ function updateMine(dt) {
   if (!mine.built) return;
   for (const gn of golds) gn.update(dt);
   for (const gm of mine.golems.slice()) gm.update(dt);
-  const normal = mine.golems.filter(g => !g.king).length;
+  const normal = mine.golems.filter(g => !g.king && !g.fire).length;
   mine.golemT -= dt;
   if (mine.golemT <= 0 && normal < 4) { mine.golemT = 12; mine.golems.push(new Golem(rand(110, 120), rand(-11, 11))); }
   if (!mine.king) { mine.kingT -= dt; if (mine.kingT <= 0) { mine.king = new Golem(126, 0, true); mine.golems.push(mine.king); if (inMine(player.g.position)) toast('The Crystal King has risen!'); } }
 }
 function applyMineEnv() {
-  const m = inMine(player.g.position); snow.visible = !m && springK < 0.5;
+  const m = inMine(player.g.position), v = inVolcano(player.g.position); snow.visible = !m && !v && springK < 0.5;
+  if (v) {
+    scene.background.setHex(0x1e0d0a); scene.fog.color.setHex(0x1e0d0a); scene.fog.near = 16; scene.fog.far = 46;
+    hemi.intensity = 0.6; hemi.color.setHex(0xffb08a); sun.intensity = 0.25; return;
+  }
   if (!m) return;
   scene.background.setHex(0x121826); scene.fog.color.setHex(0x121826); scene.fog.near = 14; scene.fog.far = 42;
   hemi.intensity = 0.55; hemi.color.setHex(0xa8bcff); sun.intensity = 0.2;
 }
+
+// ================= Ember Volcano =================
+const volc = { built: false, entrance: new V3(130.6, 0, -11.6), exitZone: new V3(102.2, 0, -48), start: new V3(104.6, 0, -48), wasIn: false, fireT: 3, lava: [] };
+function unlockVolcano(instant) {
+  if (volc.built) return;
+  volc.built = true;
+  // glowing tunnel at the back of the Frost Mine
+  const tg = stationGroup(131.8, -11.6);
+  mesh(new THREE.DodecahedronGeometry(1.4, 0), 0x3a2a2a, 0, 1.0, -1.4, tg); mesh(new THREE.DodecahedronGeometry(1.4, 0), 0x3a2a2a, 0, 1.0, 1.4, tg);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.0, 14), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); hole.rotation.y = -PI / 2; hole.position.set(-0.6, 1.0, 0); tg.add(hole);
+  zoneMarker(volc.entrance.x, volc.entrance.z, 'fire', '#ff9a3c');
+  // the volcano cavern
+  const cx = (VOLC.x0 + VOLC.x1) / 2, cz = (VOLC.z0 + VOLC.z1) / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(VOLC.x1 - VOLC.x0 + 8, VOLC.z1 - VOLC.z0 + 8), mat(0x3a2a28)); floor.rotation.x = -PI / 2; floor.position.set(cx, 0.012, cz); floor.receiveShadow = true; scene.add(floor);
+  const spots = [];
+  for (let x = VOLC.x0; x <= VOLC.x1; x += 2.2) { spots.push([x, VOLC.z0 - 1]); spots.push([x, VOLC.z1 + 1]); }
+  for (let z = VOLC.z0; z <= VOLC.z1; z += 2.2) { spots.push([VOLC.x0 - 1, z]); spots.push([VOLC.x1 + 1, z]); }
+  const walls = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.8, 0), mat(0x4a2a24), spots.length), o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x + rand(-0.4, 0.4), rand(0.6, 1.4), z + rand(-0.4, 0.4)); o.rotation.set(rand(0, 3), rand(0, 3), 0); o.scale.setScalar(rand(0.9, 1.5)); o.updateMatrix(); walls.setMatrixAt(i, o.matrix); });
+  walls.castShadow = true; scene.add(walls);
+  const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a }); volc.lavaMat = lavaMat;
+  for (const [x, z, rr] of [[118, -47, 2.2], [124, -40, 1.6], [112, -55, 1.8], [128, -52, 2.0]]) {
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(rr, 20), lavaMat); pool.rotation.x = -PI / 2; pool.position.set(x, 0.03, z); scene.add(pool);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.18, 6, 24), mat(0x2a1a18)); rim.rotation.x = PI / 2; rim.position.set(x, 0.06, z); scene.add(rim);
+    circles.push({ x, z, r: rr, on: () => true });
+  }
+  const cone = mesh(new THREE.ConeGeometry(5, 6, 10), 0x4a2a24, 126, 3, -59); cone.castShadow = false;
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.2, 12), lavaMat); top.position.set(126, 5.95, -59); scene.add(top);
+  for (const [x, z] of [[110, -40], [122, -50]]) { const L = new THREE.PointLight(0xff7a2a, 1.4, 18, 1.5); L.position.set(x, 3, z); scene.add(L); }
+  zoneMarker(volc.exitZone.x, volc.exitZone.z, 'exit', '#ff9a3c');
+  for (let i = 0; i < 12; i++) {
+    let x, z, tries = 0;
+    do { x = rand(106, 130); z = rand(-60, -36); tries++; } while (tries < 30 && ((x < 115 && z > -44) || (x < 107 && Math.abs(z + 48) < 3) || volc.lavaNear(x, z) || obsidians.some(n => d2(n.pos, { x, z }) < 2.6)));
+    obsidians.push(new Tree(x, z, 'obsidian'));
+  }
+  volc.wasIn = !instant;
+  if (!instant) { popIn(tg); burst(volc.entrance, 0xff7a2a, 18); toast('A lava tunnel opens to the Ember Volcano!'); }
+}
+volc.lavaNear = (x, z) => [[118, -47, 2.2], [124, -40, 1.6], [112, -55, 1.8], [128, -52, 2.0]].some(([lx, lz, r]) => Math.hypot(x - lx, z - lz) < r + 1.4);
+function updateVolcano(dt) {
+  if (!volc.built) return;
+  volc.lavaMat.color.setHSL(0.06, 1, 0.5 + Math.sin(performance.now() / 400) * 0.06);
+  for (const n of obsidians) n.update(dt);
+  const fires = mine.golems.filter(g => g.fire).length;
+  volc.fireT -= dt;
+  if (volc.fireT <= 0 && fires < 5) { volc.fireT = 10; mine.golems.push(new Golem(rand(114, 130), rand(-58, -38), false, true)); }
+}
+
+// ================= Pets & riding reindeer =================
+const pets = { penguin: null, fox: null, foxT: 40 };
+function petFollow(g, side, dt, speed) {
+  const pp = player.g.position;
+  if (d2(g.position, pp) > 20) g.position.set(pp.x + side, 0, pp.z - 1);
+  const back = new V3(Math.sin(player.g.rotation.y), 0, Math.cos(player.g.rotation.y)).multiplyScalar(-1.5).add(new V3(side, 0, 0));
+  return !stepToward(g, pp.clone().add(back), Math.max(speed, d2(g.position, pp) * 2), dt, 0.35);
+}
+function adoptPenguin(instant) {
+  if (pets.penguin) return;
+  const pg = new Penguin(player.g.position.x - 1, player.g.position.z - 1); pg.g.position.y = 0;
+  const sack = mesh(new THREE.SphereGeometry(0.22, 8, 6), 0xb8733d, 0, 0.55, -0.25, pg.g); sack.scale.set(1, 1.2, 0.8);
+  pets.penguin = pg;
+  if (!instant) { burst(pg.g.position, 0x1d2433, 10); toast('Penguin Pal joins you! You can carry 6 more items.'); }
+}
+function adoptFox(instant) {
+  if (pets.fox) return;
+  const g = new THREE.Group(); scene.add(g);
+  const fur = 0xe0702a;
+  mesh(new THREE.BoxGeometry(0.36, 0.34, 0.75), fur, 0, 0.45, 0, g); mesh(new THREE.BoxGeometry(0.34, 0.32, 0.34), fur, 0, 0.66, 0.45, g);
+  mesh(new THREE.BoxGeometry(0.2, 0.14, 0.2), 0xffffff, 0, 0.58, 0.66, g); mesh(new THREE.BoxGeometry(0.07, 0.06, 0.04), 0x1a1a1a, 0, 0.62, 0.77, g);
+  for (const x of [-0.11, 0.11]) mesh(new THREE.ConeGeometry(0.08, 0.2, 4), fur, x, 0.9, 0.42, g);
+  const tail = mesh(new THREE.ConeGeometry(0.14, 0.55, 6), fur, 0, 0.55, -0.55, g); tail.rotation.x = -1.9;
+  mesh(new THREE.ConeGeometry(0.07, 0.15, 6), 0xffffff, 0, 0.47, -0.82, g).rotation.x = -1.9;
+  const legs = [[-0.11, 0.25], [0.11, 0.25], [-0.11, -0.25], [0.11, -0.25]].map(([x, z]) => { const p = new THREE.Group(); p.position.set(x, 0.3, z); g.add(p); mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), 0x3a2a1a, 0, -0.15, 0, p); return p; });
+  g.position.copy(player.g.position).add(new V3(1.2, 0, -1));
+  pets.fox = { g, legs, tail, phase: 0, dig: 0 };
+  if (!instant) { burst(g.position, fur, 10); toast('Treasure Fox joins you! It digs up treasure every minute.'); }
+}
+function updatePets(dt) {
+  player.c.cap = W.cap + (pets.penguin ? 6 : 0);
+  if (pets.penguin) { const moving = petFollow(pets.penguin.g, -0.8, dt, W.speed * 1.1); pets.penguin.phase += dt * (moving ? 12 : 2); pets.penguin.g.rotation.z = moving ? Math.sin(pets.penguin.phase) * 0.15 : 0; }
+  const f = pets.fox; if (!f) return;
+  let moving = false;
+  if (f.dig > 0) { f.dig -= dt; f.g.rotation.x = 0.35; f.legs[0].rotation.x = f.legs[1].rotation.x = Math.sin(performance.now() / 50) * 0.9; if (f.dig <= 0) foxTreasure(); }
+  else { f.g.rotation.x = 0; moving = petFollow(f.g, 0.9, dt, W.speed * 1.15); }
+  f.phase += dt * 14; if (f.dig <= 0) f.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(f.phase + (i % 2 ? PI : 0)) * 0.8 : 0; });
+  f.tail.rotation.z = Math.sin(performance.now() / 200) * 0.3;
+  pets.foxT -= dt; if (pets.foxT <= 0 && f.dig <= 0) { pets.foxT = 60; f.dig = 1.6; burst(f.g.position, 0xf3f7fb, 8); }
+}
+function foxTreasure() {
+  const at = pets.fox.g.position.clone(); burst(at, 0xffd23a, 10); sfx('coin');
+  for (let i = 0; i < randi(2, 4); i++) dropGround('cash', at.clone());
+  const r2 = Math.random();
+  if (r2 < 0.3 && smith.built) dropGround('gold', at.clone()); else if (r2 < 0.5) dropGround('gem', at.clone());
+  bump('foxdig'); toast('Your fox dug up treasure!');
+}
+const mount = { built: false, phase: 0 };
+W.ride = true;
+function buildMount(instant) {
+  if (mount.built) return;
+  mount.built = true;
+  const g = new THREE.Group(); mount.g = g; player.g.add(g); g.position.y = -0.72;
+  const fur = 0x8a5a36;
+  mesh(new THREE.BoxGeometry(0.6, 0.6, 1.4), fur, 0, 0.95, 0, g); mesh(new THREE.BoxGeometry(0.42, 0.42, 0.55), fur, 0, 1.45, 0.8, g);
+  mesh(new THREE.SphereGeometry(0.09, 8, 6), 0xe8433a, 0, 1.38, 1.1, g); mesh(new THREE.BoxGeometry(0.62, 0.08, 0.6), 0xd84a3a, 0, 1.27, -0.1, g);
+  for (const s of [-1, 1]) { mesh(new THREE.BoxGeometry(0.05, 0.45, 0.05), 0xe8d6b0, s * 0.16, 1.85, 0.72, g); mesh(new THREE.BoxGeometry(0.25, 0.05, 0.05), 0xe8d6b0, s * 0.26, 1.95, 0.72, g); }
+  mount.legs = [[-0.2, 0.5], [0.2, 0.5], [-0.2, -0.5], [0.2, -0.5]].map(([x, z]) => { const p = new THREE.Group(); p.position.set(x, 0.68, z); g.add(p); mesh(new THREE.BoxGeometry(0.13, 0.68, 0.13), 0x6b4428, 0, -0.34, 0, p); return p; });
+  rideBtn.hidden = false; showRide();
+  if (!instant) { burst(player.g.position, fur, 12); toast('Hop on! Your reindeer makes you 60% faster.'); }
+}
+const riding = () => mount.built && W.ride;
+function updateMount(dt, moving) {
+  if (!mount.built) return;
+  mount.g.visible = W.ride;
+  player.g.position.y = W.ride ? 0.72 : 0;
+  player.p.legL.visible = player.p.legR.visible = !W.ride;
+  if (!W.ride) return;
+  if (moving) mount.phase += dt * 13;
+  mount.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(mount.phase + (i % 2 ? PI : 0)) * 0.7 : 0; });
+}
+const rideBtn = document.createElement('button'); rideBtn.type = 'button'; rideBtn.id = 'ridebtn'; rideBtn.hidden = true;
+const showRide = () => { rideBtn.textContent = W.ride ? 'Riding reindeer' : 'Walking'; rideBtn.classList.toggle('on', W.ride); };
+rideBtn.onclick = () => { W.ride = !W.ride; showRide(); save(); };
+document.querySelector('#menu .mgrid').appendChild(rideBtn);
 
 // ================= Crafting stations (generic) =================
 class TypedPile extends Pile {
@@ -2507,7 +2672,7 @@ class Station {
     for (const i of this.ins) for (let k = 0; k < i.n; k++) { const m = i.pile.take(); fly(m, m.position.clone(), () => top, 0.25, () => scene.remove(m)); }
   }
 }
-const ICON_OF = { wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
+const ICON_OF = { obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 const hut = (g, wall, roof, w = 2.2, d = 1.6) => {
   mesh(new THREE.BoxGeometry(w, 1.4, d), wall, 0, 0.7, 0, g);
   const rf = mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.6, 1.0, 4), roof, 0, 1.9, 0, g); rf.rotation.y = PI / 4; rf.scale.z = d / w;
@@ -2534,7 +2699,7 @@ const store = new Station({ id: 'store', x: 0, z: 30.4, size: [3.2, 1.8], inputs
   accepts: { jam: () => 18 + 4 * U('jamp'), tool: () => 75 + 20 * U('toolp'), potion: () => 110 + 30 * U('potionp'),
     pie: () => 32 + 8 * U('piep'), candle: () => 40 + 10 * U('candlep'), chair: () => 65 + 15 * U('chairp'), ring: () => 160 + 40 * U('ringp'),
     cheese: () => 55 + 12 * U('cheesep'), toy: () => 90 + 20 * U('toyp'), ornament: () => 75 + 18 * U('glassp'),
-    bread: () => 26 + 6 * U('breadp'), stew: () => 38 + 9 * U('stewp') },
+    bread: () => 26 + 6 * U('breadp'), stew: () => 38 + 9 * U('stewp'), blade: () => 300 + 60 * U('bladep') },
   hint: 'The General Store buys jam, tools, potions, pies, candles, chairs and rings.',
   build: (g) => { hut(g, 0xf2e6c8, 0x2f8a5a, 3.2, 1.8); for (let i = 0; i < 8; i++) mesh(new THREE.BoxGeometry(0.4, 0.08, 0.7), i % 2 ? 0xffffff : 0x2f8a5a, -1.4 + i * 0.4, 1.5, 1.2, g); } });
 const apoth = new Station({ id: 'apoth', x: 128, z: 65, inputs: [['bloom', 124.8, 66.0], ['shard', 124.8, 63.6]], out: ['potion', 130.2, 62.6], time: 2.4, fx: 0x5ff0d0,
@@ -2602,6 +2767,11 @@ const oven = new Station({ id: 'oven', x: 24.8, z: 17.6, inputs: [['wheat', 22.6
   hint: 'Two bundles of wheat bake one loaf of bread.',
   build: (g, st) => { mesh(new THREE.SphereGeometry(1.0, 12, 8, 0, 2 * PI, 0, PI / 2), 0xc8a080, 0, 0, 0, g); mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.9, 8), 0x8d97a6, 0.4, 1.1, -0.3, g);
     st.glow = new THREE.Mesh(new THREE.CircleGeometry(0.35, 12, 0, PI), new THREE.MeshBasicMaterial({ color: 0xff9a3c })); st.glow.position.set(0, 0.02, 0.98); g.add(st.glow); } });
+const forge = new Station({ id: 'forge', x: 110, z: -40.5, inputs: [['obsidian', 107.4, -41.7, 2], ['bar', 107.4, -39.2]], out: ['blade', 112.6, -40.5], time: 3.0, fx: 0xff7a2a,
+  hint: 'Two obsidian + an iron bar forge an obsidian blade, the priciest thing in the store!',
+  build: (g, st) => { mesh(new THREE.BoxGeometry(2.2, 1.0, 1.6), 0x2a1a18, 0, 0.5, 0, g); mesh(new THREE.BoxGeometry(0.8, 0.3, 0.45), 0x1d1a24, 0, 1.15, 0, g);
+    st.glow = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 1.2), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); st.glow.position.y = 1.02; g.add(st.glow); },
+  anim: (dt, st) => { st.glow.material.color.setHSL(0.06, 1, 0.45 + Math.sin(performance.now() / 150) * 0.08); } });
 const soup = new Station({ id: 'soup', x: 24.8, z: 21.8, inputs: [['carrot', 22.6, 20.6], ['meat', 22.6, 22.9]], out: ['stew', 24.8, 24.4], time: 2.2, fx: 0xff8a2a,
   hint: 'A carrot and raw meat simmer into a hearty stew.',
   build: (g, st) => { hut(g, 0xe8d8b8, 0x9a5a2a); st.pot = mesh(new THREE.CylinderGeometry(0.35, 0.28, 0.4, 12), 0x2b3442, 1.4, 0.25, 0.9, g); } });
@@ -2732,6 +2902,7 @@ function updateCarts(dt) {
     if (smelter.built) move(smelter.ins[1].pile, glass.ins[1].pile, 'coal');
   }
   if (U('ssupply') && soup.built) move(grill.input, soup.ins[1].pile, 'meat');
+  if (U('fsupply') && forge.built && smelter.built) move(smelter.outPile, forge.ins[1].pile, 'bar');
   if (U('psupply') && bakery.built) {
     move(grill.input, bakery.ins[0].pile, 'meat');
     if (kitchen.built) for (let i = 0; i < 4 && kitchen.ins[0].pile.n > 4 && bakery.ins[1].pile.free() > 0; i++) { scene.remove(kitchen.ins[0].pile.take()); bakery.ins[1].pile.receive(makeItem('berry'), bakery.ins[1].pile.center.clone().add(new V3(0, 3, 0))); }
@@ -2753,6 +2924,7 @@ const JOBS = {
   herbalist: { want: () => { const [b, s] = apoth.ins.map(i => i.pile.n + i.pile.pending); return b <= s ? 'bloom' : 'shard'; }, nodes: t => t === 'bloom' ? blooms : isle.shards, dst: t => t === 'bloom' ? apoth.ins[0].pile : apoth.ins[1].pile },
   carpenter: { want: () => 'log', nodes: () => trees.filter(t => t.pos.x < RIVER.x0), dst: () => furniture.ins[0].pile },
   beekeeper: { pickup: true, srcs: () => (beeyard.built && beeyard.outPile.n > 0 ? [[beeyard.outPile, 'comb']] : []), dst: () => chandler.ins[0].pile, idle: new V3(18.5, 0, 26.2) },
+  obsminer: { want: () => 'obsidian', nodes: () => obsidians, dst: () => forge.ins[0].pile },
   farmer: { want: () => { const w = oven.ins[0].pile, cr = soup.ins[0].pile; if (!soup.built) return 'wheat'; if (!oven.built) return 'carrot'; return w.n + w.pending <= (cr.n + cr.pending) * 2 ? 'wheat' : 'carrot'; },
     nodes: t => crops.filter(n => n.kind === t), dst: t => t === 'wheat' ? oven.ins[0].pile : soup.ins[0].pile },
   milkmaid: { pickup: true, srcs: () => (barn.built && barn.outPile.n > 0 ? [[barn.outPile, 'milk']] : []), dst: () => creamery.ins[0].pile, idle: new V3(44, 0, 10) },
@@ -3081,6 +3253,11 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['volcano', 'Into the Fire', 'Enter the Ember Volcano', () => stat('volcano') >= 1],
+  ['blade10', 'Bladesmith', 'Forge 10 obsidian blades', () => stat('blade') >= 10],
+  ['fire25', 'Firefighter', 'Smash 25 fire golems', () => stat('firegolem') >= 25],
+  ['siege', 'Hold the Line', 'Survive a siege night', () => stat('siege') >= 1],
+  ['ride', 'Giddy Up', 'Ride your reindeer', () => !!UP.reindeer],
   ['farm', 'Green Thumb', 'Harvest 100 crops', () => stat('wheat') + stat('carrot') >= 100],
   ['orders10', 'Special Delivery', 'Fill 10 villager orders', () => stat('orders') >= 10],
   ['orders50', 'Town Favorite', 'Fill 50 villager orders', () => stat('orders') >= 50],
@@ -3134,13 +3311,13 @@ function renderLegacy() {
 
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const WCOL = { obsminer: 0x2a1a3a, farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
 const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
-    this.p = makePerson(WCOL[kind] || 0x8a5a36, kind === 'lumber' || kind === 'miner' || kind === 'crafter' || kind === 'digger' || kind === 'sharder' || kind === 'picker' || kind === 'smelterhand' || kind === 'herbalist' || kind === 'carpenter' || kind === 'farmer' ? 'axe' : kind === 'hunter' ? 'spear' : null, kind === 'digger' ? 0.75 : 1);
+    this.p = makePerson(WCOL[kind] || 0x8a5a36, kind === 'lumber' || kind === 'miner' || kind === 'crafter' || kind === 'digger' || kind === 'sharder' || kind === 'picker' || kind === 'smelterhand' || kind === 'herbalist' || kind === 'carpenter' || kind === 'farmer' || kind === 'obsminer' ? 'axe' : kind === 'hunter' ? 'spear' : null, kind === 'digger' ? 0.75 : 1);
     this.g = this.p.group; this.g.position.set(x, 0, z);
     this.c = new Carrier(this.g, (kind === 'server' ? 8 : 6) + 2 * U('wcap'));
     this.state = 'gather'; this.t = 0; this.idle = 0; this.tree = null;
@@ -3267,6 +3444,9 @@ const PADS = [
   { id: 'milkmaid', label: 'Hire Milker', icon: 'person', costs: [2500], x: 45, z: 15.6, req: () => creamery.built, apply: () => new Worker('milkmaid', 45, 15.6) },
   { id: 'toyshop', label: 'Toy Workshop', icon: 'toy', costs: [4000], x: 44.2, z: 13.6, req: () => ridge.unlocked && pen.level > 0, apply: (l, i) => toyshop.unlock(i) },
   { id: 'glass', label: 'Glassblower', icon: 'ornament', costs: [4500], x: 17, z: 12.6, req: () => icesaw.built, apply: (l, i) => glass.unlock(i) },
+  { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
+  { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
+  { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
   { id: 'farm', label: 'Farm Field', icon: 'wheat', costs: [2500], x: 16.1, z: 19.2, req: () => town.built, apply: unlockFarm },
   { id: 'oven', label: 'Bread Oven', icon: 'bread', costs: [3000], x: 24.8, z: 17.6, req: () => farm.built, apply: (l, i) => oven.unlock(i) },
   { id: 'soup', label: 'Soup Kitchen', icon: 'stew', costs: [3500], x: 24.8, z: 21.8, req: () => farm.built, apply: (l, i) => soup.unlock(i) },
@@ -3548,7 +3728,7 @@ function collide(pos, r) {
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
     if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
   }
-  const B = inIsle(pos) ? ISLE : pos.x > 90 ? MINE : null;
+  const B = inIsle(pos) ? ISLE : inVolcano(pos) ? VOLC : pos.x > 90 ? MINE : null;
   if (!B) { clampToLand(pos, 0.6); return; }
   pos.x = clamp(pos.x, B.x0 + 0.6, B.x1 - 0.6); pos.z = clamp(pos.z, B.z0 + 0.6, B.z1 - 0.6);
 }
@@ -3599,6 +3779,13 @@ function playerInteract() {
   for (const [pile, type, ok] of [[hotel.input, 'lantern', hotel.built], [exch.input, 'shard', exch.built]]) {
     if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
+  // lava tunnel between the mine and the volcano
+  if (volc.built) {
+    const atE = inZone(pos, volc.entrance.x, volc.entrance.z, 1.0), atX = inZone(pos, volc.exitZone.x, volc.exitZone.z, 1.0);
+    if (atE && !volc.wasIn) { teleport(volc.start); bump('volcano'); toast('The Ember Volcano. Mind the lava and the fire golems!'); return; }
+    if (atX && !volc.wasIn) { teleport(volc.entrance.clone().add(new V3(-2.4, 0, 0))); return; }
+    volc.wasIn = atE || atX;
+  }
   // frost mine entrance / exit
   if (mine.built) {
     const atEnt = inZone(pos, mine.entrance.x, mine.entrance.z, 1.0), atExit = inZone(pos, mine.exitZone.x, mine.exitZone.z, 1.0);
@@ -3630,7 +3817,7 @@ function playerInteract() {
   }
   // sled depot takes steaks, gems and fish
   if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
-    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion') || c.take('pie') || c.take('candle') || c.take('chair') || c.take('ring') || c.take('cheese') || c.take('toy') || c.take('ornament') || c.take('bread') || c.take('stew');
+    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion') || c.take('pie') || c.take('candle') || c.take('chair') || c.take('ring') || c.take('cheese') || c.take('toy') || c.take('ornament') || c.take('bread') || c.take('stew') || c.take('blade');
     if (it) { depotReceive(it.type, it); sfx('drop'); return; }
   }
   // villager order board
@@ -3671,7 +3858,7 @@ function updatePlayer(dt) {
   const pos = player.g.position;
   if (moving) {
     dir.normalize();
-    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK));
+    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK) * (riding() ? 1.6 : 1));
     player.g.rotation.y = lerpAng(player.g.rotation.y, Math.atan2(dir.x, dir.z), 0.3);
     collide(pos, 0.38);
   }
@@ -3689,7 +3876,7 @@ function updatePlayer(dt) {
       player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
-      const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms).filter(t => !t.down), pos);
+      const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms, crops, obsidians).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
         player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
@@ -3854,7 +4041,7 @@ class Wolf {
       } else { arrived = navStep(this.g, target, 3.3, dt, 0.8, g => !gatesBlocking() || g.broken); moving = !arrived; }
       if (arrived && pick) {
         const m = pick[0].take();
-        if (m) { m.position.set(0, 0.78, 1.25); m.rotation.set(0, 0, m.rotation.z); this.g.add(m); this.carry = m; this.carryType = pick[1]; this.state = 'flee'; }
+        if (m) { m.position.set(0, 0.78, 1.25); m.rotation.set(0, 0, m.rotation.z); this.g.add(m); this.carry = m; this.carryType = pick[1]; this.state = 'flee'; if (siege.active) siege.stolen++; }
       }
     } else if (navStep(this.g, this.home, 4.2, dt, 0.5)) { this.remove(); return; }
     if (moving) this.phase += dt * 14;
@@ -3877,6 +4064,9 @@ function updateBossCal() {
   if (today) t = today === 'Wolf Alpha' ? 'Tonight: Wolf Alpha' : 'Today: ' + today;
   else { let d = day + 1; while (!bossFor(d)) d++; t = `Next boss: ${bossFor(d)} (day ${d})`; }
   if (isSpring()) t = 'Spring thaw · ' + t;
+  const ev = eventFor(day);
+  if (ev === 'festival') t = 'Winter Festival (+25%) · ' + t;
+  else if (ev === 'siege') t = 'Siege night tonight · ' + t;
   if (t !== bossText) { bossText = t; bossEl.textContent = t; }
 }
 function spawnWolf(alpha = false) {
@@ -3884,7 +4074,15 @@ function spawnWolf(alpha = false) {
   const p = side === 0 ? [-24, rand(-20, 18)] : side === 1 ? [rand(-20, 12), -28] : [rand(-20, -3), 21];
   new Wolf(p[0], p[1], alpha);
 }
-const maxWolves = () => 2 + Math.min(4, Math.floor(dayT / CYCLE));
+const maxWolves = () => (2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1);
+function eventFor(day) { return day % 10 === 0 ? 'siege' : day % 8 === 0 ? 'festival' : null; }
+const siege = { active: false, stolen: 0 };
+let festT = 0;
+function updateFestival(dt) {
+  if (eventFor(Math.floor(dayT / CYCLE) + 1) !== 'festival' || isNight() || regionOf(player.g.position) !== 'main') return;
+  festT -= dt; if (festT > 0) return; festT = rand(3, 6);
+  firework(new V3(rand(-8, 8), 0, rand(-4, 6)));
+}
 function updateDayNight(dt) {
   dayT += dt;
   const night = isNight();
@@ -3895,11 +4093,19 @@ function updateDayNight(dt) {
   grillGlow.intensity = 1.9 * nightK; lantern.intensity = 1.4 * nightK;
   if (night && !wasNight) {
     sfx('howl'); wolfTimer = 2;
+    if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'siege') { siege.active = true; siege.stolen = 0; setTimeout(() => toast('Siege night! Twice the wolves. Keep your food safe until morning.'), 4200); }
     if (bossFor(Math.floor(dayT / CYCLE) + 1) === 'Wolf Alpha' && !wolves.some(w => w.alpha)) { spawnWolf(true); toast('The Wolf Alpha leads tonight\'s pack!'); }
     else toast(gates.built ? 'Night falls. Gates closed. Wolves are coming!' : 'Night falls. Wolves are coming for your food!');
   }
   if (!night && wasNight) {
     repairGates(); newQuests(true);
+    if (siege.active) {
+      siege.active = false;
+      const day = Math.floor(dayT / CYCLE), reward = Math.max(200, Math.round((1500 + day * 60) * Math.max(0.2, 1 - siege.stolen * 0.1) / 10) * 10);
+      W.cash += reward; setCash(); bump('siege'); save();
+      setTimeout(() => { toast(`You held the camp! Siege reward: $${fmt(reward)}${siege.stolen ? ` (wolves stole ${siege.stolen})` : ''}`); for (let k = 0; k < 4; k++) setTimeout(() => firework(player.g.position.clone()), k * 250); }, 6000);
+    }
+    if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') setTimeout(() => toast('Winter Festival! Everything earns 25% more today.'), 8000);
     if (isSpring()) setTimeout(() => toast('Spring thaw! Crops and berries grow twice as fast, and the boat catches more.'), 4500);
     const dayN = Math.floor(dayT / CYCLE) + 1;
     if (dayN >= 2 && dayN % 2 === 0) setTimeout(traderArrive, 9000);
@@ -3909,7 +4115,7 @@ function updateDayNight(dt) {
     else { toast('Morning! The wolves ran off.'); sfx('dawn'); }
   }
   wasNight = night;
-  if (night) { wolfTimer -= dt; if (wolfTimer <= 0 && wolves.length < maxWolves()) { spawnWolf(); wolfTimer = 6; } }
+  if (night) { wolfTimer -= dt; if (wolfTimer <= 0 && wolves.length < maxWolves()) { spawnWolf(); wolfTimer = siege.active ? 3 : 6; } }
   const ph = dayT % CYCLE;
   clockEl.classList.toggle('night', night);
   daynEl.textContent = (night ? 'Night ' : 'Day ') + (Math.floor(dayT / CYCLE) + 1);
@@ -3979,7 +4185,7 @@ const ITEM_NAME = { meat: ['raw meat', 'raw meat'], steak: ['steak', 'steaks'], 
   bloom: ['snowbloom', 'snowblooms'], potion: ['potion', 'potions'], comb: ['honeycomb', 'honeycombs'], candle: ['candle', 'candles'],
   chair: ['chair', 'chairs'], ring: ['ring', 'rings'], pie: ['pie', 'pies'], milk: ['milk', 'milk'], cheese: ['cheese', 'cheeses'],
   toy: ['toy bear', 'toy bears'], ornament: ['ornament', 'ornaments'], wheat: ['wheat', 'wheat'], carrot: ['carrot', 'carrots'],
-  bread: ['loaf of bread', 'loaves of bread'], stew: ['bowl of stew', 'bowls of stew'] };
+  bread: ['loaf of bread', 'loaves of bread'], stew: ['bowl of stew', 'bowls of stew'], obsidian: ['obsidian', 'obsidian'], blade: ['obsidian blade', 'obsidian blades'] };
 const itemName = (t, n = 1) => (ITEM_NAME[t] || [t, t + 's'])[n === 1 ? 0 : 1];
 const capFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
 const iconOfItem = t => ICON_OF[t] || t;
@@ -3993,7 +4199,7 @@ function iconImg(icon) {
   }
   return `<img class="ico" alt="" src="${iconImgCache[icon]}">`;
 }
-const regionOf = p => (inIsle(p) ? 'isle' : p.x > 90 ? 'mine' : 'main');
+const regionOf = p => (inIsle(p) ? 'isle' : inVolcano(p) ? 'volcano' : p.x > 90 ? 'mine' : 'main');
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
@@ -4177,7 +4383,9 @@ function findDelivery() {
   if (best || full) return best || full;
   if (!elsewhere) return null;
   // the place that takes it is in another area: point to the way there
-  if (here === 'main') return elsewhere === 'mine' ? { p: mine.entrance, label: 'To the Frost Mine' } : { p: isle.ferry, label: 'To the Aurora Ferry' };
+  if (here === 'volcano') return { p: volc.exitZone, label: 'Back to the mine' };
+  if (here === 'mine' && elsewhere === 'volcano') return { p: volc.entrance, label: 'To the Ember Volcano' };
+  if (here === 'main') return elsewhere === 'mine' || elsewhere === 'volcano' ? { p: mine.entrance, label: 'To the Frost Mine' } : { p: isle.ferry, label: 'To the Aurora Ferry' };
   return here === 'mine' ? { p: mine.exitZone, label: 'To the mine exit' } : { p: isle.exitZone, label: 'Ferry back to camp' };
 }
 function updateDeliver(dt, t) {
@@ -4236,6 +4444,7 @@ const PLACES = [
   { name: 'Frost Mine', sub: 'Gold, coal, iron and golems', at: () => mine.start, ok: () => mine.built },
   { name: 'Farm', sub: 'Wheat, carrots, oven and soup', at: () => new V3(16.1, 0, 23.0), ok: () => farm.built },
   { name: 'Aurora Isle', sub: 'Shards, hotel and Apothecary', at: () => isle.start, ok: () => isle.built },
+  { name: 'Ember Volcano', sub: 'Obsidian, Lava Forge and fire golems', at: () => volc.start, ok: () => volc.built },
 ];
 function renderTravel() {
   const list = PLACES.filter(pl => pl.ok());
@@ -4367,11 +4576,12 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
 if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
+  if (saved.ride === false) W.ride = false;
   if (Array.isArray(saved.orders)) { orders.list = saved.orders; orders.next = saved.ordersNext || 10; }
   if (Array.isArray(saved.quests)) { quests = saved.quests; questDay = saved.questDay || 0; }
   W.cash = saved.cash || 0; served = saved.served || 0; dayT = saved.dayT || 6; wasNight = isNight(); nightK = wasNight ? 1 : 0;
@@ -4414,7 +4624,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt);
+  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);

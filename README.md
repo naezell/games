@@ -54,3 +54,10 @@ yours through a Golden Restart; the Restart button clears it.
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
 - Chopping and attacking happen automatically when you walk next to a tree or boar.
 - Progress saves in your browser; the Restart button wipes it.
+
+**Latest additions:** a Menu with fast travel (also by tapping the minimap), a live Warehouse,
+a backup code to save or move your progress, a Check for update button, photo mode and
+optional music. Villager orders at the Order Board, a Farm (wheat and carrots into bread and
+stew), spring thaws every fourth day, the Ember Volcano (through a lava tunnel in the Frost
+Mine) with obsidian, fire golems and a Lava Forge for obsidian blades, Winter Festivals
+(+25% income) and siege nights, a riding reindeer, and Penguin Pal and Treasure Fox pets.
