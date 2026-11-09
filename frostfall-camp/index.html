@@ -2575,8 +2575,11 @@ const JOBS = {
   picker: { want: () => 'berry', nodes: () => berries, dst: () => {
     const k = kitchen.ins[0].pile, b = bakery.ins[1].pile;
     pickerAlt = !pickerAlt;
-    if (bakery.built && (!kitchen.built || pickerAlt || b.n + b.pending < k.n + k.pending)) return b;
-    return k;
+    // the bakery only gets berries while it has room and isn't backed up waiting for meat
+    const bOk = bakery.built && b.free() > 0 && (b.n + b.pending < 8 || bakery.ins[0].pile.n > 0);
+    const kOk = kitchen.built && k.free() > 0;
+    if (bOk && (!kOk || pickerAlt || b.n + b.pending < k.n + k.pending)) return b;
+    return kOk || !bakery.built ? k : b;
   } },
   smelterhand: { want: () => { const [o, c] = smelter.ins.map(i => i.pile.n + i.pile.pending); return o <= c ? 'ore' : 'coal'; }, nodes: t => t === 'ore' ? irons : coals, dst: t => t === 'ore' ? smelter.ins[0].pile : smelter.ins[1].pile },
   herbalist: { want: () => { const [b, s] = apoth.ins.map(i => i.pile.n + i.pile.pending); return b <= s ? 'bloom' : 'shard'; }, nodes: t => t === 'bloom' ? blooms : isle.shards, dst: t => t === 'bloom' ? apoth.ins[0].pile : apoth.ins[1].pile },
@@ -2591,7 +2594,13 @@ function runJob(w, job, go) {
     const [dst, type] = w.drop;
     if (go(dst.center, 0.7) && w.t > 0.12) {
       w.t = 0;
-      if (dst.free() > 0) { const it = type === '*' ? w.c.take() : w.c.take(type); if (it) { if (dst.typed) dst.receiveT(it.m, it.pos, it.type); else dst.receive(it.m, it.pos); } }
+      if (dst.free() > 0) { w.fullSince = 0; const it = type === '*' ? w.c.take() : w.c.take(type); if (it) { if (dst.typed) dst.receiveT(it.m, it.pos, it.type); else dst.receive(it.m, it.pos); } }
+      else {
+        // destination is full: after a short wait, ask the job where else this load can go
+        const now = performance.now();
+        if (!w.fullSince) w.fullSince = now;
+        else if (now - w.fullSince > 2500) { w.fullSince = 0; w.drop = [job.pickup ? job.dst() : job.dst(w.want), type]; }
+      }
     }
     if (w.c.load === 0) { w.state = 'gather'; w.want = null; w.tree = null; }
     return;
