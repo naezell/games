@@ -450,6 +450,10 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'fire') {
     c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(0, -44); c.quadraticCurveTo(40, 0, 22, 34); c.lineTo(-22, 34);
     c.quadraticCurveTo(-40, 0, 0, -44); c.fill();
+  } else if (icon === 'plot') {
+    c.fillStyle = W_; c.beginPath(); c.ellipse(0, 30, 48, 14, 0, 0, 2 * PI); c.fill();
+    c.fillStyle = '#c48a4a'; c.fillRect(-6, -44, 8, 74);
+    c.fillStyle = '#e8433a'; c.beginPath(); c.moveTo(2, -44); c.lineTo(42, -30); c.lineTo(2, -16); c.closePath(); c.fill();
   }
   c.restore();
 }
@@ -860,10 +864,10 @@ for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
   if (z < -9 && x > 45) { if (Math.random() < 0.6) trees.push(new Tree(px, pz)); }
   else if (Math.random() < 0.5) rocks.push(new Tree(px, pz, 'rock'));
 }
-// decorative backdrop forest (single draw call)
-{
+// decorative backdrop forest (single draw call); it also fills the land plots until they're bought
+const backdrop = (() => {
   const spots = [];
-  for (let x = -48; x <= 48; x += 2.6) for (let z = -50; z <= 44; z += 2.6) {
+  for (let x = -68; x <= 86; x += 2.6) for (let z = -72; z <= 76; z += 2.6) {
     const px = x + rand(-0.9, 0.9), pz = z + rand(-0.9, 0.9);
     const inPlay = px > BOUNDS.x0 - 1 && px < BOUNDS.x1 + 1 && pz > BOUNDS.z0 - 1 && pz < BOUNDS.z1 + 1;
     if (inPlay || (px > 1 && px < 7 && pz > 0) || (px > RIVER.x0 - 1 && px < RIVER.x1 + 1)) continue;
@@ -872,8 +876,10 @@ for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
   const inst = new THREE.InstancedMesh(TREE_GEO, vcMat, spots.length);
   const o = new THREE.Object3D();
   spots.forEach(([x, z], i) => { o.position.set(x, 0, z); o.rotation.y = rand(0, 6); o.scale.setScalar(rand(0.9, 1.4)); o.updateMatrix(); inst.setMatrixAt(i, o.matrix); });
-  inst.receiveShadow = true; scene.add(inst);
-}
+  // spread across the whole map, so culling by the mesh's own centre would hide it far from camp
+  inst.frustumCulled = false; inst.receiveShadow = true; scene.add(inst);
+  return { inst, spots };
+})();
 
 // ---------------- particles ----------------
 const puffs = [];
@@ -964,8 +970,8 @@ const BG = {
   leg: new THREE.BoxGeometry(0.16, 0.36, 0.16), ear: new THREE.ConeGeometry(0.08, 0.18, 4),
 };
 class Boar {
-  constructor(x, z) {
-    this.g = new THREE.Group(); this.g.position.set(x, 0, z);
+  constructor(x, z, home = null) {
+    this.g = new THREE.Group(); this.g.position.set(x, 0, z); this.home = home;
     this.mat = new THREE.MeshLambertMaterial({ color: 0xeef1f6, emissive: 0x000000 });
     const b = mesh(BG.body, this.mat, 0, 0.62, 0, this.g);
     mesh(BG.head, this.mat, 0, 0.72, 0.68, this.g);
@@ -994,7 +1000,8 @@ class Boar {
       questProgress('boar');
     } else {
       // flee a little
-      this.target = new V3(clamp(this.pos.x + rand(-4, 4), FIELD.x0, FIELD.x1), 0, clamp(this.pos.z + rand(-4, 4), FIELD.z0, FIELD.z1));
+      const R = this.home || FIELD;
+      this.target = new V3(clamp(this.pos.x + rand(-4, 4), R.x0, R.x1), 0, clamp(this.pos.z + rand(-4, 4), R.z0, R.z1));
       this.idle = 0;
     }
   }
@@ -1004,7 +1011,8 @@ class Boar {
     let moving = false;
     if (this.idle > 0) this.idle -= dt;
     else {
-      if (!this.target) this.target = new V3(rand(FIELD.x0, FIELD.x1), 0, rand(FIELD.z0, FIELD.z1));
+      const R = this.home || FIELD;
+      if (!this.target) this.target = new V3(rand(R.x0, R.x1), 0, rand(R.z0, R.z1));
       moving = true;
       if (stepToward(this.g, this.target, this.flash > -0.6 ? 2.6 : 1.3, dt, 0.1)) { this.target = null; this.idle = rand(1, 3.5); }
     }
@@ -1826,10 +1834,12 @@ function drawMap(dt) {
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
     return;
   }
-  Object.assign(MAP, { x0: -26, x1: 59, z0: -30, z1: 35 });
+  Object.assign(MAP, landBox());
   const c = mapX, W_ = mapCv.width, H_ = mapCv.height;
   c.clearRect(0, 0, W_, H_);
   c.fillStyle = nightK > 0.5 ? '#2a3a58' : '#e9f0f6'; c.fillRect(0, 0, W_, H_);
+  c.fillStyle = 'rgba(120,135,155,0.45)';
+  for (const pl of PLOTS) if (!pl.owned) c.fillRect(mx(pl.x0), mz(pl.z0), mx(pl.x1) - mx(pl.x0), mz(pl.z1) - mz(pl.z0));
   c.fillStyle = '#4f9fe0'; c.fillRect(mx(RIVER.x0), 0, mx(RIVER.x1) - mx(RIVER.x0), H_);
   if (bridge.unlocked) { c.fillStyle = '#c9d3dc'; c.fillRect(mx(RIVER.x0 - 1), mz(BRIDGE_Z - 1.2), mx(RIVER.x1 + 1) - mx(RIVER.x0 - 1), mz(BRIDGE_Z + 1.2) - mz(BRIDGE_Z - 1.2)); }
   c.fillStyle = 'rgba(80,140,200,0.35)';
@@ -2902,7 +2912,7 @@ function renderLegacy() {
   shopList.innerHTML = `<div class="legacy">
     <p class="big">★ ${legacy.stars} Golden Star${legacy.stars === 1 ? '' : 's'}</p>
     <p>Every star adds <b>+10% to all money you earn</b> and <b>$100 of starting cash</b>, forever. Trophies stay with you.</p>
-    <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. The more you have built, the more stars you get.</p>
+    <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. Land plots you have bought stay yours. The more you have built, the more stars you get.</p>
     <p>You would earn <b>${gain} star${gain === 1 ? '' : 's'}</b> now.${gain < 1 ? ' Build more to earn your first star.' : ''}</p>
     <div class="row2">${legacyConfirm
       ? `<button type="button" class="red" id="lgo">Yes, restart for ${gain} ★</button><button type="button" class="no" id="lno">Not yet</button>`
@@ -2911,7 +2921,7 @@ function renderLegacy() {
   if (q('lask')) q('lask').onclick = () => { legacyConfirm = true; renderLegacy(); };
   if (q('lno')) q('lno').onclick = () => { legacyConfirm = false; renderLegacy(); };
   if (q('lgo')) q('lgo').onclick = () => {
-    legacy.stars += gain; bump('prestige'); saveLegacy();
+    legacy.stars += gain; legacy.plots = ownedPlotPrices(); bump('prestige'); saveLegacy();
     try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
     resetting = true; location.reload();
   };
@@ -3068,6 +3078,156 @@ const PADS = [
   { id: 'runner', label: 'Hire Runner', icon: 'person', costs: [500], x: 49.4, z: 1.2, req: () => market.built, apply: () => new Worker('runner', 49.4, 1.2) },
   { id: 'sawup', label: 'Sharper Saw', icon: 'saw', costs: [200, 500], x: -3.6, z: 3.6, req: () => padLevel('lumber') > 0, apply: () => {} },
 ];
+// ---------------- land plots ----------------
+// Misty land rings the map. Walk onto a plot's pad to buy it: the mist lifts, a forest
+// grows in and boars move into its clearing. Each plot costs more than the last one bought.
+// Bought land is kept through a Golden Restart (saved with the stars in legacy.plots, and not
+// counted toward stars a second time); the Restart button clears it with the rest of the camp.
+const PLOT_BASE = 2000, PLOT_GROWTH = 1.35, PLOT_BOARS = 3, MIST_A = 0.3;
+const plotPrice = n => { const v = PLOT_BASE * Math.pow(PLOT_GROWTH, n), s = v < 10000 ? 100 : 1000; return Math.round(v / s) * s; };
+// each plot: its land, its buy pad (on land you already own) and the plot it is bought from ('' = the starting map)
+const PLOTS = [
+  { id: 'plotw1', name: 'Pine Hollow', x0: -45, x1: -25, z0: -29, z1: 2.5, px: -23, pz: -16, from: '' },
+  { id: 'plotw2', name: 'Fox Glen', x0: -45, x1: -25, z0: 2.5, z1: 34, px: -23, pz: 19, from: '' },
+  { id: 'plotn1', name: 'Frost Flats', x0: -25, x1: 0, z0: -49, z1: -29, px: -14, pz: -27.2, from: '' },
+  { id: 'plotn2', name: 'North Woods', x0: 0, x1: 26, z0: -49, z1: -29, px: 17, pz: -27.2, from: '' },
+  { id: 'plotn3', name: 'Crag Wood', x0: 30, x1: 58, z0: -49, z1: -29, px: 50, pz: -27.2, from: '' },
+  { id: 'plots1', name: 'Birch Vale', x0: -25, x1: 0, z0: 34, z1: 54, px: -12, pz: 32.6, from: '' },
+  { id: 'plots2', name: 'South Woods', x0: 0, x1: 26, z0: 34, z1: 54, px: 11.6, pz: 32.6, from: '' },
+  { id: 'plots3', name: 'Elk Meadow', x0: 30, x1: 58, z0: 34, z1: 54, px: 46, pz: 32.6, from: '' },
+  { id: 'plote1', name: 'Far Ridge', x0: 58, x1: 78, z0: -29, z1: 2.5, px: 56, pz: -16, from: '' },
+  { id: 'plote2', name: 'Cedar Bend', x0: 58, x1: 78, z0: 2.5, z1: 34, px: 56, pz: 22, from: '' },
+  { id: 'plotc1', name: 'Wolf Den', x0: -45, x1: -25, z0: -49, z1: -29, px: -35, pz: -27, from: 'plotw1' },
+  { id: 'plotc2', name: 'Owl Wood', x0: -45, x1: -25, z0: 34, z1: 54, px: -35, pz: 32, from: 'plotw2' },
+  { id: 'plotc3', name: 'Icefall', x0: 58, x1: 78, z0: -49, z1: -29, px: 68, pz: -27, from: 'plote1' },
+  { id: 'plotc4', name: 'Snowy Bluff', x0: 58, x1: 78, z0: 34, z1: 54, px: 68, pz: 32, from: 'plote2' },
+].map(pl => {
+  const cx = (pl.x0 + pl.x1) / 2, cz = (pl.z0 + pl.z1) / 2, hw = (pl.x1 - pl.x0) * 0.22, hd = (pl.z1 - pl.z0) * 0.22;
+  // boars roam a clearing in the middle; trees fill the rest
+  return Object.assign(pl, { owned: false, east: pl.x0 >= RIVER.x1, mist: null, fade: 1, boarT: 0,
+    home: { x0: cx - hw, x1: cx + hw, z0: cz - hd, z1: cz + hd } });
+});
+const plotById = id => PLOTS.find(pl => pl.id === id);
+const inRect = (r, x, z) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+// keep the plot pads standing in the open
+for (const list of [trees, rocks, berries]) for (let i = list.length - 1; i >= 0; i--) {
+  const t = list[i];
+  if (!PLOTS.some(pl => Math.hypot(t.pos.x - pl.px, t.pos.z - pl.pz) < 2.2)) continue;
+  scene.remove(t.m, t.stump); circles.splice(circles.indexOf(t.circle), 1); list.splice(i, 1);
+}
+// soft-edged mist sheet, stacked a few layers deep over each plot you don't own yet
+const mistTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d'), img = x.createImageData(64, 64);
+  for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) {
+    const e = Math.min(1, Math.min(i, j, 63 - i, 63 - j) / 14), k = (i + j * 64) * 4;
+    const n = 0.8 + 0.2 * Math.sin(i * 0.7 + Math.sin(j * 0.5) * 2) * Math.cos(j * 0.6);
+    img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = 255 * e * e * (3 - 2 * e) * n;
+  }
+  x.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(cv);
+})();
+function makeMist(pl) {
+  const g = new THREE.Group(), geo = new THREE.PlaneGeometry(pl.x1 - pl.x0 + 5, pl.z1 - pl.z0 + 5);
+  const m = new THREE.MeshLambertMaterial({ map: mistTex, color: 0xf4f8fc, emissive: 0x2a3440, transparent: true, opacity: MIST_A, depthWrite: false });
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.Mesh(geo, m);
+    s.rotation.x = -PI / 2; s.position.set(rand(-1, 1), 0.9 + i * 1.05, rand(-1, 1)); s.renderOrder = 2; s.userData.ph = rand(0, 6);
+    g.add(s);
+  }
+  g.position.set((pl.x0 + pl.x1) / 2, 0, (pl.z0 + pl.z1) / 2); scene.add(g);
+  pl.mist = { g, geo, m };
+}
+function removeMist(pl) {
+  if (!pl.mist) return;
+  scene.remove(pl.mist.g); pl.mist.geo.dispose(); pl.mist.m.dispose(); pl.mist = null;
+}
+const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+function clearBackdrop(pl) {
+  let hit = false;
+  backdrop.spots.forEach(([x, z], i) => { if (inRect(pl, x, z)) { backdrop.inst.setMatrixAt(i, ZERO_M); hit = true; } });
+  if (hit) backdrop.inst.instanceMatrix.needsUpdate = true;
+}
+function growPlot(pl, instant) {
+  for (let x = pl.x0 + 1.4; x < pl.x1 - 1; x += 2.6) for (let z = pl.z0 + 1.4; z < pl.z1 - 1; z += 2.6) {
+    const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8), h = pl.home;
+    if (px > RIVER.x0 - 1.5 && px < RIVER.x1 + 1.5) continue;            // riverbank
+    if (px > 1 && px < 11.5 && pz > 30) continue;                         // the sled's road south
+    if (px > h.x0 - 1 && px < h.x1 + 1 && pz > h.z0 - 1 && pz < h.z1 + 1) continue; // boar clearing
+    if (PLOTS.some(o => Math.hypot(px - o.px, pz - o.pz) < 2.6)) continue; // pads stay open
+    if (Math.random() < 0.4) continue;
+    const rock = pl.east && Math.random() < 0.35, t = new Tree(px, pz, rock ? 'rock' : 'tree');
+    (rock ? rocks : trees).push(t);
+    if (!instant) t.grow = 0;
+  }
+}
+function ownPlot(pl, instant) {
+  pl.owned = true;
+  clearBackdrop(pl); growPlot(pl, instant);
+  if (instant) removeMist(pl);
+  else {
+    padState[pl.id].price = pl.pad.costs[0];
+    toast(`${pl.name} is yours! Trees and boars are moving in.`);
+    burst(new V3((pl.x0 + pl.x1) / 2, 0, (pl.z0 + pl.z1) / 2), 0xffffff, 20);
+  }
+  repricePlots();
+}
+// every plot you haven't bought yet costs the next price up
+function repricePlots() {
+  const n = PLOTS.filter(pl => pl.owned).length;
+  for (const pl of PLOTS) if (!pl.owned && pl.pad) { pl.pad.costs[0] = plotPrice(n); if (pl.pad.label3d) pl.pad.label3d.redraw(); }
+}
+function updatePlots(dt, t) {
+  for (const pl of PLOTS) {
+    const ms = pl.mist;
+    if (ms) {
+      ms.g.children.forEach((s, i) => { s.position.y = 0.9 + i * 1.05 + Math.sin(t * 0.4 + s.userData.ph) * 0.25; });
+      if (pl.owned) {
+        pl.fade -= dt / 1.8; ms.m.opacity = MIST_A * Math.max(0, pl.fade); ms.g.position.y += dt * 2;
+        if (pl.fade <= 0) removeMist(pl);
+      }
+    }
+    if (pl.owned && (pl.boarT -= dt) <= 0) {
+      pl.boarT = 4;
+      const h = pl.home;
+      if (boars.filter(b => b.home === h).length < PLOT_BOARS) new Boar(rand(h.x0, h.x1), rand(h.z0, h.z1), h);
+    }
+  }
+}
+// where you can walk on the main map: the starting land plus every plot you own
+function clampToLand(pos, m) {
+  if (pos.x > BOUNDS.x0 + m && pos.x < BOUNDS.x1 - m && pos.z > BOUNDS.z0 + m && pos.z < BOUNDS.z1 - m) return;
+  const rs = [BOUNDS, ...PLOTS.filter(pl => pl.owned)];
+  let bx = pos.x, bz = pos.z, bd = Infinity;
+  for (const r of rs) {
+    // no wall along an edge that opens onto more land you own
+    const open = (x, z) => rs.some(o => o !== r && inRect(o, x, z));
+    const zc = clamp(pos.z, r.z0, r.z1), xc = clamp(pos.x, r.x0, r.x1);
+    const x0 = r.x0 + (open(r.x0 - 0.05, zc) ? 0 : m), x1 = r.x1 - (open(r.x1 + 0.05, zc) ? 0 : m);
+    const z0 = r.z0 + (open(xc, r.z0 - 0.05) ? 0 : m), z1 = r.z1 - (open(xc, r.z1 + 0.05) ? 0 : m);
+    const cx = clamp(pos.x, x0, x1), cz = clamp(pos.z, z0, z1), d = Math.hypot(cx - pos.x, cz - pos.z);
+    if (d < bd) { bd = d; bx = cx; bz = cz; if (d === 0) break; }
+  }
+  pos.x = bx; pos.z = bz;
+}
+// land kept from before a Golden Restart: owned again with no pad to pay
+function keepLegacyPlots() {
+  for (const id in legacy.plots || {}) { const pl = plotById(id); if (pl && !pl.owned) { pl.pad.costs[0] = legacy.plots[id]; ownPlot(pl, true); } }
+}
+const ownedPlotPrices = () => Object.fromEntries(PLOTS.filter(pl => pl.owned).map(pl => [pl.id, pl.pad.costs[0]]));
+// minimap frame: the land you own, a step of margin around it
+function landBox() {
+  const b = { x0: BOUNDS.x0, x1: BOUNDS.x1, z0: BOUNDS.z0, z1: BOUNDS.z1 };
+  for (const pl of PLOTS) if (pl.owned) { b.x0 = Math.min(b.x0, pl.x0); b.x1 = Math.max(b.x1, pl.x1); b.z0 = Math.min(b.z0, pl.z0); b.z1 = Math.max(b.z1, pl.z1); }
+  return { x0: b.x0 - 1, x1: b.x1 + 1, z0: b.z0 - 1, z1: b.z1 + 1 };
+}
+PLOTS.forEach(makeMist);
+PADS.push(...PLOTS.map(pl => (pl.pad = {
+  id: pl.id, label: pl.name, icon: 'plot', costs: [plotPrice(0)], x: pl.px, z: pl.pz, plot: pl,
+  req: () => !pl.owned && (pl.east ? bridge.unlocked : sawmill.unlocked) && (!pl.from || plotById(pl.from).owned),
+  apply: (l, instant) => ownPlot(pl, instant),
+})));
+window.__plots = PLOTS;
 const padState = {};
 const padLevel = id => (padState[id] ? padState[id].level : 0);
 for (const p of PADS) {
@@ -3178,7 +3338,8 @@ function collide(pos, r) {
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
     if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
   }
-  const B = inIsle(pos) ? ISLE : pos.x > 90 ? MINE : BOUNDS;
+  const B = inIsle(pos) ? ISLE : pos.x > 90 ? MINE : null;
+  if (!B) { clampToLand(pos, 0.6); return; }
   pos.x = clamp(pos.x, B.x0 + 0.6, B.x1 - 0.6); pos.z = clamp(pos.z, B.z0 + 0.6, B.z1 - 0.6);
 }
 const inZone = (pos, x, z, half = 1.05) => Math.abs(pos.x - x) < half && Math.abs(pos.z - z) < half;
@@ -3582,6 +3743,7 @@ document.getElementById('reset').onclick = () => { confirmEl.hidden = false; };
 document.getElementById('no').onclick = () => { confirmEl.hidden = true; };
 document.getElementById('yes').onclick = () => {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  delete legacy.plots; saveLegacy(); // a plain Restart gives the land back too
   resetting = true; location.reload();
 };
 let resetting = false;
@@ -3598,12 +3760,14 @@ if (saved && saved.pads) {
   W.cash = saved.cash || 0; served = saved.served || 0; dayT = saved.dayT || 6; wasNight = isNight(); nightK = wasNight ? 1 : 0;
   for (const p of PADS) {
     const s = saved.pads[p.id]; if (!s) continue;
+    if (p.plot && s.price) { p.costs[0] = s.price; padState[p.id].price = s.price; }
     for (let l = 0; l < Math.min(s.level, p.costs.length); l++) { p.apply(l, true); padState[p.id].level = l + 1; }
     padState[p.id].paid = s.paid || 0;
   }
   if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
   setTimeout(() => offlineReport(saved), 600);
 } else if (legacy.stars) { W.cash = 100 * legacy.stars; }
+keepLegacyPlots();
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false); renderTrophies();
 document.getElementById('rankname').title = legacy.stars ? legacy.stars + ' Golden Stars' : '';
 setInterval(save, 3000);
@@ -3618,8 +3782,9 @@ function frame() {
   updatePlayer(dt);
   for (const tr of trees) tr.update(dt);
   boarTimer -= dt;
-  if (boarTimer <= 0 && boars.length < maxBoars()) { new Boar(rand(FIELD.x0, FIELD.x1), rand(FIELD.z0, FIELD.z1)); boarTimer = 2.5; }
+  if (boarTimer <= 0 && boars.filter(b => !b.home).length < maxBoars()) { new Boar(rand(FIELD.x0, FIELD.x1), rand(FIELD.z0, FIELD.z1)); boarTimer = 2.5; }
   for (const b of boars.slice()) b.update(dt);
+  updatePlots(dt, t);
   for (const rk of rocks) rk.update(dt);
   updateGrill(dt); updateSawmill(dt); updateTower(dt); updateCutter(dt); updateRiver(dt); updateDayNight(dt);
   updateGates(dt); updateDock(dt); updateSmoke(dt); updateSprings(dt); updateHusky(dt); updateBoosts(dt); updateTrader(dt); updateDepot(dt); drawMap(dt);
