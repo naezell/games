@@ -5894,6 +5894,11 @@ const RESEARCH = [
   { id: 'boots', name: 'Boot Patterns', cost: 20, desc: 'Unlocks the Boot Maker in the Harbor District.' },
   { id: 'sleds', name: 'Sled Blueprints', cost: 25, desc: 'Unlocks the Sled Works in the Harbor District.' },
   { id: 'skis', name: 'Ski Design', cost: 25, desc: 'Unlocks the Ski Shop in the Harbor District.' },
+  { id: 'harbortrade', name: 'Harbor Trade', cost: 30, desc: 'Every Harbor District shop pays 20% more.' },
+  { id: 'burners', name: 'Hot Air Burners', cost: 25, desc: 'The Cargo Balloon makes its trips 40% faster.' },
+  { id: 'traps', name: 'Wolf Traps', cost: 30, desc: 'Your hits do double damage to wolf dens.' },
+  { id: 'melters', name: 'Snow Melters', cost: 25, desc: 'Avalanches bury fewer buildings, and you dig twice as fast.' },
+  { id: 'tourism', name: 'Tourism Office', cost: 35, desc: 'The tourist ferry comes more often, and each tourist buys one more souvenir.', req: 'harbortrade' },
   { id: 'lures', name: 'Lucky Lures', cost: 20, desc: 'Rare fish bite far more often.' },
   { id: 'hearts', name: 'Warm Hearts', cost: 25, desc: 'Gifts to villagers count double.' },
   { id: 'nightowl', name: 'Night Owl', cost: 30, desc: '+15% income at night.' },
@@ -7050,9 +7055,9 @@ function updateBalloon(dt) {
   if (!balloon.built) return;
   const b = balloon, g = b.g, at = b.at; b.t += dt;
   b.flame.scale.y = 1 + Math.sin(performance.now() / 70) * 0.3;
-  if (b.phase === 'home') { g.position.set(at.x, Math.abs(Math.sin(b.t * 1.5)) * 0.06, at.z); if (b.t > 10) { b.phase = 'up'; b.t = 0; } }
+  if (b.phase === 'home') { g.position.set(at.x, Math.abs(Math.sin(b.t * 1.5)) * 0.06, at.z); if (b.t > (RS('burners') ? 6 : 10)) { b.phase = 'up'; b.t = 0; } }
   else if (b.phase === 'up') { const k = Math.min(1, b.t / 6); g.position.set(at.x + k * k * 34, k * 20, at.z - k * 8); if (k >= 1) { b.phase = 'away'; b.t = 0; g.visible = false; } }
-  else if (b.phase === 'away') { if (b.t > 18) { balloonLoad(); b.crates.visible = b.cargo > 0; b.phase = 'down'; b.t = 0; g.visible = true; } }
+  else if (b.phase === 'away') { if (b.t > (RS('burners') ? 9 : 18)) { balloonLoad(); b.crates.visible = b.cargo > 0; b.phase = 'down'; b.t = 0; g.visible = true; } }
   else if (b.phase === 'down') {
     const k = Math.max(0, 1 - b.t / 6); g.position.set(at.x + k * k * 34, k * 20, at.z - k * 8);
     if (k <= 0) {
@@ -7114,22 +7119,23 @@ function buildHarbor(instant) {
   if (!instant) toast('The Harbor District is open! Step on the anchor sign to go there and build its shops.');
 }
 const HSIGN = 0x3f8fc8;
+const hx = v => () => Math.round(v * (RS('harbortrade') ? 1.2 : 1));
 const fishmkt = new Station({ id: 'fishmkt', x: 230, z: -8.8, inputs: [['*', 230, -5.4]], cashAt: [233.6, -5.4], time: 0.8, fx: 0x5fd0e6,
-  accepts: { fish: () => 16, glowfish: () => 120, pearl: () => 100 }, hint: 'The Fish Market buys fish, glowfish and pearls.',
+  accepts: { fish: hx(16), glowfish: hx(120), pearl: hx(100) }, hint: 'The Fish Market buys fish, glowfish and pearls.',
   build: g => { hut(g, 0xdff1ff, HSIGN, 2.6, 1.8); mesh(new THREE.BoxGeometry(2.4, 0.1, 0.9), 0x3f6f9f, 0, 1.5, 1.2, g); } });
-const shipyard = new Station({ id: 'shipyard', x: 238, z: -8.8, size: [2.8, 1.8], inputs: [['log', 236.6, -5.4, 3], ['bar', 239.4, -5.4, 2]], cashAt: [242.2, -5.4], time: 8, sell: () => 320, fx: 0xa86a3a, stat: 'boatsBuilt',
+const shipyard = new Station({ id: 'shipyard', x: 238, z: -8.8, size: [2.8, 1.8], inputs: [['log', 236.6, -5.4, 3], ['bar', 239.4, -5.4, 2]], cashAt: [242.2, -5.4], time: 8, sell: hx(320), fx: 0xa86a3a, stat: 'boatsBuilt',
   hint: 'Shipyard: 3 logs and 2 iron bars make a rowboat worth $320.',
   build: g => { hut(g, 0xc8a070, 0x6b4428, 2.8, 1.8); const hull = mesh(new THREE.BoxGeometry(0.9, 0.45, 2.0), 0xffffff, -1.9, 0.3, 0.2, g); mesh(new THREE.BoxGeometry(0.95, 0.1, 2.05), 0xd84a3a, -1.9, 0.55, 0.2, g); } });
-const bootmk = new Station({ id: 'bootmk', x: 246, z: -8.8, inputs: [['wool', 244.6, -5.4], ['meat', 247.4, -5.4]], cashAt: [249.8, -5.4], time: 4, sell: () => 140, fx: 0x8a5a36, stat: 'bootsMade',
+const bootmk = new Station({ id: 'bootmk', x: 246, z: -8.8, inputs: [['wool', 244.6, -5.4], ['meat', 247.4, -5.4]], cashAt: [249.8, -5.4], time: 4, sell: hx(140), fx: 0x8a5a36, stat: 'bootsMade',
   hint: 'Boot Maker: yak wool and a hide make warm snow boots worth $140.',
   build: g => { hut(g, 0xe8d6b0, 0x8a5a36); mesh(new THREE.BoxGeometry(0.35, 0.4, 0.6), 0x6b4428, 0.6, 1.6, 0.9, g); } });
-const cafe = new Station({ id: 'cafe', x: 230, z: 8.8, inputs: [['milk', 228.6, 5.4], ['comb', 231.4, 5.4]], cashAt: [233.6, 5.4], time: 3, sell: () => 80, fx: 0x7a4a2a, stat: 'cocoas',
+const cafe = new Station({ id: 'cafe', x: 230, z: 8.8, inputs: [['milk', 228.6, 5.4], ['comb', 231.4, 5.4]], cashAt: [233.6, 5.4], time: 3, sell: hx(80), fx: 0x7a4a2a, stat: 'cocoas',
   hint: 'Harbor Café: milk and honey make cocoa worth $80 a cup.',
   build: g => { hut(g, 0xfff0e0, 0xd84a6a, 2.6, 1.8); for (const x of [-1.6, 1.6]) { mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.06, 10), 0xffffff, x, 0.7, -1.4, g); mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 5), 0x2b3442, x, 0.35, -1.4, g); } } });
-const sledworks = new Station({ id: 'sledworks', x: 238, z: 8.8, inputs: [['log', 236.6, 5.4, 2], ['bar', 239.4, 5.4]], cashAt: [242.2, 5.4], time: 5, sell: () => 200, fx: 0xd84a3a, stat: 'sledsMade',
+const sledworks = new Station({ id: 'sledworks', x: 238, z: 8.8, inputs: [['log', 236.6, 5.4, 2], ['bar', 239.4, 5.4]], cashAt: [242.2, 5.4], time: 5, sell: hx(200), fx: 0xd84a3a, stat: 'sledsMade',
   hint: 'Sled Works: 2 logs and an iron bar make a sled worth $200.',
   build: g => { hut(g, 0xd8e4f0, 0xd84a3a); const sl = mesh(new THREE.BoxGeometry(0.7, 0.2, 1.4), 0xd84a3a, 1.6, 0.25, 0.9, g); } });
-const skishop = new Station({ id: 'skishop', x: 246, z: 8.8, inputs: [['log', 244.6, 5.4], ['comb', 247.4, 5.4]], cashAt: [249.8, 5.4], time: 4, sell: () => 150, fx: 0x3f8fc8, stat: 'skisMade',
+const skishop = new Station({ id: 'skishop', x: 246, z: 8.8, inputs: [['log', 244.6, 5.4], ['comb', 247.4, 5.4]], cashAt: [249.8, 5.4], time: 4, sell: hx(150), fx: 0x3f8fc8, stat: 'skisMade',
   hint: 'Ski Shop: a log and some wax make skis worth $150.',
   build: g => { hut(g, 0xf0f6ff, 0x3f8fc8); for (const x of [1.4, 1.6]) { const sk = mesh(new THREE.BoxGeometry(0.1, 1.8, 0.05), 0xffcc33, x, 0.9, 0.9, g); sk.rotation.z = 0.1; } } });
 for (const st of [fishmkt, shipyard, bootmk, cafe, sledworks, skishop]) VENDORS.push({ name: padLabel(st.id), pos: st.pos, ok: () => st.built, station: st, about: PAD_INFO[st.id] || st.hint || '',
@@ -7160,7 +7166,7 @@ function drawDenBar(d) {
 }
 dens.forEach(d => { d.hit = dmg => {
   if (!d.alive) return;
-  d.hp -= dmg; drawDenBar(d); burst(d.at.clone().setY(1), 0x8d97a6, 4); sfx('mine');
+  d.hp -= dmg * (RS('traps') ? 2 : 1); drawDenBar(d); burst(d.at.clone().setY(1), 0x8d97a6, 4); sfx('mine');
   if (d.hp > 0) return;
   d.alive = false; d.g.visible = false; camShake = 0.4; bump('dens');
   const cash = Math.round(Math.max(1500, incomeRate * 40) / 50) * 50; W.cash += cash; setCash(); sfx('buy');
@@ -7180,7 +7186,7 @@ function updateDens(dt) {
 // ================= Avalanches =================
 const aval = { day: -1, when: 0, list: [] };
 function startAvalanche() {
-  const sts = STATIONS.filter(st => st.built && st.x < 90 && !st.snowed && st.g).sort(() => Math.random() - 0.5).slice(0, randi(3, 5));
+  const sts = STATIONS.filter(st => st.built && st.x < 90 && !st.snowed && st.g).sort(() => Math.random() - 0.5).slice(0, RS('melters') ? randi(1, 2) : randi(3, 5));
   if (!sts.length) return;
   for (const st of sts) {
     const [w, d] = st.size || [2.2, 1.6], g = new THREE.Group(); g.position.copy(st.pos); scene.add(g);
@@ -7200,7 +7206,7 @@ function updateAvalanche(dt) {
   for (let i = aval.list.length - 1; i >= 0; i--) {
     const a = aval.list[i];
     if (d2(a.st.pos, pp) > a.r) continue;
-    a.left -= dt; player.p.swing = 1; if (Math.random() < dt * 8) burst(a.st.pos.clone().setY(1), 0xffffff, 3);
+    a.left -= dt * (RS('melters') ? 2 : 1); player.p.swing = 1; if (Math.random() < dt * 8) burst(a.st.pos.clone().setY(1), 0xffffff, 3);
     a.g.scale.setScalar(Math.max(0.2, a.left / 2.4));
     if (a.left <= 0) {
       scene.remove(a.g); a.st.snowed = false; aval.list.splice(i, 1); bump('dugout');
@@ -7337,7 +7343,7 @@ function toggleJob(name, quiet) {
 
 // ================= Gift shop and tourist ferry (Harbor) =================
 const tourists = { list: [], ferry: null, t: 40, state: 'away', waiting: 0, sold: 0 };
-const gp = base => () => { touristBuy(); return base; };
+const gp = base => () => { touristBuy(); return Math.round(base * (RS('harbortrade') ? 1.2 : 1)); };
 const giftshop = new Station({ id: 'giftshop', x: 223.6, z: -9.2, inputs: [['*', 223.6, -5.6]], cashAt: [226.8, -5.6], time: 0.9, timeFn: () => (tourists.waiting > 0 ? 0.9 : 1e9), fx: 0xff8ab0,
   accepts: { toy: gp(150), ornament: gp(130), candle: gp(70), jam: gp(35), ring: gp(260), chair: gp(110), quilt: gp(300), globe: gp(250), cheese: gp(90), pie: gp(55) },
   hint: 'Tourists pay extra for souvenirs: toys, ornaments, candles, rings and more. The shop only sells while tourists are waiting.',
@@ -7359,7 +7365,7 @@ function updateTourists(dt) {
   if (tourists.state === 'away' && tourists.t <= 0) { tourists.state = 'in'; }
   if (tourists.state === 'in') { f.position.x += (254.5 - f.position.x) * Math.min(1, dt * 0.8); if (Math.abs(f.position.x - 254.5) < 0.3) { tourists.state = 'docked'; tourists.t = 50; spawnTourists(); } }
   if (tourists.state === 'docked' && (tourists.t <= 0 || !tourists.list.length)) { tourists.state = 'out'; for (const t of tourists.list) if (t.state !== 'leave') { if (t.state === 'wait') tourists.waiting--; t.state = 'leave'; } }
-  if (tourists.state === 'out') { f.position.x += dt * 6; if (f.position.x > 275 && !tourists.list.length) { tourists.state = 'away'; tourists.t = rand(90, 150); } }
+  if (tourists.state === 'out') { f.position.x += dt * 6; if (f.position.x > 275 && !tourists.list.length) { tourists.state = 'away'; tourists.t = rand(90, 150) * (RS('tourism') ? 0.6 : 1); } }
   const q = new V3(223.6, 0, -3.8);
   tourists.list.forEach((t, i) => {
     const g = t.p.group; let mv = false;
@@ -7375,7 +7381,7 @@ function spawnTourists() {
     const p = makePerson([0xff8ab0, 0x5fd0e6, 0xffd23a, 0x9a5ad8, 0x6ac08a, 0xff9a3a][i % 6], null, 0.9);
     mesh(new THREE.BoxGeometry(0.22, 0.16, 0.12), 0x2b3442, 0, 1.0, 0.36, p.group);
     p.group.position.set(251.2, 0, rand(-1, 1)); scene.add(p.group);
-    tourists.list.push({ p, state: 'walk', budget: randi(2, 3), slot: i });
+    tourists.list.push({ p, state: 'walk', budget: randi(2, 3) + (RS('tourism') ? 1 : 0), slot: i });
   }
   bump('touristvisits', n);
   if (farOf(player.g.position) === 'harbor') toast(`A ferry brought ${n} tourists! Keep the Gift Shop stocked.`);
