@@ -809,6 +809,9 @@ class CashPile extends Pile {
     if (UP.statue) v = Math.round(v * 1.1);
     if (typeof friendBonus === 'function') v = Math.round(v * friendBonus());
     if (storm.t > 0 && typeof weather !== 'undefined' && weather.built) v = Math.round(v * 1.25);
+    if (longNight()) v = Math.round(v * 1.3);
+    if (typeof companionSkill === 'function' && companionSkill() === 'story') v = Math.round(v * 1.1);
+    if (typeof homeBonus === 'function') v = Math.round(v * homeBonus());
     if (typeof RS === 'function' && RS('nightowl') && isNight()) v = Math.round(v * 1.15);
     if (typeof placed !== 'undefined') { const fn = Math.min(3, placed.filter(q => q.k === 'fountain').length); if (fn) v = Math.round(v * (1 + 0.03 * fn)); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
@@ -997,6 +1000,7 @@ class Tree {
     if (this.down || carrier.full()) return false;
     this.hp--; this.shake = 0.3;
     carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.2, 0)));
+    if ((isAutumn() && GROWS[this.kind]) || (carrier === player.c && ((companionSkill() === 'wood' && this.k.item === 'log') || (companionSkill() === 'farm' && GROWS[this.kind])))) { if (!carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.4, 0))); }
     if (carrier === player.c) { sfx(this.k.sound); questProgress(this.k.item); if (wx.aurora && AURORA_DOUBLE.has(this.k.item) && !carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.5, 0))); }
     if (this.hp <= 0) { this.down = true; this.regrow = this.k.regrow; this.m.visible = false; this.stump.visible = true; burst(this.pos, this.k.color); }
     return true;
@@ -1120,7 +1124,7 @@ const gearDmg = () => WEAPONS[U('weapon')].dmg;
 const gearReach = () => WEAPONS[U('weapon')].reach || 0;
 const armorKB = () => ARMORS[U('armor')].kb;
 function dropFromCarrier(carrier, n, src = 'knocked') {
-  if (src === 'knocked' && carrier === player.c) n = Math.max(0, n - ARMORS[U('armor')].save);
+  if (src === 'knocked' && carrier === player.c) n = companionSkill() === 'heal' ? 0 : Math.max(0, n - ARMORS[U('armor')].save);
   for (let i = 0; i < n; i++) {
     const it = carrier.take(); if (!it) break;
     const to = it.pos.clone().add(new V3(rand(-1.6, 1.6), 0, rand(-1.6, 1.6))); to.y = 0.1;
@@ -1497,7 +1501,7 @@ function unlockDock(instant) {
 function tryFish(carrier, who, dt) {
   dock.active = 0.3;
   who.fishT = (who.fishT || 0) + dt;
-  if (who.fishT > 1.4 && !carrier.full()) {
+  if (who.fishT > (who === player && companionSkill() === 'fish' ? 0.7 : 1.4) && !carrier.full()) {
     who.fishT = 0;
     const frozen = typeof wx !== 'undefined' && wx.kind === 'blizzard', ty = frozen ? 'ice' : 'fish';
     carrier.receive(ty, makeItem(ty), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
@@ -2462,7 +2466,7 @@ const FAR = {
   steam: { name: 'Steam Caves', rect: { x0: 160, x1: 192, z0: -62, z1: -34 }, test: p => p.x > 150 && p.z <= -25 },
   cove: { name: 'Shipwreck Cove', rect: { x0: 160, x1: 192, z0: 76, z1: 104 }, test: p => p.x > 150 && p.z > 72 },
 };
-const farOf = p => (p.x > 150 ? Object.keys(FAR).find(k => FAR[k].test(p)) : null);
+const farOf = p => (p.x > 196 ? 'home' : p.x > 150 ? Object.keys(FAR).find(k => k !== 'home' && FAR[k].test(p)) : null);
 const golds = [];
 const mine = { built: false, entrance: new V3(45, 0, -10.6), exitZone: new V3(102.2, 0, 0), start: new V3(104.6, 0, 0), back: new V3(45, 0, -8.2), wasIn: false, golems: [], king: null, kingT: 3, golemT: 2 };
 function teleport(p) {
@@ -2752,6 +2756,7 @@ function updateVillagers(dt) {
   const pp = player.g.position;
   for (const v of villagers) {
     const g = v.p.group; v.cd -= dt;
+    if (v.trip) { const mv = petFollow(g, 1.1, dt, W.speed * (riding() ? 1.7 : 1.1)); animPerson(v.p, mv, dt); if (d2(g.position, pp) > 30) g.position.copy(pp).add(new V3(1, 0, 1)); continue; }
     let moving = false;
     if (v.idle > 0) v.idle -= dt;
     else {
@@ -3206,7 +3211,7 @@ const ITEM_NAME_EXTRA = {};
 const ICON_OF = { feather: 'feather', mushroom: 'mushroom', pearl: 'pearl', quilt: 'quilt', glowfish: 'fish', obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 // ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
 const TIER_SPEED = [1, 0.75, 0.55], TIER_NAME = ['Basic', 'Silver', 'Gold'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33];
-const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0);
+const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0);
 const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
 function makeGolden(m, type) {
   m.material = goldenMat; m.userData.golden = true; m.scale.multiplyScalar(1.15);
@@ -3873,7 +3878,7 @@ function updateLakeFishing(dt, moving) {
   player.rod.visible = player.rod.visible || !!h;
   if (!h) { lake.fishT = 0; return; }
   lake.fishT += dt;
-  if (lake.fishT > 1.3 && !player.c.full()) {
+  if (lake.fishT > (companionSkill() === 'fish' ? 0.65 : 1.3) && !player.c.full()) {
     lake.fishT = 0; const glow = Math.random() < 0.15, type = glow ? 'glowfish' : 'fish';
     player.c.receive(type, makeItem(type), h.clone().add(new V3(0, 0.3, 0)));
     burst(h.clone().add(new V3(0, -0.4, 0)), glow ? 0x5ff0ff : 0xa9d8f7, 6); sfx('splash'); questProgress('fish');
@@ -4374,6 +4379,11 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['trip', 'Road Trip', 'Take a villager on a day trip', () => stat('trips') >= 1],
+  ['tame3', 'Wild Whisperer', 'Tame 3 wild animals', () => stat('tamed') >= 3],
+  ['nm5', 'Night Owl Shopper', 'Buy 5 things at the Night Market', () => stat('nightmarket') >= 5],
+  ['home', 'Home Sweet Home', 'Complete both cabin furniture sets', () => homeBonus() >= 1.1],
+  ['longnight', 'Through the Dark', 'Live through a Long Night', () => (Math.floor(dayT / CYCLE) + 1) > 15],
   ['exp10', 'Explorer', 'Finish 10 expeditions', () => stat('expeditions') >= 10],
   ['contract3', 'City Supplier', 'Finish 3 city contracts', () => stat('contracts') >= 3],
   ['research', 'Scholar', 'Finish every research', () => RESEARCH.every(r2 => RS(r2.id))],
@@ -4599,6 +4609,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'cabin', label: 'Your Cabin', icon: 'house', costs: [10000], x: 11.4, z: -1.8, req: () => sawmill.unlocked, apply: (l, i) => buildCabin(i) },
   { id: 'guild', label: 'Guild Hall', icon: 'board', costs: [8000], x: 6.8, z: 24.4, req: () => town.built, apply: unlockGuild },
   { id: 'racetrack', label: 'Ice Race Track', icon: 'exit', costs: [6000], x: 169, z: 54, req: () => FAR.lake.built, apply: (l, i) => buildRace(i) },
   { id: 'sanctuary', label: 'Animal Sanctuary', icon: 'house', costs: [6000], x: 12.2, z: 9.2, req: () => town.built, apply: unlockSanct },
@@ -5185,7 +5196,9 @@ function toast(msg) {
 // ---------------- day / night & wolves ----------------
 const DAY = 100, NIGHT = 40, CYCLE = DAY + NIGHT;
 let dayT = 6, wasNight = false, nightK = 0, wolfTimer = 0;
-const isNight = () => dayT % CYCLE > DAY;
+const longNight = () => (Math.floor(dayT / CYCLE) + 1) % 15 === 0;
+const isNight = () => longNight() || dayT % CYCLE > DAY;
+const isAutumn = () => (Math.floor(dayT / CYCLE) + 1) % 4 === 2;
 const DAY_BG = new THREE.Color(0xdbe7f2), NIGHT_BG = new THREE.Color(0x1d2b47);
 const DAY_SKY = new THREE.Color(0xffffff), NIGHT_SKY = new THREE.Color(0x8ea6d8);
 const clockEl = document.getElementById('clock'), daynEl = document.getElementById('dayn'), barEl = document.getElementById('barfill');
@@ -5261,9 +5274,13 @@ let bossText = '';
 function isSpring() { return (Math.floor(dayT / CYCLE) + 1) % 4 === 0; }
 let springK = 0;
 const SNOW_GROUND = new THREE.Color(0xf3f7fb), SPRING_GROUND = new THREE.Color(0xd6ebc0);
+let autumnK = 0;
+const AUTUMN_GROUND = new THREE.Color(0xe8c8a0), WHITE_C = new THREE.Color(0xffffff), LEAF_C = new THREE.Color(0xe0702a);
 function updateSeason(dt) {
   springK += ((isSpring() ? 1 : 0) - springK) * Math.min(1, dt * 0.5);
-  ground.material.color.copy(SNOW_GROUND).lerp(SPRING_GROUND, springK);
+  autumnK += ((isAutumn() ? 1 : 0) - autumnK) * Math.min(1, dt * 0.5);
+  ground.material.color.copy(SNOW_GROUND).lerp(SPRING_GROUND, springK).lerp(AUTUMN_GROUND, autumnK * 0.7);
+  snow.material.color.copy(WHITE_C).lerp(LEAF_C, autumnK); snow.material.size = (0.14 + 0.08 * stormK) * (1 + autumnK * 0.8);
 }
 function updateBossCal() {
   const day = Math.floor(dayT / CYCLE) + 1, today = bossFor(day);
@@ -5271,6 +5288,8 @@ function updateBossCal() {
   if (today) t = today === 'Wolf Alpha' ? 'Tonight: Wolf Alpha' : 'Today: ' + today;
   else { let d = day + 1; while (!bossFor(d)) d++; t = `Next boss: ${bossFor(d)} (day ${d})`; }
   if (isSpring()) t = 'Spring thaw · ' + t;
+  if (isAutumn()) t = 'Autumn harvest (double crops) · ' + t;
+  if (longNight()) t = 'The Long Night (+30%) · ' + t;
   const ev = eventFor(day);
   if (ev === 'festival') t = 'Winter Festival (+25%) · ' + t;
   else if (ev === 'siege') t = 'Siege night tonight · ' + t;
@@ -5309,6 +5328,9 @@ function updateDayNight(dt) {
   }
   if (!night && wasNight) {
     repairGates(); newQuests(true);
+    for (const v of villagers) if (v.trip) { v.trip = false; v.p.group.position.copy(v.home); }
+    if (isAutumn()) setTimeout(() => toast('Autumn harvest! Crops and berries give double today.'), 12500);
+    if (longNight()) setTimeout(() => toast('The Long Night begins: no sunrise today, but everything earns 30% more.'), 6000);
     wx.aurora = false;
     { const dN = Math.floor(dayT / CYCLE) + 1;
       if (dN >= 3 && Math.random() < 0.2) wx.next = ['sunny', dayT + rand(10, 50)];
@@ -5854,6 +5876,181 @@ function updateTreasure(dt) {
   }
 }
 
+// ================= Wildlife: herds, foxes and birds =================
+const wild = { list: [], birds: null, birdT: 20 };
+const WILD_DEFS = [
+  { k: 'reindeer', n: 4, area: [-22, 22, -26, -12], speed: 2.2, flee: 5, tame: 'berry', label: 'reindeer' },
+  { k: 'afox', n: 2, area: [-22, -12, 10, 20], speed: 3.4, flee: 4, tame: 'meat', label: 'arctic fox' },
+];
+function makeWild(k) {
+  const g = new THREE.Group(); scene.add(g);
+  if (k === 'reindeer') {
+    mesh(new THREE.BoxGeometry(0.5, 0.5, 1.1), 0x9a6a46, 0, 0.85, 0, g); mesh(new THREE.BoxGeometry(0.34, 0.36, 0.45), 0x9a6a46, 0, 1.25, 0.65, g);
+    mesh(new THREE.BoxGeometry(0.42, 0.12, 0.9), 0xf0e6d8, 0, 0.6, 0, g);
+    for (const s of [-1, 1]) { mesh(new THREE.BoxGeometry(0.04, 0.4, 0.04), 0xe8d6b0, s * 0.12, 1.6, 0.6, g); mesh(new THREE.BoxGeometry(0.2, 0.04, 0.04), 0xe8d6b0, s * 0.2, 1.7, 0.6, g); }
+  } else {
+    mesh(new THREE.BoxGeometry(0.3, 0.28, 0.6), 0xf6f8fb, 0, 0.35, 0, g); mesh(new THREE.BoxGeometry(0.28, 0.26, 0.28), 0xf6f8fb, 0, 0.52, 0.38, g);
+    for (const x of [-0.09, 0.09]) mesh(new THREE.ConeGeometry(0.06, 0.16, 4), 0xf6f8fb, x, 0.72, 0.36, g);
+    const tail = mesh(new THREE.ConeGeometry(0.11, 0.45, 6), 0xffffff, 0, 0.42, -0.45, g); tail.rotation.x = -1.9;
+  }
+  const legs = [[-0.15, 0.3], [0.15, 0.3], [-0.15, -0.3], [0.15, -0.3]].map(([x, z]) => { const pv = new THREE.Group(); pv.position.set(x, k === 'reindeer' ? 0.6 : 0.24, z); g.add(pv); mesh(new THREE.BoxGeometry(0.09, k === 'reindeer' ? 0.6 : 0.24, 0.09), k === 'reindeer' ? 0x6b4428 : 0xe8edf3, 0, k === 'reindeer' ? -0.3 : -0.12, 0, pv); return pv; });
+  return { g, legs };
+}
+function spawnWildlife() {
+  for (const d of WILD_DEFS) for (let i = 0; i < d.n; i++) {
+    const { g, legs } = makeWild(d.k); g.position.set(rand(d.area[0], d.area[1]), 0, rand(d.area[2], d.area[3]));
+    wild.list.push({ d, g, legs, target: null, idle: rand(0, 3), phase: rand(0, 6), tame: 0, cd: 0 });
+  }
+}
+function updateWildlife(dt) {
+  if (!wild.list.length) spawnWildlife();
+  const pp = player.g.position, inMain = regionOf(pp) === 'main';
+  for (let i = wild.list.length - 1; i >= 0; i--) {
+    const w = wild.list[i], d = w.d, a = d.area; w.cd -= dt;
+    let moving = false, speed = d.speed * 0.4;
+    const dp = inMain ? d2(pp, w.g.position) : 99;
+    if (dp < 1.6 && w.cd <= 0 && player.c.count(d.tame) > 0) {
+      w.cd = 2; const it = player.c.take(d.tame); fly(it.m, it.pos, () => w.g.position.clone().add(new V3(0, 0.6, 0)), 0.3, () => scene.remove(it.m));
+      w.tame++; burst(w.g.position.clone().add(new V3(0, 0.8, 0)), 0xff8ab0, 8); sfx('buy');
+      if (w.tame >= 3) {
+        scene.remove(w.g); wild.list.splice(i, 1); bump('tamed');
+        if (sanct.built) { addResident(CRITTERS.find(cr => cr.k === (d.k === 'afox' ? 'fox' : 'fawn'))); toast(`The ${d.label} trusts you now and moves into the Sanctuary!`); }
+        else { W.cash += 400; setCash(); toast(`The ${d.label} trusts you! Build an Animal Sanctuary to give tamed animals a home. +$400`); }
+        setTimeout(() => { const { g, legs } = makeWild(d.k); g.position.set(rand(a[0], a[1]), 0, rand(a[2], a[3])); wild.list.push({ d, g, legs, target: null, idle: 2, phase: 0, tame: 0, cd: 0 }); }, 60000);
+        save(); continue;
+      }
+      toast(`The ${d.label} nibbles the ${itemName(d.tame)}. Trust ${w.tame}/3`);
+    } else if (dp < d.flee && player.c.count(d.tame) === 0) {
+      const away = new V3(w.g.position.x - pp.x, 0, w.g.position.z - pp.z).normalize().multiplyScalar(4).add(w.g.position);
+      away.x = clamp(away.x, a[0], a[1]); away.z = clamp(away.z, a[2], a[3]); w.target = away; w.idle = 0; speed = d.speed;
+    }
+    if (w.idle > 0) w.idle -= dt;
+    else {
+      if (!w.target) w.target = new V3(rand(a[0], a[1]), 0, rand(a[2], a[3]));
+      moving = true;
+      if (stepToward(w.g, w.target, speed, dt, 0.2)) { w.target = null; w.idle = rand(1.5, 5); }
+    }
+    if (moving) w.phase += dt * (speed > 2 ? 14 : 7);
+    w.legs.forEach((l, k) => { l.rotation.x = moving ? Math.sin(w.phase + (k % 2 ? PI : 0)) * 0.6 : 0; });
+  }
+  // a flock of birds now and then
+  wild.birdT -= dt;
+  if (!wild.birds && wild.birdT <= 0 && inMain) {
+    wild.birdT = rand(35, 70); const g = new THREE.Group(); scene.add(g);
+    for (let k = 0; k < 9; k++) { const b = new THREE.Group(); b.position.set(-Math.abs(k - 4) * 0.9, 0, (k - 4) * 0.8); g.add(b); for (const s of [-1, 1]) { const wg = mesh(new THREE.BoxGeometry(0.5, 0.04, 0.16), 0x2b3442, s * 0.25, 0, 0, b); wg.castShadow = true; } }
+    g.position.set(pp.x - 30, 9, pp.z + rand(-6, 6)); wild.birds = { g, t: 0 };
+  }
+  if (wild.birds) {
+    const b = wild.birds; b.t += dt; b.g.position.x += dt * 8; b.g.position.y = 9 + Math.sin(b.t * 2) * 0.3;
+    b.g.children.forEach((c, k) => c.children.forEach((wg, j) => { wg.rotation.x = Math.sin(b.t * 10 + k) * 0.6 * (j ? 1 : -1); }));
+    if (b.t > 8) { scene.remove(b.g); wild.birds = null; }
+  }
+}
+
+// ================= Night market =================
+const nightMarket = { built: false, open: false, offers: [], paid: [0, 0, 0], g: null, spots: [new V3(10.4, 0, 25.2), new V3(12.8, 0, 25.2), new V3(15.2, 0, 25.2)], marks: [], night: -1, lock: [false, false, false] };
+const NM_OFFERS = [
+  { name: 'Golden Goods', sub: '3 golden pieces', cost: 4000, apply: at => { const pool = ['jam', 'pie', 'candle', 'chair', 'tool', 'cheese', 'toy', 'ornament'].filter(t => STATIONS.some(st => st.built && st.out && st.out[0] === t)); const list = pool.length ? pool : ['jam']; for (let i = 0; i < 3; i++) { const t = list[randi(0, list.length - 1)], m = makeItem(t); makeGolden(m, t); const gi = { type: t, m, ready: false }; groundItems.push(gi); const to = at.clone().add(new V3(rand(-1, 1), 0.1, 1.6)); fly(m, at.clone().setY(1), () => to, 0.4, () => { gi.ready = true; }, 1); } } },
+  { name: 'Treasure Map', sub: 'Where X marks the spot', cost: 3000, apply: () => giveMap() },
+  { name: 'Research Notes', sub: '+6 research points', cost: 4000, apply: () => { research.kp += 6; } },
+  { name: 'Aurora Crystal', sub: 'Calls an aurora tonight', cost: 5000, apply: () => { wx.aurora = true; ensureAurora(); } },
+  { name: 'Lucky Charm', sub: '2x cash for 90s', cost: 3500, apply: () => { boost.cash = 90; } },
+  { name: 'Rare Bait', sub: 'Adds an uncaught fish to your book', cost: 2500, apply: () => { const f = FISH.filter(x => !legacy.fish[x.id] && x.page !== 'Legendary'); if (f.length) { const pick = f[randi(0, f.length - 1)]; legacy.fish[pick.id] = 1; saveLegacy(); toast(`${pick.name} added to your fish book!`); } else { W.cash += 2500; setCash(); } } },
+];
+function buildNightMarket() {
+  nightMarket.built = true; const g = new THREE.Group(); scene.add(g); nightMarket.g = g;
+  nightMarket.spots.forEach((sp, i) => {
+    const st = new THREE.Group(); st.position.set(sp.x, 0, sp.z - 2.0); g.add(st);
+    mesh(new THREE.BoxGeometry(1.6, 0.8, 0.7), 0x5a3a24, 0, 0.4, 0, st);
+    for (const x of [-0.75, 0.75]) mesh(new THREE.BoxGeometry(0.08, 1.4, 0.08), 0x3a2a1a, x, 1.1, -0.2, st);
+    mesh(new THREE.BoxGeometry(1.8, 0.1, 0.9), [0x7a4fc8, 0x2f6a9a, 0xb03a5a][i], 0, 1.85, -0.1, st);
+    const l = new THREE.Mesh(GEO.lantern, lanternMat); l.position.set(0.6, 1.6, 0.25); st.add(l);
+    const lab = groundLabel(2.1, c => {
+      const o = nightMarket.offers[i]; if (!o) return; const k = nightMarket.paid[i] / o.cost;
+      c.fillStyle = 'rgba(40,20,70,0.75)'; roundRect(c, 10, 10, 236, 236, 30); c.fill();
+      c.save(); roundRect(c, 10, 10, 236, 236, 30); c.clip(); c.fillStyle = 'rgba(80,205,110,0.7)'; c.fillRect(10, 246 - 236 * k, 236, 236 * k); c.restore();
+      c.lineWidth = 8; c.strokeStyle = '#d9b3ff'; c.setLineDash([22, 12]); roundRect(c, 10, 10, 236, 236, 30); c.stroke(); c.setLineDash([]);
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 28px "Nunito", sans-serif'; c.fillText(o.name, 128, 80);
+      c.font = 'bold 20px "Nunito", sans-serif'; c.fillText(o.sub, 128, 120); c.font = '42px "Lilita One", sans-serif'; c.fillText(o.sold ? 'Sold' : '$' + fmt(o.cost - nightMarket.paid[i]), 128, 185);
+    });
+    lab.mesh.position.set(sp.x, 0.035, sp.z); g.add(lab.mesh); nightMarket.marks.push(lab);
+  });
+  g.visible = false;
+}
+function updateNightMarket(dt) {
+  if (!town.built) return;
+  if (!nightMarket.built) buildNightMarket();
+  const open = isNight();
+  if (open && !nightMarket.open) {
+    const nightNo = Math.floor(dayT / CYCLE);
+    if (nightMarket.night !== nightNo) { nightMarket.night = nightNo; nightMarket.offers = NM_OFFERS.slice().sort(() => Math.random() - 0.5).slice(0, 3).map(o => ({ ...o })); nightMarket.paid = [0, 0, 0]; }
+    nightMarket.marks.forEach(m => m.redraw());
+    if (regionOf(player.g.position) === 'main') toast('The Night Market is open in Market Town!');
+  }
+  nightMarket.open = open; nightMarket.g.visible = open;
+  if (!open) return;
+  const pp = player.g.position;
+  nightMarket.spots.forEach((sp, i) => {
+    const o = nightMarket.offers[i]; if (!o || o.sold) return;
+    const on = inZone(pp, sp.x, sp.z, 1.05);
+    if (!on) { nightMarket.lock[i] = false; return; }
+    if (nightMarket.lock[i] || W.cash <= 0) return;
+    nightMarket.t = (nightMarket.t || 0) + dt; if (nightMarket.t < 0.07) return; nightMarket.t = 0;
+    const chunk = Math.min(W.cash, o.cost - nightMarket.paid[i], Math.max(1, Math.ceil(o.cost / 30)));
+    W.cash -= chunk; nightMarket.paid[i] += chunk; setCash(); sfx('pay');
+    if (nightMarket.paid[i] >= o.cost) { o.sold = true; nightMarket.lock[i] = true; o.apply(sp.clone()); bump('nightmarket'); sfx('buy'); toast(`Bought: ${o.name}!`); burst(sp, 0xd9b3ff, 14); }
+    nightMarket.marks[i].redraw();
+  });
+}
+
+// ================= Your Cabin =================
+FAR.home = { name: 'Your Cabin', rect: { x0: 200, x1: 212, z0: -6, z1: 6 }, test: p => p.x > 196, env: { bg: 0x2a1a14, near: 20, far: 60, hemi: 0.85, sky: 0xffe0b8, sun: 0.35 }, floor: 0x9a6a46, wall: 0x7a4a2a,
+  entrance: new V3(11.4, 0, -1.8), pad: 'cabin', start: new V3(202.6, 0, 0), exit: new V3(200.8, 0, 0), built: false, wasIn: false };
+const HOME_SLOTS = [
+  { type: 'quilt', name: 'Bed', at: [206, -4], set: 'cozy' }, { type: 'chair', name: 'Armchair', at: [209.5, -3.6], set: 'cozy' }, { type: 'candle', name: 'Candlestick', at: [210.6, 0], set: 'cozy' },
+  { type: 'toy', name: 'Toy shelf', at: [206, 4], set: 'play' }, { type: 'ornament', name: 'Little tree', at: [209.5, 3.8], set: 'play' }, { type: 'rocker', name: 'Rocking horse', at: [203.6, 3.6], set: 'play' },
+];
+const home = { built: false, filled: {} };
+const homeBonus = () => 1 + (HOME_SLOTS.filter(s => s.set === 'cozy').every(s => home.filled[s.type]) ? 0.05 : 0) + (HOME_SLOTS.filter(s => s.set === 'play').every(s => home.filled[s.type]) ? 0.05 : 0);
+function buildCabin(instant) {
+  if (home.built) return; home.built = true; FAR.home.built = true;
+  const ex = stationGroup(13.8, -1.8);
+  mesh(new THREE.BoxGeometry(2.0, 1.4, 1.6), 0x8a5a36, 0, 0.7, 0, ex);
+  for (let i = 0; i < 4; i++) mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.05, 6), 0x6b4428, 0, 0.2 + i * 0.36, 0.81, ex).rotation.z = PI / 2;
+  const rf = mesh(new THREE.ConeGeometry(1.6, 1.0, 4), 0x9a3b2a, 0, 1.9, 0, ex); rf.rotation.y = PI / 4; rf.scale.z = 0.8;
+  mesh(new THREE.BoxGeometry(0.3, 0.7, 0.3), 0x8d97a6, 0.55, 2.2, -0.2, ex);
+  colliders.push({ x0: 12.8, x1: 14.8, z0: -2.6, z1: -1.0 });
+  zoneMarker(11.4, -1.8, 'house', '#ffd23a');
+  const { x0, x1, z0, z1 } = FAR.home.rect, cx = (x0 + x1) / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat(0x9a6a46)); floor.rotation.x = -PI / 2; floor.position.set(cx, 0.01, 0); floor.receiveShadow = true; scene.add(floor);
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), mat(0xb03a5a)); rug.rotation.x = -PI / 2; rug.position.set(cx + 0.5, 0.02, 0); rug.scale.y = 0.7; scene.add(rug);
+  for (const [w, d, x, z] of [[x1 - x0, 0.3, cx, z0], [x1 - x0, 0.3, cx, z1], [0.3, z1 - z0, x0, 0], [0.3, z1 - z0, x1, 0]]) mesh(new THREE.BoxGeometry(w, 2.6, d), 0x7a4a2a, x, 1.3, z);
+  const fire = stationGroup(211.4, 0); mesh(new THREE.BoxGeometry(0.6, 1.6, 1.8), 0x8d97a6, 0, 0.8, 0, fire);
+  const fl = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 7), new THREE.MeshBasicMaterial({ color: 0xffa23a })); fl.position.set(-0.25, 0.45, 0); fire.add(fl); home.flame = fl;
+  const L = new THREE.PointLight(0xffb070, 1.6, 14, 1.5); L.position.set(208, 2.2, 0); scene.add(L);
+  zoneMarker(FAR.home.exit.x, FAR.home.exit.z, 'exit', '#ffd23a');
+  home.meshes = {};
+  for (const sl of HOME_SLOTS) { zoneMarker(sl.at[0], sl.at[1], ICON_OF[sl.type] || 'gift', '#ffd23a'); if (home.filled[sl.type]) placeFurniture(sl); }
+  if (!instant) { popIn(ex); toast('Your cabin is ready! Step on its door to go inside and furnish it.'); }
+}
+function placeFurniture(sl) {
+  const m = makeItem(sl.type); m.scale.multiplyScalar(sl.type === 'quilt' ? 4 : 2.8); m.position.set(sl.at[0], sl.type === 'quilt' ? 0.4 : 0.5, sl.at[1]); scene.add(m); home.meshes[sl.type] = m;
+}
+function updateCabin(dt) {
+  if (!home.built) return;
+  if (home.flame) home.flame.scale.y = 1 + Math.sin(performance.now() / 90) * 0.2;
+  const pp = player.g.position; if (farOf(pp) !== 'home') return;
+  for (const sl of HOME_SLOTS) {
+    if (home.filled[sl.type] || !inZone(pp, sl.at[0], sl.at[1], 1.0)) continue;
+    const it = player.c.take(sl.type); if (!it) continue;
+    scene.remove(it.m); home.filled[sl.type] = true; placeFurniture(sl); sfx('buy'); bump('furnish');
+    const set = HOME_SLOTS.filter(x => x.set === sl.set);
+    if (set.every(x => home.filled[x.type])) { toast(`${sl.set === 'cozy' ? 'Cozy' : 'Playful'} set complete! +5% on all income.`); for (let k = 0; k < 3; k++) setTimeout(() => firework(pp.clone()), k * 250); }
+    else toast(`${sl.name} placed!`);
+    save();
+  }
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -5959,9 +6156,20 @@ function renderPeople() {
   if (c) h += `<div class="wh"><b>${c.name}</b><span class="chip warn">Target ${rival.goal}</span><small>You so far: ${contestVal(c) - rival.start}</small></div>`;
   h += `<h4>Villagers</h4><p>Build cottages north of camp so villagers move in. Walk up to one while carrying their favorite to make friends. Best friends add 5% to all income.</p>`;
   h += VILLAGERS.map((d, i) => { const v = villagers.find(x => x.def === d); return v
-    ? `<div class="wh"><b>${d.name}</b><span class="chip ${v.hearts >= 10 ? 'ok' : 'warn'}">\u2665 ${v.hearts}/10</span><small>${capFirst(d.about)}. Loves ${itemName(d.fav, 2)}.</small></div>`
+    ? `<div class="wh"><b>${d.name}</b><span class="chip ${v.hearts >= 10 ? 'ok' : 'warn'}">\u2665 ${v.hearts}/10</span><small>${capFirst(d.about)}. Loves ${itemName(d.fav, 2)}. On trips: ${TRIP_SKILL[d.name][1]}.</small>${v.hearts >= 3 ? `<div class="rowbtns"><button type="button" data-trip="${d.name}">${v.trip ? 'Send home' : 'Bring along'}</button></div>` : '<small>Reach 3 hearts to take them on day trips.</small>'}</div>`
     : `<div class="wh"><b>Empty cottage ${i + 1}</b><span class="chip bad">Not built</span><small>Build it to welcome a new villager.</small></div>`; }).join('');
   menuBody.innerHTML = h;
+  menuBody.querySelectorAll('[data-trip]').forEach(b => b.onclick = () => toggleTrip(b.dataset.trip));
+}
+const TRIP_SKILL = { Elsa: ['farm', 'an extra berry, wheat or carrot each harvest'], Bjorn: ['wood', 'an extra log each chop'], Mira: ['art', '+3% golden pieces'],
+  Otto: ['fish', 'fish bite twice as fast'], Saga: ['heal', 'you never drop items when hit'], Nils: ['story', '+10% income'] };
+function companionSkill() { const v = villagers.find(x => x.trip); return v ? TRIP_SKILL[v.def.name][0] : null; }
+function toggleTrip(name) {
+  const v = villagers.find(x => x.def.name === name); if (!v) return;
+  const was = v.trip; for (const o of villagers) o.trip = false;
+  v.trip = !was; if (v.trip) { v.p.group.position.copy(player.g.position).add(new V3(1, 0, 1)); bump('trips'); toast(`${name} comes along: ${TRIP_SKILL[name][1]}. They'll head home at dawn.`); }
+  else toast(`${name} heads home.`);
+  renderPeople();
 }
 document.getElementById('recipebtn').onclick = () => showMenuView(menuView === 'recipes' ? '' : 'recipes');
 function renderRecipes() {
@@ -5984,6 +6192,7 @@ const PLACES = [
   { name: 'Frost Mine', sub: 'Gold, coal, iron and golems', at: () => mine.start, ok: () => mine.built },
   { name: 'Farm', sub: 'Wheat, carrots, oven and soup', at: () => new V3(16.1, 0, 23.0), ok: () => farm.built },
   { name: 'Aurora Isle', sub: 'Shards, hotel and Apothecary', at: () => isle.start, ok: () => isle.built },
+  { name: 'Your Cabin', sub: 'Furnish it for bonuses', at: () => FAR.home.start, ok: () => home.built },
   { name: 'Sky Peak', sub: 'Nests, feathers and the Weather Station', at: () => FAR.peak.start, ok: () => FAR.peak.built },
   { name: 'Frozen Lake', sub: 'Ice fishing and the skating rink', at: () => FAR.lake.start, ok: () => FAR.lake.built },
   { name: 'Steam Caves', sub: 'Mushrooms, vents and the Greenhouse', at: () => FAR.steam.start, ok: () => FAR.steam.built },
@@ -6001,7 +6210,7 @@ function renderTravel() {
 }
 
 // warehouse: every building, its stock and whether it's stuck
-const AREA_NAME = { main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave', peak: 'Sky Peak', lake: 'Frozen Lake', steam: 'Steam Caves', cove: 'Shipwreck Cove' };
+const AREA_NAME = { home: 'Your Cabin', main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave', peak: 'Sky Peak', lake: 'Frozen Lake', steam: 'Steam Caves', cove: 'Shipwreck Cove' };
 function vendorStatus(v) {
   const st = v.station;
   const missing = v.needs.filter(n => n.pile.n < (n.n || 1)).map(n => n.types ? 'goods' : itemName(n.type, 2));
@@ -6121,7 +6330,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -6129,6 +6338,8 @@ if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
+  if (saved.home) home.filled = saved.home;
+  if (saved.nmNight) { nightMarket.night = saved.nmNight[0]; nightMarket.offers = saved.nmNight[1].filter(([i]) => i >= 0).map(([i, sold]) => ({ ...NM_OFFERS[i], sold })); nightMarket.paid = saved.nmNight[2] || [0, 0, 0]; }
   if (saved.guild) Object.assign(guild, saved.guild);
   if (saved.treasure) Object.assign(treasure, saved.treasure);
   if (saved.raceDay) [race.day, race.today] = saved.raceDay;
@@ -6184,7 +6395,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -6220,7 +6431,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
