@@ -2710,8 +2710,10 @@ function unlockIsle(instant) {
   zoneMarker(isle.ferry.x, isle.ferry.z, 'boat', '#9fd2f5');
   // the island
   const cx = (ISLE.x0 + ISLE.x1) / 2, cz = (ISLE.z0 + ISLE.z1) / 2;
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(90, 70), mat(0x3f8ad0)); sea.rotation.x = -PI / 2; sea.position.set(cx, 0.02, cz); scene.add(sea);
-  const land = new THREE.Mesh(new THREE.CylinderGeometry(23, 24, 0.4, 40), mat(0xeef6ff)); land.position.set(cx, 0, cz); land.scale.z = 0.85; land.receiveShadow = true; scene.add(land);
+  // the sea is a ring around the island and the land's top sits just above ground level,
+  // so pads, drop-off squares and piles on the island stay visible on top of it
+  const sea = new THREE.Mesh(new THREE.RingGeometry(23.4, 70, 56), mat(0x3f8ad0)); sea.rotation.x = -PI / 2; sea.scale.y = 0.85; sea.position.set(cx, 0.02, cz); scene.add(sea);
+  const land = new THREE.Mesh(new THREE.CylinderGeometry(23, 24, 0.4, 40), mat(0xeef6ff)); land.position.set(cx, -0.19, cz); land.scale.z = 0.85; land.receiveShadow = true; scene.add(land);
   const rim = new THREE.Mesh(new THREE.TorusGeometry(23.5, 0.5, 6, 40), mat(0xffffff)); rim.rotation.x = PI / 2; rim.scale.y = 0.85; rim.position.set(cx, 0.15, cz); scene.add(rim);
   for (let i = 0; i < 14; i++) { const a = rand(0, 2 * PI), rr = rand(24, 33); const ice = mesh(new THREE.CylinderGeometry(rand(0.8, 1.8), rand(1, 2), 0.25, 6), 0xdff1ff, cx + Math.cos(a) * rr, 0.05, cz + Math.sin(a) * rr * 0.85); ice.castShadow = false; }
   const dockG = stationGroup(101, 54);
