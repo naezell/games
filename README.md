@@ -68,3 +68,9 @@ the Frost Wraith, bosses that level up, villagers who move in, a six-chapter sto
 contests against a rival camp, Sky Peak, the Frozen Lake, the Steam Caves and Shipwreck Cove,
 an animal sanctuary, pet treats, a 20-fish collection book, garden pieces you can place and
 move, sunny spells, blizzards and aurora nights, and four holidays.
+
+### Round F: automation, challenges, people, extras
+- **Freight Train** loops north of camp and sells goods from any building more than half full. **Storage Sheds** let every building hold more. The **Power Plant** burns logs to speed up all buildings. A new **Diamond** tier adds a second floor. **Camp beauty**: every 10 garden pieces gives +1% income, and there are four new garden pieces.
+- **Crossbow turrets** shoot wolves. The Ice Cave now goes down into the **Endless Depths**. A **Frost Titan** appears each week, and damage to it lasts all week. **Timed challenges** award medals. **Hard rules** for Golden Restarts give extra stars.
+- **Villager favors** at 4 and 8 hearts, each adding +1% income. A **merchant ship** docks every third day. **Duels** against Captain Brisk. **Lantern Night** and the **Ice Sculpture Contest**. A **mailbox** with tips, gifts and paid requests.
+- New pets: the **Snow Hare** and the **Baby Yeti**. A **Cooking Pot** with 8 recipes that give buffs. An **Aquarium** that earns more for every fish species you've caught. A **Snowmobile**. **Ambient sounds** (wind, water, birds, fire) and festival music.

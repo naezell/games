@@ -51,6 +51,7 @@
   #barfill { display: block; height: 100%; width: 0; background: #ffd23a; }
   #clock.night #barfill { background: #9fb6ff; }
   #chal { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 64px); transform: translateX(-50%); background: rgba(20,28,48,.88); color: #ffe27a; border-radius: 12px; padding: 8px 14px; font: 800 14px var(--font-body); white-space: nowrap; pointer-events: none; z-index: 5; }
+  #buffbar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 104px); transform: translateX(-50%); background: rgba(30,90,60,.88); color: #dfffe8; border-radius: 12px; padding: 6px 12px; font: 800 13px var(--font-body); white-space: nowrap; pointer-events: none; z-index: 5; }
   .hardrow { display: block; margin: 6px 0; font: 700 13px var(--font-body); } .hardrow small { color: #5a6878; }
   #toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); box-sizing: border-box;
     background: rgba(20,28,48,.85); color: var(--white); border-radius: 16px; padding: 12px 20px; text-align: center;
@@ -261,7 +262,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="chalbtn" type="button">Challenges</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -833,6 +834,7 @@ class CashPile extends Pile {
     if (typeof placed !== 'undefined') { const fn = Math.min(3, placed.filter(q => q.k === 'fountain').length); if (fn) v = Math.round(v * (1 + 0.03 * fn)); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
     if (typeof beautyBonus === 'function') v = Math.round(v * beautyBonus());
+    if (buffs.cash > 0) v = Math.round(v * 1.25);
     if (hardOn('poor')) v = Math.round(v * 0.75);
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'lanterns' && isNight()) v = Math.round(v * 1.15);
     if (typeof favorBonus === 'function') v = Math.round(v * favorBonus());
@@ -1522,7 +1524,7 @@ function unlockDock(instant) {
 function tryFish(carrier, who, dt) {
   dock.active = 0.3;
   who.fishT = (who.fishT || 0) + dt;
-  if (who.fishT > (who === player && companionSkill() === 'fish' ? 0.7 : 1.4) * (who === player && outfitBonus() === 'fish' ? 0.75 : 1) && !carrier.full()) {
+  if (who.fishT > (who === player && companionSkill() === 'fish' ? 0.7 : 1.4) * (who === player && outfitBonus() === 'fish' ? 0.75 : 1) * (who === player && buffs.fish > 0 ? 0.5 : 1) && !carrier.full()) {
     who.fishT = 0;
     const frozen = typeof wx !== 'undefined' && wx.kind === 'blizzard', ty = frozen ? 'ice' : 'fish';
     carrier.receive(ty, makeItem(ty), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
@@ -3197,18 +3199,19 @@ function buildMount(instant) {
   rideBtn.hidden = false; showRide();
   if (!instant) { burst(player.g.position, fur, 12); toast('Hop on! Your reindeer makes you 60% faster.'); }
 }
-const riding = () => mount.built && W.ride;
+const riding = () => (mount.built || snowmo.built) && W.ride;
 function updateMount(dt, moving) {
-  if (!mount.built) return;
-  mount.g.visible = W.ride;
-  player.g.position.y = W.ride ? 0.72 : 0;
+  if (!mount.built && !snowmo.built) return;
+  if (mount.g) mount.g.visible = W.ride && !snowmo.built;
+  if (snowmo.g) { snowmo.g.visible = W.ride; if (W.ride && moving) { snowmo.g.rotation.z = Math.sin(performance.now() / 120) * 0.03; snowmo.puff -= dt; if (snowmo.puff <= 0) { snowmo.puff = 0.12; burst(player.g.position.clone().add(new V3(0, -0.2, 0)), 0xffffff, 2); } } }
+  player.g.position.y = W.ride ? (snowmo.built ? 0.32 : 0.72) : 0;
   player.p.legL.visible = player.p.legR.visible = !W.ride;
-  if (!W.ride) return;
+  if (!W.ride || snowmo.built) return;
   if (moving) mount.phase += dt * 13;
   mount.legs.forEach((l, i) => { l.rotation.x = moving ? Math.sin(mount.phase + (i % 2 ? PI : 0)) * 0.7 : 0; });
 }
 const rideBtn = document.createElement('button'); rideBtn.type = 'button'; rideBtn.id = 'ridebtn'; rideBtn.hidden = true;
-const showRide = () => { rideBtn.textContent = W.ride ? 'Riding reindeer' : 'Walking'; rideBtn.classList.toggle('on', W.ride); };
+const showRide = () => { rideBtn.textContent = W.ride ? (snowmo.built ? 'Riding snowmobile' : 'Riding reindeer') : 'Walking'; rideBtn.classList.toggle('on', W.ride); };
 rideBtn.onclick = () => { W.ride = !W.ride; showRide(); save(); };
 document.querySelector('#menu .mgrid').appendChild(rideBtn);
 
@@ -3271,7 +3274,7 @@ const ITEM_NAME_EXTRA = {};
 const ICON_OF = { feather: 'feather', mushroom: 'mushroom', pearl: 'pearl', quilt: 'quilt', glowfish: 'fish', obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 // ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
 const TIER_SPEED = [1, 0.75, 0.55, 0.42], TIER_NAME = ['Basic', 'Silver', 'Gold', 'Diamond'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33, 0x8ff0ff];
-const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0);
+const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0) + (buffs.luck > 0 ? 0.05 : 0);
 const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
 function makeGolden(m, type) {
   m.material = goldenMat; m.userData.golden = true; m.scale.multiplyScalar(1.15);
@@ -4462,6 +4465,10 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['cook5', 'Home Chef', 'Discover 5 Cooking Pot recipes', () => Object.keys(legacy.cook || {}).length >= 5],
+  ['yeti50', 'Little Lumberjack', 'Your Baby Yeti chops 50 times', () => stat('yetichops') >= 50],
+  ['aqua10', 'Fish Keeper', 'Show 10 kinds of fish in the Aquarium', () => aquarium.built && aquaSpecies() >= 10],
+  ['vroom', 'Vroom', 'Get the turbo snowmobile', () => snowmo.lvl >= 2],
   ['favor6', 'Good Neighbor', 'Finish 6 villager favors', () => stat('favors') >= 6],
   ['ship3', 'Ahoy!', 'Buy 3 things from the merchant ship', () => stat('shipbuys') >= 3],
   ['duel3', 'Fastest Axe', 'Win 3 duels against Captain Brisk', () => stat('duelwins') >= 3],
@@ -4575,7 +4582,7 @@ function renderLegacy() {
 const workers = [];
 const WCOL = { obsminer: 0x2a1a3a, farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
-const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
+const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, train.cash, aquarium.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
   constructor(kind, x, z) {
     this.kind = kind;
@@ -4709,6 +4716,11 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'hare', label: 'Snow Hare', icon: 'dog', costs: [7000], x: -9.6, z: -13.4, req: () => husky.owned || owl.owned || !!pets.penguin || !!pets.fox, apply: (l, i) => adoptHare(i) },
+  { id: 'yetipet', label: 'Baby Yeti', icon: 'dog', costs: [14000], x: -9.6, z: -11.0, req: () => !!pets.hare, apply: (l, i) => adoptYeti(i) },
+  { id: 'pot', label: 'Cooking Pot', icon: 'stew', costs: [2500], x: 13.4, z: -22.6, req: () => padLevel('hall') > 0, apply: (l, i) => buildPot(i) },
+  { id: 'aquarium', label: 'Aquarium', icon: 'fish', costs: [15000, 30000], x: -7.6, z: -21.0, req: () => dock.built, apply: (l, i) => buildAquarium(l, i) },
+  { id: 'garage', label: 'Snowmobile', icon: 'sled', costs: [8000, 16000], x: 8.2, z: -12.4, req: () => padLevel('boots') > 0, apply: (l, i) => buildSnowmobile(l, i) },
   { id: 'mailbox', label: 'Mailbox', icon: 'board', costs: [800], x: -14.4, z: -5.2, req: () => padLevel('hall') > 0, apply: (l, i) => buildMailbox(i) },
   { id: 'turret', label: 'Crossbow Turret', icon: 'tower', costs: [4000, 9000, 16000], x: -12.2, z: -12.2, req: () => padLevel('tower') > 0, apply: (l, i) => buildTurret(l, i) },
   { id: 'shed', label: 'Storage Shed', icon: 'house', costs: [3000, 8000, 18000], x: -1.6, z: -15.4, req: () => padLevel('hall') > 0, apply: (l, i) => buildShed(l, i) },
@@ -5189,7 +5201,7 @@ function updatePlayer(dt) {
   const pos = player.g.position;
   if (moving) {
     dir.normalize();
-    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK) * (riding() ? 1.6 : 1) * (outfitBonus() === 'speed' ? 1.1 : 1) * (shipPerk.compass ? 1.05 : 1));
+    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK) * (riding() ? (snowmo.built ? 1.9 + 0.3 * (snowmo.lvl - 1) : 1.6) : 1) * (outfitBonus() === 'speed' ? 1.1 : 1) * (shipPerk.compass ? 1.05 : 1) * (buffs.speed > 0 ? 1.2 : 1) * (pets.hare ? 1.1 : 1));
     player.g.rotation.y = lerpAng(player.g.rotation.y, Math.atan2(dir.x, dir.z), 0.3);
     collide(pos, 0.38);
   }
@@ -5210,7 +5222,7 @@ function updatePlayer(dt) {
       const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms, crops, obsidians, feathers, mushrooms, pearls).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
         const ob = outfitBonus(), mining = t.k.sound === 'mine';
-        player.atk = 0.38 * (1 - 0.2 * U('axe')) * ((ob === 'chop' && !mining) || (ob === 'mine' && mining) ? 0.75 : 1); player.p.swing = 1; t.hit(player.c);
+        player.atk = 0.38 * (1 - 0.2 * U('axe')) * ((ob === 'chop' && !mining) || (ob === 'mine' && mining) ? 0.75 : 1) * (buffs.chop > 0 ? 0.7 : 1); player.p.swing = 1; t.hit(player.c);
         if (mining && Math.random() < 0.06) findGem();
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
       }
@@ -5567,6 +5579,11 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  hare: 'A fluffy pet that makes you walk 10% faster and digs up snacks and coins.',
+  yetipet: 'A little yeti that chops trees near you and hands you the logs.',
+  pot: 'Drop in two different ingredients to cook a dish. Each recipe gives a short buff, like faster chopping or bigger tips.',
+  aquarium: 'Visitors pay to see your fish. It earns more for every kind of fish in your fish book.',
+  garage: 'A snowmobile, faster than the reindeer. Level 2 adds a turbo.',
   mailbox: 'Letters arrive every few minutes: tips, cash gifts, and requests that pay well when you mail the goods.',
   turret: 'Each level adds a crossbow turret at the camp edge. Turrets shoot wolves that come close, and level 3 bolts hit twice as hard.',
   shed: 'Every building holds 25% more goods per level, so they keep working longer while you are away.',
@@ -6699,6 +6716,213 @@ function updateMail(dt) {
   mail.wasIn = on;
 }
 
+// ================= New pets: Snow Hare and Baby Yeti =================
+function adoptHare(instant) {
+  if (pets.hare) return;
+  const g = new THREE.Group(); scene.add(g); const fur = 0xf6f8fb;
+  mesh(new THREE.BoxGeometry(0.3, 0.28, 0.45), fur, 0, 0.26, 0, g); mesh(new THREE.BoxGeometry(0.26, 0.24, 0.26), fur, 0, 0.42, 0.24, g);
+  for (const x of [-0.07, 0.07]) mesh(new THREE.BoxGeometry(0.06, 0.32, 0.05), fur, x, 0.68, 0.2, g);
+  mesh(new THREE.BoxGeometry(0.05, 0.05, 0.03), 0xff8ab0, 0, 0.42, 0.38, g); mesh(new THREE.SphereGeometry(0.08, 6, 5), 0xffffff, 0, 0.3, -0.26, g);
+  g.position.copy(player.g.position).add(new V3(-1.2, 0, -0.6));
+  pets.hare = { g, hop: 0, findT: 45 };
+  if (!instant) { burst(g.position, fur, 10); toast('A Snow Hare joins you! You walk 10% faster, and it sniffs out snacks.'); }
+}
+function adoptYeti(instant) {
+  if (pets.yeti) return;
+  const g = new THREE.Group(); scene.add(g); const fur = 0xeef3f8;
+  mesh(new THREE.BoxGeometry(0.7, 0.75, 0.55), fur, 0, 0.7, 0, g); mesh(new THREE.BoxGeometry(0.5, 0.45, 0.45), fur, 0, 1.28, 0.05, g);
+  mesh(new THREE.BoxGeometry(0.34, 0.24, 0.05), 0x7a9ab8, 0, 1.25, 0.28, g);
+  for (const x of [-0.08, 0.08]) mesh(new THREE.BoxGeometry(0.06, 0.06, 0.03), 0x1a1a1a, x, 1.3, 0.31, g);
+  const arms = [-1, 1].map(sd => { const a = new THREE.Group(); a.position.set(sd * 0.45, 1.0, 0); g.add(a); mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), fur, 0, -0.25, 0, a); return a; });
+  for (const x of [-0.18, 0.18]) mesh(new THREE.BoxGeometry(0.22, 0.35, 0.24), fur, x, 0.17, 0, g);
+  g.position.copy(player.g.position).add(new V3(1.4, 0, -0.8));
+  pets.yeti = { g, arms, cd: 2, swing: 0 };
+  if (!instant) { burst(g.position, fur, 12); toast('A Baby Yeti joins you! It chops nearby trees and hands you the logs.'); }
+}
+function updateNewPets(dt) {
+  const h = pets.hare;
+  if (h) {
+    const mv = petFollow(h.g, -1.5, dt, W.speed * 1.2); h.hop += dt * (mv ? 14 : 3); h.g.position.y = mv ? Math.abs(Math.sin(h.hop)) * 0.25 : 0;
+    h.findT -= dt; if (h.findT <= 0) { h.findT = 50 - 10 * U('petlvl'); const t = ['berry', 'carrot', 'cash', 'cash', 'gem'][randi(0, 4)]; dropGround(t, h.g.position.clone()); burst(h.g.position, 0xffffff, 6); bump('harefinds'); }
+  }
+  const y = pets.yeti;
+  if (y) {
+    y.cd -= dt;
+    if (y.swing > 0) { y.swing -= dt; y.arms.forEach(a => { a.rotation.x = -Math.sin(y.swing * 12) * 1.2; }); }
+    else { const mv = petFollow(y.g, 1.6, dt, W.speed * 1.1); y.g.rotation.z = mv ? Math.sin(performance.now() / 110) * 0.08 : 0; y.arms.forEach(a => { a.rotation.x = 0; }); }
+    if (y.cd <= 0 && !player.c.full()) {
+      y.cd = 1.8 - 0.3 * U('petlvl');
+      const t = nearest(trees.filter(t => !t.down), y.g.position);
+      if (t && d2(t.pos, y.g.position) < 3.2) { y.swing = 0.5; y.g.rotation.y = Math.atan2(t.pos.x - y.g.position.x, t.pos.z - y.g.position.z); t.hit(player.c); bump('yetichops'); }
+    }
+  }
+}
+
+// ================= Cooking pot: dishes give short buffs =================
+const buffs = { speed: 0, chop: 0, fish: 0, cash: 0, luck: 0 };
+const COOK = [
+  { id: 'huntstew', name: "Hunter's Stew", a: 'meat', b: 'berry', buff: 'chop', t: 180, desc: 'chop and mine 30% faster' },
+  { id: 'fishcake', name: 'Fish Cakes', a: 'fish', b: 'wheat', buff: 'fish', t: 180, desc: 'fish bite twice as fast' },
+  { id: 'smoothie', name: 'Berry Smoothie', a: 'berry', b: 'milk', buff: 'speed', t: 180, desc: 'walk 20% faster' },
+  { id: 'roast', name: 'Carrot Roast', a: 'carrot', b: 'meat', buff: 'chop', t: 240, desc: 'chop and mine 30% faster' },
+  { id: 'honeymilk', name: 'Honey Milk', a: 'comb', b: 'milk', buff: 'cash', t: 120, desc: '+25% on all income' },
+  { id: 'toast', name: 'Mushroom Toast', a: 'mushroom', b: 'bread', buff: 'luck', t: 180, desc: '+5% golden pieces' },
+  { id: 'chowder', name: 'Fish Chowder', a: 'fish', b: 'milk', buff: 'cash', t: 150, desc: '+25% on all income' },
+  { id: 'jamtart', name: 'Jam Tart', a: 'jam', b: 'wheat', buff: 'speed', t: 240, desc: 'walk 20% faster' },
+];
+const COOK_IN = [...new Set(COOK.flatMap(c => [c.a, c.b]))];
+const BUFF_NAME = { speed: 'Quick feet', chop: 'Strong arms', fish: 'Lucky line', cash: 'Big tips', luck: 'Golden touch' };
+const pot = { built: false, slots: [], cookT: 0, zone: new V3(10.5, 0, -22.6), at: new V3(10.5, 0, -24.8), wasIn: false };
+legacy.cook = legacy.cook || {};
+const buffEl = document.createElement('div'); buffEl.id = 'buffbar'; buffEl.hidden = true; document.body.appendChild(buffEl);
+function buildPot(instant) {
+  if (pot.built) return; pot.built = true;
+  const g = stationGroup(pot.at.x, pot.at.z); pot.g = g;
+  for (let i = 0; i < 6; i++) { const a = i / 6 * 2 * PI; mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), 0x8d97a6, Math.cos(a) * 0.75, 0.1, Math.sin(a) * 0.75, g); }
+  for (const sd of [-1, 1]) mesh(new THREE.BoxGeometry(0.08, 1.5, 0.08), 0x5a3a1e, sd * 0.85, 0.75, 0, g);
+  mesh(new THREE.BoxGeometry(1.8, 0.08, 0.08), 0x5a3a1e, 0, 1.5, 0, g);
+  mesh(new THREE.SphereGeometry(0.5, 12, 8, 0, 2 * PI, PI / 3, PI * 2 / 3), 0x2b3442, 0, 0.75, 0, g);
+  pot.soup = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshLambertMaterial({ color: 0xc88a40, emissive: 0x3a2000 })); pot.soup.rotation.x = -PI / 2; pot.soup.position.y = 1.0; g.add(pot.soup);
+  pot.fire = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.5, 7), new THREE.MeshBasicMaterial({ color: 0xffa23a })); pot.fire.position.y = 0.25; g.add(pot.fire);
+  colliders.push({ x0: pot.at.x - 0.9, x1: pot.at.x + 0.9, z0: pot.at.z - 0.9, z1: pot.at.z + 0.9 });
+  zoneMarker(pot.zone.x, pot.zone.z, 'stew', '#ffffff');
+  if (!instant) { popIn(g); toast('Cooking Pot ready! Drop in two different ingredients (meat, berries, fish, wheat, milk...) to cook a dish with a buff.'); }
+}
+function updateCook(dt) {
+  let txt = '';
+  for (const k in buffs) if (buffs[k] > 0) { buffs[k] -= dt; txt += (txt ? ' · ' : '') + `${BUFF_NAME[k]} ${Math.ceil(buffs[k] / 60)}m`; }
+  buffEl.hidden = !txt; if (txt && buffEl.textContent !== txt) buffEl.textContent = txt;
+  if (!pot.built) return;
+  pot.fire.scale.y = 1 + Math.sin(performance.now() / 80) * 0.25;
+  pot.soup.position.y = 1.0 + (pot.cookT > 0 ? Math.sin(performance.now() / 60) * 0.03 : 0);
+  if (pot.cookT > 0) {
+    pot.cookT -= dt; if (Math.random() < dt * 6) burst(pot.at.clone().setY(1.1), 0xffffff, 1);
+    if (pot.cookT <= 0) cookDish();
+    return;
+  }
+  const pp = player.g.position, on = inZone(pp, pot.zone.x, pot.zone.z, 1.05);
+  if (on && pot.slots.length < 2) {
+    for (const t of COOK_IN) {
+      if (pot.slots.includes(t)) continue;
+      const it = player.c.take(t); if (!it) continue;
+      pot.slots.push(t); sfx('drop');
+      fly(it.m, it.pos, () => pot.at.clone().setY(1.2), 0.35, () => scene.remove(it.m));
+      if (pot.slots.length === 2) { pot.cookT = 2; sfx('splash'); }
+      else if (!pot.wasIn) toast(`${capFirst(itemName(t))} in the pot. Add one more, different ingredient.`);
+      break;
+    }
+  }
+  pot.wasIn = on;
+}
+function cookDish() {
+  const [a, b] = pot.slots; pot.slots = [];
+  const rc = COOK.find(c => (c.a === a && c.b === b) || (c.a === b && c.b === a));
+  pot.soup.material.color.setHex(rc ? 0xe8a040 : 0x8a7a5a); bump('dishes');
+  if (!rc) { const cash = Math.round(Math.max(100, incomeRate * 8) / 10) * 10; W.cash += cash; setCash(); toast(`Mystery Stew! Not a real recipe, but a hungry guest pays $${fmt(cash)} for it.`); return; }
+  const isNew = !legacy.cook[rc.id]; legacy.cook[rc.id] = 1; saveLegacy();
+  buffs[rc.buff] = Math.max(buffs[rc.buff], 0) + rc.t; sfx('buy'); burst(pot.at.clone().setY(1.4), 0xffd23a, 16);
+  toast(`${isNew ? 'New recipe! ' : ''}${rc.name}: ${rc.desc} for ${rc.t / 60} minutes.`);
+}
+function renderCookbook() {
+  menuBody.innerHTML = `<h4>Cookbook</h4><p>Drop two different ingredients in the Cooking Pot. ${Object.keys(legacy.cook).length}/${COOK.length} found.</p>` + COOK.map(c => legacy.cook[c.id]
+    ? `<div class="wh"><b>${c.name}</b><span class="chip ok">Found</span><small>${capFirst(itemName(c.a))} + ${itemName(c.b)}: ${c.desc} for ${c.t / 60} min.</small></div>`
+    : `<div class="wh"><b>???</b><span class="chip warn">Not found</span><small>Has ${itemName(c.a)} in it...</small></div>`).join('');
+}
+document.getElementById('cookbtn').onclick = renderCookbook;
+
+// ================= Aquarium =================
+const aquarium = { built: false, lvl: 0, t: 0, cash: null, fish: [], at: new V3(-7.6, 0, -24.2) };
+const aquaSpecies = () => Object.keys(legacy.fish || {}).length;
+function buildAquarium(l, instant) {
+  aquarium.lvl = l + 1;
+  if (!aquarium.built) {
+    aquarium.built = true; const g = stationGroup(aquarium.at.x, aquarium.at.z); aquarium.g = g;
+    mesh(new THREE.BoxGeometry(4.0, 0.5, 2.4), 0x6a7480, 0, 0.25, 0, g);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.8, 2.2), new THREE.MeshLambertMaterial({ color: 0x5fd0e6, transparent: true, opacity: 0.45, emissive: 0x0d3a44 })); glass.position.y = 1.4; g.add(glass);
+    mesh(new THREE.BoxGeometry(4.0, 0.15, 2.4), 0x6a7480, 0, 2.38, 0, g);
+    mesh(new THREE.BoxGeometry(3.6, 0.12, 2.0), 0xd8c8a0, 0, 0.56, 0, g);
+    for (let i = 0; i < 5; i++) mesh(new THREE.ConeGeometry(0.08, rand(0.4, 0.9), 5), 0x3fa85a, rand(-1.6, 1.6), 0.8, rand(-0.8, 0.8), g);
+    colliders.push({ x0: aquarium.at.x - 2.1, x1: aquarium.at.x + 2.1, z0: aquarium.at.z - 1.3, z1: aquarium.at.z + 1.3 });
+    aquarium.cash = new CashPile(aquarium.at.x + 3.2, aquarium.at.z + 1.6);
+  }
+  if (!instant) toast(aquarium.lvl === 1 ? `Aquarium open! Visitors pay to see every kind of fish in your fish book (${aquaSpecies()} so far).` : 'Bigger aquarium: visitors pay 60% more.');
+}
+function updateAquarium(dt) {
+  if (!aquarium.built) return;
+  const n = Math.min(14, aquaSpecies());
+  while (aquarium.fish.length < n) {
+    const i = aquarium.fish.length, sp = FISH.filter(f => legacy.fish[f.id])[i];
+    const f = new THREE.Group(); aquarium.g.add(f); mesh(new THREE.BoxGeometry(0.12, 0.16, 0.3), sp && sp.color || [0xffa23a, 0x3f8fd8, 0xffd23a, 0xd84a3a, 0x9a5ad8][i % 5], 0, 0, 0, f); mesh(new THREE.ConeGeometry(0.08, 0.14, 4), 0xffffff, 0, 0, -0.2, f).rotation.x = -PI / 2;
+    f.userData = { r: rand(0.4, 1.4), y: rand(0.9, 1.9), sp: rand(0.5, 1.2) * (i % 2 ? 1 : -1), ph: rand(0, 6) }; aquarium.fish.push(f);
+  }
+  if (regionOf(player.g.position) === 'main') for (const f of aquarium.fish) { const u = f.userData; u.ph += dt * u.sp; f.position.set(Math.cos(u.ph) * u.r * 1.2, u.y + Math.sin(u.ph * 2) * 0.08, Math.sin(u.ph) * u.r * 0.6); f.rotation.y = Math.atan2(-Math.sin(u.ph) * u.sp, Math.cos(u.ph) * u.sp * 0.5) + (u.sp > 0 ? 0 : PI); }
+  aquarium.t += dt; if (aquarium.t < 6) return; aquarium.t = 0;
+  if (n) aquarium.cash.addValue(Math.round(n * 6 * (aquarium.lvl >= 2 ? 1.6 : 1)), aquarium.at.clone().setY(2.4));
+}
+
+// ================= Snowmobile =================
+const snowmo = { built: false, lvl: 0, g: null, puff: 0 };
+function buildSnowmobile(l, instant) {
+  snowmo.lvl = l + 1;
+  if (!snowmo.built) {
+    snowmo.built = true;
+    const g = new THREE.Group(); snowmo.g = g; player.g.add(g); g.position.y = -0.32;
+    mesh(new THREE.BoxGeometry(0.8, 0.4, 1.7), 0xd84a3a, 0, 0.45, 0, g);
+    mesh(new THREE.BoxGeometry(0.7, 0.18, 0.7), 0x2b3442, 0, 0.72, -0.2, g);
+    const ws = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.05), new THREE.MeshLambertMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.6 })); ws.position.set(0, 0.85, 0.55); ws.rotation.x = -0.4; g.add(ws);
+    for (const x of [-0.42, 0.42]) { mesh(new THREE.BoxGeometry(0.1, 0.06, 1.9), 0x2b3442, x, 0.08, 0.1, g); const tip = mesh(new THREE.BoxGeometry(0.1, 0.06, 0.3), 0x2b3442, x, 0.15, 1.1, g); tip.rotation.x = -0.6; }
+    mesh(new THREE.BoxGeometry(0.6, 0.2, 0.5), 0x1d2433, 0, 0.25, -0.7, g);
+    mesh(new THREE.SphereGeometry(0.07, 6, 5), 0xffe08a, 0, 0.55, 0.86, g);
+    rideBtn.hidden = false; if (!instant) W.ride = true; showRide();
+  }
+  if (!instant) { burst(player.g.position, 0xd84a3a, 12); toast(snowmo.lvl === 1 ? 'Your snowmobile is ready! It is faster than the reindeer. Toggle it from the Menu.' : 'Turbo snowmobile: even faster!'); }
+}
+
+// ================= Ambient sounds =================
+const amb = { on: true, nodes: null, chirp: 4, crackle: 1 };
+try { amb.on = localStorage.getItem(SAVE_KEY + '-amb') !== '0'; } catch (e) {}
+const ambBtn = document.getElementById('ambbtn');
+const showAmb = () => { ambBtn.textContent = amb.on ? 'Ambience on' : 'Ambience off'; ambBtn.classList.toggle('on', amb.on); };
+showAmb();
+ambBtn.onclick = () => { amb.on = !amb.on; showAmb(); audioInit(); try { localStorage.setItem(SAVE_KEY + '-amb', amb.on ? '1' : '0'); } catch (e) {} };
+function ambNodes() {
+  const len = actx.sampleRate * 2, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const mk = (type, freq, q) => { const src = actx.createBufferSource(); src.buffer = buf; src.loop = true; const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = actx.createGain(); g.gain.value = 0; src.connect(f); f.connect(g); g.connect(actx.destination); src.start(); return { g, f }; };
+  return { wind: mk('lowpass', 420, 0.7), water: mk('bandpass', 1400, 0.8) };
+}
+function ambTone(f0, f1, dur, vol, type = 'sine', delay = 0) {
+  const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + delay;
+  o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.03);
+}
+function updateAmbience(dt) {
+  if (!actx || actx.state !== 'running') return;
+  const live = amb.on && !muted;
+  if (!amb.nodes) { if (!live) return; amb.nodes = ambNodes(); }
+  const pp = player.g.position, area = regionOf(pp), main = area === 'main', blizz = wx.kind === 'blizzard' || stormK > 0.3;
+  const windV = live ? (blizz ? 0.07 : main ? 0.022 : area === 'mine' ? 0.01 : 0.016) : 0;
+  const waterV = live && main ? Math.max(0, 1 - Math.abs(pp.x - 28.6) / 9) * 0.035 : 0;
+  amb.nodes.wind.g.gain.value += (windV - amb.nodes.wind.g.gain.value) * Math.min(1, dt * 2);
+  amb.nodes.wind.f.frequency.value = 380 + Math.sin(performance.now() / 2300) * 160 + (blizz ? 300 : 0);
+  amb.nodes.water.g.gain.value += (waterV - amb.nodes.water.g.gain.value) * Math.min(1, dt * 2);
+  if (!live) return;
+  amb.chirp -= dt;
+  if (amb.chirp <= 0) {
+    amb.chirp = rand(5, 11);
+    if (main && !isNight() && !blizz) { const f = rand(2400, 3400); for (let k = 0; k < randi(2, 4); k++) ambTone(f, f * 1.3, 0.07, 0.025, 'sine', k * 0.11); }
+    else if (main && isNight()) { ambTone(440, 400, 0.18, 0.03); ambTone(400, 360, 0.24, 0.03, 'sine', 0.25); }
+  }
+  amb.crackle -= dt;
+  if (amb.crackle <= 0) {
+    amb.crackle = rand(0.08, 0.35);
+    const fires = [grill.output.center, pot.built ? pot.at : null, home.built ? new V3(211.4, 0, 0) : null].filter(Boolean);
+    const near = fires.reduce((m, f) => Math.min(m, d2(f, pp)), 99);
+    if (near < 7) ambTone(rand(1800, 3200), rand(600, 900), 0.03, 0.02 * (1 - near / 7), 'square');
+  }
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -6977,7 +7201,7 @@ showMusic();
 musicBtn.onclick = () => { music.on = !music.on; showMusic(); audioInit(); try { localStorage.setItem(SAVE_KEY + '-music', music.on ? '1' : '0'); } catch (e) {} };
 const SCALES = {
   day: [261.6, [0, 2, 4, 7, 9, 12, 14, 16], 0.5], night: [196, [0, 3, 5, 7, 10, 12, 15], 0.8], mine: [146.8, [0, 1, 5, 7, 8, 12, 13], 0.75],
-  isle: [293.7, [0, 2, 4, 6, 9, 11, 14], 0.55], volcano: [130.8, [0, 1, 4, 5, 7, 8, 11, 12], 0.6], spring: [329.6, [0, 2, 4, 7, 9, 12], 0.45],
+  isle: [293.7, [0, 2, 4, 6, 9, 11, 14], 0.55], fest: [349.2, [0, 2, 4, 5, 7, 9, 12], 0.4], volcano: [130.8, [0, 1, 4, 5, 7, 8, 11, 12], 0.6], spring: [329.6, [0, 2, 4, 7, 9, 12], 0.45],
 };
 function playNote(f, dur, vol) {
   const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime;
@@ -6990,7 +7214,8 @@ function musicTick(dt) {
   if (!music.gain) { music.gain = actx.createGain(); music.gain.gain.value = 0.06; music.gain.connect(actx.destination); }
   music.t -= dt; if (music.t > 0) return;
   const area = regionOf(player.g.position);
-  const key = area !== 'main' ? area : isNight() ? 'night' : (typeof isSpring === 'function' && isSpring()) ? 'spring' : 'day';
+  const ev = eventFor(Math.floor(dayT / CYCLE) + 1);
+  const key = area !== 'main' ? area : (ev === 'festival' || ev === 'lanterns') ? 'fest' : isNight() ? 'night' : (typeof isSpring === 'function' && isSpring()) ? 'spring' : 'day';
   const [base, sc, beat] = SCALES[key] || SCALES.day;
   music.step = clamp(music.step + randi(-2, 2), 0, sc.length - 1);
   if (Math.random() < 0.85) playNote(base * Math.pow(2, sc[music.step] / 12), beat * 2.2, 0.5);
@@ -7001,7 +7226,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f4: { buffs }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -7009,6 +7234,7 @@ if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(outfitOwned(saved.outfit) ? saved.outfit : 0), 0);
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
+  if (saved.f4 && saved.f4.buffs) Object.assign(buffs, saved.f4.buffs);
   if (saved.f3) { Object.assign(favors, saved.f3.favors || {}); shipPerk.compass = !!saved.f3.compass; mail.list = saved.f3.mail || []; mail.req = saved.f3.req || null; if (saved.f3.ship) { ship.day = saved.f3.ship[0]; ship.offers = saved.f3.ship[1].filter(([i]) => i >= 0).map(([i, sold]) => ({ ...SHIP_OFFERS[i], sold })); ship.paid = saved.f3.ship[2] || [0, 0, 0]; } if (saved.f3.sc) [fest.sculptStart, fest.sculptDay] = saved.f3.sc; }
   if (saved.f1) setTimeout(() => { power.fuel = saved.f1.fuel || 0; if (saved.f1.th) { [titan.week, titan.hp, titan.beat] = saved.f1.th; titan.max = titanMax(titan.week); titan.lastQ = Math.ceil(titan.hp / titan.max * 4); } }, 0);
   if (saved.home) home.filled = saved.home;
@@ -7068,7 +7294,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -7105,7 +7331,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
