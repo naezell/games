@@ -154,6 +154,25 @@
   #confirm button { border: 0; border-radius: 12px; padding: 10px 18px; font: 800 16px var(--font-body); cursor: pointer; }
   #yes { background: #d84a3a; color: var(--white); }
   #no { background: #dfe6ee; color: var(--ink); }
+  /* tap info card and delivery arrow */
+  #info { position: fixed; left: 0; top: 0; width: min(300px, calc(100vw - 24px)); max-height: 45vh; overflow: auto; box-sizing: border-box;
+    background: #f7fafc; color: var(--ink); border-radius: 16px; padding: 12px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.3);
+    font: 700 13px/1.35 var(--font-body); pointer-events: auto; cursor: pointer; z-index: 3; touch-action: pan-y; }
+  #info h3 { margin: 0 0 4px; font: 20px var(--font-display); letter-spacing: .3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #info h3 small { font: 800 12px var(--font-body); color: #5a6878; }
+  #info h3 .ico { width: 32px; height: 32px; }
+  #info p { margin: 0 0 4px; }
+  #info h4 { margin: 8px 0 2px; font: 800 11px var(--font-body); text-transform: uppercase; letter-spacing: .5px; color: #5a6878; }
+  #info .row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 2px 0; }
+  #info .ico { width: 28px; height: 28px; display: block; }
+  #info em { font-style: normal; font-size: 12px; color: #2f8a5a; white-space: nowrap; }
+  #info .warn { color: #b03a2a; margin-top: 6px; }
+  #info .hint { color: #5a6878; margin-top: 6px; }
+  #deliver { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2; }
+  #deliver .tip { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  #deliver span { position: absolute; bottom: 26px; white-space: nowrap; background: var(--panel); color: var(--white);
+    border-radius: 999px; padding: 4px 10px; font: 800 13px var(--font-body); }
+  #deliver.below span { bottom: auto; top: 26px; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap">
 </head>
@@ -170,6 +189,8 @@
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
+<div id="info" hidden role="dialog" aria-label="What this is"></div>
+<div id="deliver" hidden aria-hidden="true"><span></span><svg class="tip" viewBox="0 0 44 44"><path d="M22 3 L40 25 H29 V41 H15 V25 H4 Z" fill="#ffd23a" stroke="#1d2a3a" stroke-width="3" stroke-linejoin="round"/></svg></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -3742,6 +3763,246 @@ document.getElementById('yes').onclick = () => {
 };
 let resetting = false;
 
+// ---------------- tap info & delivery arrow ----------------
+// Tap (or click) a build pad, a shop or a ground marker to see what it's for and what it
+// needs. While your pack holds something, an arrow points to the nearest place that takes it.
+const ITEM_NAME = { meat: ['raw meat', 'raw meat'], steak: ['steak', 'steaks'], log: ['log', 'logs'], gem: ['crystal', 'crystals'],
+  fish: ['fish', 'fish'], lantern: ['lantern', 'lanterns'], wool: ['wool', 'wool'], gold: ['gold nugget', 'gold nuggets'],
+  shard: ['aurora shard', 'aurora shards'], berry: ['berry', 'berries'], jam: ['jam', 'jam jars'], coal: ['coal', 'coal'],
+  ore: ['iron ore', 'iron ore'], bar: ['iron bar', 'iron bars'], tool: ['tool', 'tools'], ice: ['ice block', 'ice blocks'],
+  bloom: ['snowbloom', 'snowblooms'], potion: ['potion', 'potions'], comb: ['honeycomb', 'honeycombs'], candle: ['candle', 'candles'],
+  chair: ['chair', 'chairs'], ring: ['ring', 'rings'], pie: ['pie', 'pies'], milk: ['milk', 'milk'], cheese: ['cheese', 'cheeses'],
+  toy: ['toy bear', 'toy bears'], ornament: ['ornament', 'ornaments'] };
+const itemName = (t, n = 1) => (ITEM_NAME[t] || [t, t + 's'])[n === 1 ? 0 : 1];
+const capFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
+const iconOfItem = t => ICON_OF[t] || t;
+const iconImgCache = {};
+function iconImg(icon) {
+  if (!iconImgCache[icon]) {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'); x.fillStyle = 'rgba(30,40,58,0.85)'; roundRect(x, 2, 2, 60, 60, 14); x.fill();
+    drawIcon(x, icon, 32, 32, 0.36);
+    iconImgCache[icon] = c.toDataURL();
+  }
+  return `<img class="ico" alt="" src="${iconImgCache[icon]}">`;
+}
+const regionOf = p => (inIsle(p) ? 'isle' : p.x > 90 ? 'mine' : 'main');
+
+// What each build pad is for (shown when you tap it).
+const PAD_INFO = {
+  saw: 'Buys the logs you chop from the forest.', server: 'Carries cooked steaks from the grill to the counter.',
+  bag: 'Lets you carry more in your pack.', lumber: 'Chops trees and feeds the Sawmill.', hunter: 'Hunts frost boars and brings the meat to the grill.',
+  tower: 'Shoots wolves that raid camp at night.', boots: 'You walk faster.', grill: 'The grill cooks steaks faster.',
+  bridge: 'Crosses the river to the crystal ridge.', cutter: 'Buys the crystals you mine across the river.', miner: 'Mines crystals for the Gem Cutter.',
+  gates: 'Slows wolves down at night.', dock: 'A fishing spot. Stand still on it to catch fish.', smoke: 'Buys the fish you catch.',
+  fisher: 'Catches fish for the Smokehouse.', springs: 'Villagers pay to soak. It burns logs, so keep it stocked.',
+  husky: 'A dog that fetches loot and chases wolves.', wardrobe: 'Unlocks outfits. Step into it to switch.', banker: 'Collects your cash for you.',
+  depot: 'Ships goods by reindeer sled for better prices.', hall: 'Opens the Town Hall shop: upgrades and decorations.',
+  ridge: 'A second camp across the river with new shops.', workshop: 'Turns a log and a crystal into a lantern.', market: 'Buys lanterns.',
+  pen: 'Adds a yak. Yaks grow wool (and give milk at the barn).', tailor: 'Turns wool into coats and pays you for them.',
+  crafter: 'Helps run the Lantern Shop.', shepherd: 'Carries wool from the Yak Pen to the Tailor.', town: 'Opens Market Town to the south.',
+  store: 'Buys jam, tools, potions, pies, candles, chairs, rings, cheese, toys and ornaments.', kitchen: 'Turns two berries into a jar of jam.',
+  picker: 'Picks berries for the Jam Kitchen and the Pie Bakery.', clerk: 'Carries finished goods to the General Store.',
+  smithy: 'Turns iron bars into tools.', smelter: 'Turns iron ore and coal into iron bars.', smelterhand: 'Brings ore and coal to the Smelter.',
+  beeyard: 'Bees make honeycomb on their own.', chandler: 'Turns honeycomb into candles.', beekeeper: 'Carries honeycomb to the Candle Maker.',
+  furniture: 'Turns three logs into a chair.', carpenter: 'Chops logs for the Furniture Shop.', jeweler: 'Turns a crystal and a gold nugget into a ring.',
+  bakery: 'Turns meat and two berries into a pie.', barn: 'Your yaks give milk here.', creamery: 'Turns two bottles of milk into cheese.',
+  milkmaid: 'Carries milk from the barn to the Creamery.', toyshop: 'Turns wool and a log into a toy bear.', glass: 'Turns an ice block and coal into an ornament.',
+  icesaw: 'Cuts ice blocks from the river on its own.', carver: 'Carves ice blocks into sculptures and pays you.', apoth: 'Turns a snowbloom and an aurora shard into a potion.',
+  herbalist: 'Gathers snowblooms and shards for the Apothecary.', boat: 'A boat that brings fish back to the dock.', ferry: 'Sails to Aurora Isle.',
+  hotel: 'Guests pay to stay. It uses lanterns.', exch: 'Buys aurora shards.', sharder: 'Mines aurora shards on the isle.',
+  owl: 'An owl that attacks enemies anywhere.', digger: 'Digs gold in the Frost Mine.', mine: 'Opens the Frost Mine: gold, coal and iron ore.',
+  smith: 'Buys gold nuggets.', runner: 'Carries lanterns from the Lantern Shop to the Market Stall.', sawup: 'The Sawmill pays more per log.',
+};
+
+// Every place that takes items. needs: [{ pile, type | types, n }]; makes: { type, pile }; pays: type => dollars.
+const padLabel = id => (PADS.find(p => p.id === id) || {}).label || id;
+const VENDORS = [
+  { name: 'Grill', pos: grill.pos, ok: () => true, about: 'Cooks raw meat into steaks.', needs: [{ pile: grill.input, type: 'meat', n: 1 }], makes: { type: 'steak', pile: grill.output } },
+  { name: 'Steak Counter', pos: counter.pos, ok: () => true, about: 'Villagers line up here to buy steaks.', needs: [{ pile: counter.input, type: 'steak', n: 1 }], pays: () => STEAK_PRICE, cash: () => counter.cash },
+  { name: 'Sawmill', pos: sawmill.pos, ok: () => sawmill.unlocked, about: PAD_INFO.saw, needs: [{ pile: sawmill.input, type: 'log', n: 1 }], pays: () => LOG_PRICE * (1 + padLevel('sawup')), cash: () => sawmill.cash },
+  { name: 'Gem Cutter', pos: cutter.pos, ok: () => cutter.unlocked, about: PAD_INFO.cutter, needs: [{ pile: cutter.input, type: 'gem', n: 1 }], pays: () => GEM_PRICE + 2 * U('gem'), cash: () => cutter.cash },
+  { name: 'Smokehouse', pos: smoke.pos, ok: () => smoke.unlocked, about: PAD_INFO.smoke, needs: [{ pile: smoke.input, type: 'fish', n: 1 }], pays: () => FISH_PRICE + 2 * U('fish'), cash: () => smoke.cash },
+  { name: 'Hot Springs', pos: springs.pos, ok: () => springs.unlocked, about: 'Each guest burns one log, then pays for the soak.', needs: [{ pile: springs.input, type: 'log', n: 1 }], pays: () => SPA_PRICE + 4 * U('spa'), payWord: 'per guest', cash: () => springs.cash },
+  { name: 'Lantern Shop', pos: workshop.pos, ok: () => workshop.built, about: PAD_INFO.workshop, needs: [{ pile: workshop.logs, type: 'log', n: 1 }, { pile: workshop.gems, type: 'gem', n: 1 }], makes: { type: 'lantern', pile: workshop.out } },
+  { name: 'Market Stall', pos: market.pos, ok: () => market.built, about: PAD_INFO.market, needs: [{ pile: market.input, type: 'lantern', n: 1 }], pays: () => LANTERN_PRICE + 8 * U('lantern'), cash: () => market.cash },
+  { name: 'Tailor', pos: tailor.pos, ok: () => tailor.built, about: PAD_INFO.tailor, needs: [{ pile: tailor.input, type: 'wool', n: 1 }], pays: () => COAT_PRICE + 5 * U('coat'), payWord: 'per coat', cash: () => tailor.cash },
+  { name: 'Yak Pen', pos: pen.pos, ok: () => pen.level > 0, about: 'Your yaks grow wool. Pick it up here.', needs: [], makes: { type: 'wool', pile: pen.out } },
+  { name: 'Goldsmith', pos: smith.pos, ok: () => smith.built, about: PAD_INFO.smith, needs: [{ pile: smith.input, type: 'gold', n: 1 }], pays: () => GOLD_PRICE + 10 * U('goldp'), cash: () => smith.cash },
+  { name: 'Ice Hotel', pos: hotel.pos, ok: () => hotel.built, about: 'Each guest uses one lantern, then pays for the stay.', needs: [{ pile: hotel.input, type: 'lantern', n: 1 }], cash: () => hotel.cash },
+  { name: 'Shard Exchange', pos: exch.pos, ok: () => exch.built, about: PAD_INFO.exch, needs: [{ pile: exch.input, type: 'shard', n: 1 }], pays: () => SHARD_PRICE + 20 * U('shardp'), cash: () => exch.cash },
+  { name: 'Reindeer Sled', pos: depot.pos, ok: () => depot.built, open: () => depot.state === 'load', about: 'Load goods; the sled ships them for better prices.',
+    needs: [{ pile: depot.input, types: Object.keys(SHIP_PRICE), n: 1 }], pays: t => SHIP_PRICE[t], cash: () => depot.cash },
+  { name: 'Fishing Boat', pos: boat.pile.center, ok: () => boat.owned, about: 'Your boat drops its catch here. Take the fish to the Smokehouse.', needs: [], makes: { type: 'fish', pile: boat.pile } },
+];
+for (const st of STATIONS) {
+  const made = st.out && itemName(st.out[0]);
+  VENDORS.push({ name: padLabel(st.id), pos: st.pos, ok: () => st.built, station: st,
+    about: PAD_INFO[st.id] || st.hint || '',
+    needs: st.accepts ? [{ pile: st.ins[0].pile, types: Object.keys(st.accepts), n: 1 }] : st.ins.map(i => ({ pile: i.pile, type: i.type, n: i.n })),
+    makes: st.out ? { type: st.out[0], pile: st.outPile, name: made } : null,
+    pays: st.accepts ? t => st.accepts[t]() : st.sell ? () => st.sell() : null, payWord: st.sell ? 'per sculpture' : '',
+    cash: () => st.cash });
+}
+const takesType = (need, t) => (need.types ? need.types.includes(t) : need.type === t);
+
+// Plain spots on the ground that aren't shops.
+const SPOTS = [
+  { name: 'Town Hall', at: () => hall.zone, ok: () => hall.built, icon: 'board', text: () => 'Stand here to open the shop: upgrades and decorations.' },
+  { name: 'Wardrobe', at: () => wardrobe.zone, ok: () => wardrobe.built, icon: 'hat', text: () => 'Step in to switch outfits. Each wardrobe level unlocks one more.' },
+  { name: 'Fishing Dock', at: () => dock.spot, ok: () => dock.built, icon: 'fish', text: () => 'Stand still here to catch fish. Sell them at the Smokehouse.' },
+  { name: 'Aurora Ferry', at: () => isle.ferry, ok: () => isle.built, icon: 'boat', text: () => 'Step on to sail to Aurora Isle.' },
+  { name: 'Ferry home', at: () => isle.exitZone, ok: () => isle.built, icon: 'boat', text: () => 'Step on to sail back to camp.' },
+  { name: 'Frost Mine', at: () => mine.entrance, ok: () => mine.built, icon: 'pick', text: () => 'Step on to go into the mine: gold, coal and iron ore.' },
+  { name: 'Mine exit', at: () => mine.exitZone, ok: () => mine.built, icon: 'exit', text: () => 'Step on to climb back out to Ridge Camp.' },
+  { name: 'Traveling Trader', at: () => TRADER_PAD, ok: () => trader.state === 'open' && trader.offer, icon: 'cash',
+    text: () => `${trader.offer.label} (${trader.offer.sub}). Needs <b>$${fmt(trader.cost - trader.paid)}</b> more. Walk onto the pad to pay.` },
+];
+
+// ---- info popup ----
+const infoEl = document.getElementById('info');
+let info = null; // { at: V3, h: height above ground, render: () => html }
+function needRow(need, c) {
+  if (need.types) {
+    return need.types.map(t => `<div class="row">${iconImg(iconOfItem(t))}<span>${capFirst(itemName(t, 2))}</span>` +
+      `<b>$${fmt(need.pay ? need.pay(t) : 0)}</b>${c.count(t) ? `<em>${c.count(t)} in pack</em>` : ''}</div>`).join('');
+  }
+  const have = c.count(need.type);
+  return `<div class="row">${iconImg(iconOfItem(need.type))}<span><b>${need.n}</b> × ${itemName(need.type, need.n)}</span>` +
+    `<em>${have ? have + ' in pack' : 'none in pack'}</em></div>`;
+}
+function vendorHtml(v) {
+  const c = player.c, closed = v.open && !v.open();
+  let h = `<h3>${v.name}</h3><p>${v.about}</p>`;
+  if (v.needs.length) {
+    const sold = v.needs[0].types;
+    h += `<h4>${sold ? 'Buys (each)' : v.makes ? `Bring for each ${v.makes.name || itemName(v.makes.type)}` : 'Bring'}</h4>`;
+    for (const n of v.needs) h += needRow(sold ? Object.assign({ pay: v.pays }, n) : n, c);
+    if (v.needs.some(n => n.pile.free() <= 0)) h += `<p class="warn">Full right now. Wait for it to use some up.</p>`;
+  }
+  if (v.makes && !v.needs.length) h += `<h4>Pick up</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span>${capFirst(itemName(v.makes.type, 2))}</span><em>${v.makes.pile.n} ready</em></div>`;
+  else if (v.makes) h += `<h4>Makes</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span><b>1</b> × ${itemName(v.makes.type)}</span><em>${v.makes.pile.n} ready</em></div>`;
+  else if (v.pays && !v.needs[0].types) h += `<h4>Pays</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(v.pays())}</b> ${v.payWord || 'each'}</span></div>`;
+  if (closed) h += `<p class="warn">The sled is out on a run. It takes goods again when it's back.</p>`;
+  return h;
+}
+function padHtml(p) {
+  const st = padState[p.id], cost = p.costs[st.level], left = cost - st.paid, lv = p.costs.length > 1 ? ` <small>level ${st.level + 1} of ${p.costs.length}</small>` : '';
+  return `<h3>${iconImg(p.icon)}${p.label}${lv}</h3><p>${PAD_INFO[p.id] || ''}</p>` +
+    `<h4>Needs</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(left)}</b>${st.paid ? ` more (of $${fmt(cost)})` : ''}</span>` +
+    `<em>${W.cash >= left ? 'you have enough' : `you have $${fmt(W.cash)}`}</em></div><p class="hint">Walk onto the pad to pay.</p>`;
+}
+function openInfo(at, h, render) {
+  info = { at, h, render }; infoEl.innerHTML = render(); infoEl.hidden = false; infoEl.scrollTop = 0; info.t = 0; placeInfo();
+}
+function closeInfo() { info = null; infoEl.hidden = true; }
+// tap the card to close it (a fresh tap, not the click that follows the tap that opened it; dragging scrolls)
+let cardDown = null;
+infoEl.addEventListener('pointerdown', e => { cardDown = { x: e.clientX, y: e.clientY }; });
+infoEl.addEventListener('pointerup', e => { if (cardDown && Math.hypot(e.clientX - cardDown.x, e.clientY - cardDown.y) < 10) closeInfo(); cardDown = null; });
+const toScreen = (x, y, z) => {
+  const v = new V3(x, y, z).project(camera);
+  return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight, behind: v.z > 1 };
+};
+function placeInfo() {
+  const s = toScreen(info.at.x, info.h, info.at.z);
+  if (s.behind || s.x < -40 || s.x > innerWidth + 40 || s.y < -40 || s.y > innerHeight + 40) { closeInfo(); return; }
+  const w = infoEl.offsetWidth, hh = infoEl.offsetHeight, m = 12;
+  let left = Math.min(Math.max(m, s.x - w / 2), innerWidth - w - m);
+  let top = s.y - hh - 18;
+  if (top < 70) top = s.y + 26;
+  top = Math.min(Math.max(m, top), innerHeight - hh - 90);
+  infoEl.style.transform = `translate(${Math.round(left)}px,${Math.round(top)}px)`;
+}
+function tapTargets() {
+  const out = [], r = regionOf(player.g.position);
+  const add = (p, y, rad, fn, h = 1.6) => { if (regionOf(p) === r) out.push({ p, y, rad, fn, h }); };
+  for (const p of PADS) if (p.label3d.mesh.parent) add(new V3(p.x, 0, p.z), 0, 52, () => padHtml(p), 0.4);
+  for (const v of VENDORS) {
+    if (!v.ok()) continue;
+    const fn = () => vendorHtml(v);
+    add(v.pos, 1.0, 64, fn, 2.6);
+    for (const n of v.needs) add(n.pile.center, 0, 44, fn, 0.6);
+    if (v.makes) add(v.makes.pile.center, 0, 44, fn, 0.6);
+    const cp = v.cash && v.cash(); if (cp) add(cp.center, 0, 40, fn, 0.6);
+  }
+  for (const sp of SPOTS) if (sp.ok()) add(sp.at(), 0, 48, () => `<h3>${iconImg(sp.icon)}${sp.name}</h3><p>${sp.text()}</p>`, 0.6);
+  return out;
+}
+function onTap(x, y) {
+  let best = null, bd = 1e9;
+  for (const t of tapTargets()) {
+    const s = toScreen(t.p.x, t.y, t.p.z); if (s.behind) continue;
+    const d = Math.hypot(s.x - x, s.y - y);
+    if (d < t.rad && d < bd) { bd = d; best = t; }
+  }
+  if (!best) { closeInfo(); return; }
+  sfx('pop');
+  openInfo(best.p, best.h, best.fn);
+}
+const tap = { id: null, x: 0, y: 0, t: 0 };
+cv.addEventListener('pointerdown', e => { if (tap.id === null) Object.assign(tap, { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp }); });
+cv.addEventListener('pointerup', e => {
+  if (e.pointerId !== tap.id) return; tap.id = null;
+  if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12 && e.timeStamp - tap.t < 450) onTap(e.clientX, e.clientY);
+});
+cv.addEventListener('pointercancel', e => { if (e.pointerId === tap.id) tap.id = null; });
+
+// ---- delivery arrow ----
+const arrowEl = document.getElementById('deliver'), arrowTip = arrowEl.querySelector('.tip'), arrowLbl = arrowEl.querySelector('span');
+let arrowT = 0, arrowGoal = null;
+function findDelivery() {
+  const c = player.c, pos = player.g.position, here = regionOf(pos);
+  const have = [...new Set(c.items.map(it => it.type))];
+  if (!have.length) return null;
+  let best = null, bd = 1e9, full = null, fd = 1e9, elsewhere = null;
+  for (const v of VENDORS) {
+    if (!v.ok() || (v.open && !v.open())) continue;
+    for (const n of v.needs) {
+      const t = have.find(ty => takesType(n, ty)); if (!t) continue;
+      const p = n.pile.center;
+      if (regionOf(p) !== here) { elsewhere = elsewhere || regionOf(p); continue; }
+      const d = d2(p, pos);
+      if (n.pile.free() > 0) { if (d < bd) { bd = d; best = { p, label: `${capFirst(itemName(t, 2))} → ${v.name}` }; } }
+      else if (d < fd) { fd = d; full = { p, label: `${capFirst(itemName(t, 2))} → ${v.name} (full)` }; }
+    }
+  }
+  if (best || full) return best || full;
+  if (!elsewhere) return null;
+  // the place that takes it is in another area: point to the way there
+  if (here === 'main') return elsewhere === 'mine' ? { p: mine.entrance, label: 'To the Frost Mine' } : { p: isle.ferry, label: 'To the Aurora Ferry' };
+  return here === 'mine' ? { p: mine.exitZone, label: 'To the mine exit' } : { p: isle.exitZone, label: 'Ferry back to camp' };
+}
+function updateDeliver(dt, t) {
+  arrowT -= dt;
+  if (arrowT <= 0) { arrowT = 0.2; arrowGoal = findDelivery(); }
+  const g = arrowGoal;
+  const show = g && !guide.visible && shopEl.hidden && d2(g.p, player.g.position) > 1.3;
+  if (!show) { if (!arrowEl.hidden) arrowEl.hidden = true; return; }
+  if (arrowEl.hidden) arrowEl.hidden = false;
+  if (arrowLbl.textContent !== g.label) arrowLbl.textContent = g.label;
+  const s = toScreen(g.p.x, 1.2, g.p.z), W_ = innerWidth, H_ = innerHeight;
+  const L = 16, R = W_ - 16, T = 96, B = H_ - 86;
+  let x = s.x, y = s.y, edge = s.behind || x < L || x > R || y < T || y > B, ang = 180;
+  if (s.behind) { x = W_ - x; y = H_ - y; }
+  if (edge) {
+    const cx = W_ / 2, cy = H_ / 2, dx = x - cx, dy = y - cy;
+    const k = Math.min(dx > 0 ? (R - cx) / dx : dx < 0 ? (L - cx) / dx : 1e9, dy > 0 ? (B - cy) / dy : dy < 0 ? (T - cy) / dy : 1e9);
+    x = cx + dx * k; y = cy + dy * k;
+    if (x > W_ - 170 && y > H_ - 150) y = H_ - 150; // keep clear of the Drop pack button
+    ang = Math.atan2(dy, dx) * 180 / PI + 90;
+  } else y -= 14 + Math.abs(Math.sin(t * 4)) * 10;
+  arrowEl.classList.toggle('below', y < T + 50);
+  const lw = arrowLbl.offsetWidth; arrowLbl.style.left = Math.round(Math.min(Math.max(8, x - lw / 2), W_ - lw - 8) - x) + 'px';
+  arrowEl.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
+  arrowTip.style.transform = `rotate(${Math.round(ang)}deg)`;
+}
+function updateHelp(dt, t) {
+  updateDeliver(dt, t);
+  if (info) { info.t += dt; if (info.t > 0.5) { info.t = 0; infoEl.innerHTML = info.render(); } placeInfo(); }
+}
+window.__help = { onTap, closeInfo, findDelivery, getInfo: () => info, VENDORS, toScreen };
+
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
@@ -3821,6 +4082,7 @@ function frame() {
   snow.position.set(camTarget.x, 0, camTarget.z);
   applyMineEnv();
 
+  updateHelp(dt, t);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
