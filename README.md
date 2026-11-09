@@ -74,3 +74,8 @@ move, sunny spells, blizzards and aurora nights, and four holidays.
 - **Crossbow turrets** shoot wolves. The Ice Cave now goes down into the **Endless Depths**. A **Frost Titan** appears each week, and damage to it lasts all week. **Timed challenges** award medals. **Hard rules** for Golden Restarts give extra stars.
 - **Villager favors** at 4 and 8 hearts, each adding +1% income. A **merchant ship** docks every third day. **Duels** against Captain Brisk. **Lantern Parade** and the **Carving Cup**. A **mailbox** with tips, gifts and paid requests.
 - New pets: the **Snow Hare** and the **Baby Yeti**. A **Cooking Pot** with 8 recipes that give buffs. An **Aquarium** that earns more for every fish species you've caught. A **Snowmobile**. **Ambient sounds** (wind, water, birds, fire) and festival music.
+
+### Round G: harbor, managers, dens, council
+- The **Cargo Balloon** brings goods home from Ridge Camp and the far lands. **Area managers** (in the Town Hall) collect cash piles for you. The **Water Mill** powers buildings for free. The **Harbor District** has a Fish Market, Shipyard, Café and Gift Shop, and research unlocks the Boot Maker, Sled Works and Ski Shop there.
+- **Wolf dens** to clear each week, **avalanches** that bury buildings, the **Deep Hole** ice-fishing mini-game, a weekly **Lake Tournament** against the villagers, and **daily streak** rewards.
+- **Villager jobs**. **Six new villagers** with homes facing Market Town. A **tourist ferry** that brings shoppers to the Gift Shop. **Story chapters 7–10**, ending with the harbor beacon. A weekly **Town Council** vote.

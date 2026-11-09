@@ -65,6 +65,8 @@
   .dgrid span { background: #e3e9f0; border-radius: 8px; padding: 4px 2px; font: 700 10px var(--font-body); text-align: center; color: #5a6878; }
   .dgrid span b { display: block; font-size: 10px; color: #1d2433; }
   .dgrid span.got { background: #c8f0d2; } .dgrid span.today { outline: 2px solid #3f8fd8; }
+  #storycard .polbtn, .polbtn { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 10px 12px; border: 2px solid #d5dde6; border-radius: 12px; background: #fff; color: var(--ink, #1d2433); font: 800 15px var(--font-body); cursor: pointer; }
+  #storycard .polbtn small, .polbtn small { display: block; font: 700 12px var(--font-body); color: #5a6878; margin-top: 2px; }
   .hardrow { display: block; margin: 6px 0; font: 700 13px var(--font-body); } .hardrow small { color: #5a6878; }
   #toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); box-sizing: border-box;
     background: rgba(20,28,48,.85); color: var(--white); border-radius: 16px; padding: 12px 20px; text-align: center;
@@ -275,7 +277,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="dailybtn" type="button">Daily rewards</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="dailybtn" type="button">Daily rewards</button><button id="councilbtn" type="button">Town Council</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -849,6 +851,8 @@ class CashPile extends Pile {
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
     if (typeof beautyBonus === 'function') v = Math.round(v * beautyBonus());
     if (buffs.cash > 0) v = Math.round(v * 1.25);
+    if (policyOn('market')) v = Math.round(v * 1.15);
+    if (beacon.done) v = Math.round(v * 1.1);
     if (hardOn('poor')) v = Math.round(v * 0.75);
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'lanterns' && isNight()) v = Math.round(v * 1.15);
     if (typeof favorBonus === 'function') v = Math.round(v * favorBonus());
@@ -1037,7 +1041,7 @@ class Tree {
     if (this.down || carrier.full()) return false;
     this.hp--; this.shake = 0.3;
     carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.2, 0)));
-    if ((isAutumn() && GROWS[this.kind]) || (carrier === player.c && ((companionSkill() === 'wood' && this.k.item === 'log') || (companionSkill() === 'farm' && GROWS[this.kind])))) { if (!carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.4, 0))); }
+    if (((isAutumn() || policyOn('harvest')) && GROWS[this.kind]) || (carrier === player.c && ((companionSkill() === 'wood' && this.k.item === 'log') || (companionSkill() === 'farm' && GROWS[this.kind])))) { if (!carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.4, 0))); }
     if (carrier === player.c) { sfx(this.k.sound); questProgress(this.k.item); if (wx.aurora && AURORA_DOUBLE.has(this.k.item) && !carrier.full()) carrier.receive(this.k.item, makeItem(this.k.item), this.pos.clone().add(new V3(0, 1.5, 0))); }
     if (this.hp <= 0) { this.down = true; this.regrow = this.k.regrow; this.m.visible = false; this.stump.visible = true; burst(this.pos, this.k.color); }
     return true;
@@ -2795,7 +2799,14 @@ const VILLAGERS = [
   { name: 'Saga', fav: 'potion', color: 0x4fb0a8, about: 'a healer who studies potions' },
   { name: 'Nils', fav: 'stew', color: 0x6c7fd8, about: 'a storyteller who needs a warm meal' },
 ];
-const LOTS = [[-8.8, -8.6], [-6.3, -8.6], [-3.8, -8.6], [3.8, -8.6], [6.3, -8.6], [8.8, -8.6]];
+VILLAGERS.push(
+  { name: 'Ingrid', fav: 'bread', color: 0x3fa8c8, about: 'a ski champion who is always hungry' },
+  { name: 'Leif', fav: 'ring', color: 0x2f5a8a, about: 'a sailor saving up for a wedding ring' },
+  { name: 'Astrid', fav: 'toy', color: 0xe86a8a, about: 'a toymaker with a hundred ideas' },
+  { name: 'Sven', fav: 'ornament', color: 0x8a6ad8, about: 'a musician who loves shiny things' },
+  { name: 'Freya', fav: 'quilt', color: 0xc8843a, about: 'a painter who is always cold' },
+  { name: 'Erik', fav: 'chair', color: 0x5a9a4a, about: 'a sled racer whose legs are tired' });
+const LOTS = [[-8.8, -8.6], [-6.3, -8.6], [-3.8, -8.6], [3.8, -8.6], [6.3, -8.6], [8.8, -8.6], [-8.6, 32.9], [-6.1, 32.9], [-3.6, 32.9], [3.6, 32.9], [6.1, 32.9], [8.6, 32.9]];
 const villagers = [];
 let villSaved = {};
 const friendBonus = () => (1 + 0.05 * villagers.filter(v => v.hearts >= 10).length) * (altar.done ? 1.1 : 1);
@@ -2810,14 +2821,14 @@ function drawTag(v) {
 }
 function moveIn(i, instant) {
   const def = VILLAGERS[i], [lx, lz] = LOTS[i];
-  const g = stationGroup(lx, lz);
-  hut(g, [0xf2e6c8, 0xdfeaf2, 0xf6dcc0, 0xe8f0d8, 0xf0dcec, 0xe0e8f6][i], [0xd84a3a, 0x3f7fc8, 0x2f8a5a, 0xe0a43a, 0x7a4fc8, 0x6b3f1f][i], 1.8, 1.4);
+  const g = stationGroup(lx, lz), flip = i >= 6, dz = flip ? -1.4 : 1.4; if (flip) g.rotation.y = PI;
+  hut(g, [0xf2e6c8, 0xdfeaf2, 0xf6dcc0, 0xe8f0d8, 0xf0dcec, 0xe0e8f6][i % 6], [0xd84a3a, 0x3f7fc8, 0x2f8a5a, 0xe0a43a, 0x7a4fc8, 0x6b3f1f][(i + 3) % 6], 1.8, 1.4);
   mesh(new THREE.BoxGeometry(0.45, 0.8, 0.05), 0x6b3f1f, 0, 0.4, 0.71, g);
   colliders.push({ x0: lx - 0.9, x1: lx + 0.9, z0: lz - 0.7, z1: lz + 0.7 });
-  const p = makePerson(def.color, null, 0.95); p.group.position.set(lx, 0, lz + 1.4);
+  const p = makePerson(def.color, null, 0.95); p.group.position.set(lx, 0, lz + dz);
   const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
   const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false })); tag.scale.set(2.8, 0.7, 1); tag.position.y = 2.4; tag.renderOrder = 4; p.group.add(tag);
-  const v = { def, p, home: new V3(lx, 0, lz + 1.4), hearts: villSaved[def.name] || 0, tagCv, tag, target: null, idle: rand(1, 4), cd: 0 };
+  const v = { def, p, home: new V3(lx, 0, lz + dz), hearts: villSaved[def.name] || 0, tagCv, tag, target: null, idle: rand(1, 4), cd: 0 };
   villagers.push(v); drawTag(v);
   if (!instant) { popIn(g); burst(new V3(lx, 0, lz), def.color, 16); toast(`${def.name}, ${def.about}, moved in! Bring ${itemName(def.fav, 2)} to make friends.`); }
 }
@@ -2826,6 +2837,7 @@ function updateVillagers(dt) {
   for (const v of villagers) {
     const g = v.p.group; v.cd -= dt;
     if (v.trip) { const mv = petFollow(g, 1.1, dt, W.speed * (riding() ? 1.7 : 1.1)); animPerson(v.p, mv, dt); if (d2(g.position, pp) > 30) g.position.copy(pp).add(new V3(1, 0, 1)); continue; }
+    if (v.job) { const st = jobStation(v); if (st && st.built) { if (st.x >= 90) { g.visible = false; continue; } g.visible = true; const spot = st.pos.clone().add(new V3(1.7, 0, 1.3)); const mv = !navStep(g, spot, 1.8, dt, 0.3); animPerson(v.p, mv, dt); if (!mv) g.rotation.y = Math.atan2(st.pos.x - g.position.x, st.pos.z - g.position.z); continue; } }
     let moving = false;
     if (v.idle > 0) v.idle -= dt;
     else {
@@ -2867,6 +2879,11 @@ const STORY = [
   { title: 'Chapter 5: The Old Lighthouse', text: "In the wraith's chest you find the explorer's journal. It tells of a lighthouse by the river, across the bridge, that once kept the wolves away.", goal: 'Bring 10 lanterns and 5 iron bars to the old Lighthouse', done: () => light.done, reward: 8000 },
   { title: 'Chapter 6: Wake the Aurora', text: 'The last page tells of an altar on Aurora Isle. Feed it, and the northern lights will bless the valley.', goal: 'Bring 5 potions, 5 aurora shards and 1 obsidian blade to the Aurora Altar', done: () => altar.done, reward: 20000 },
 ];
+STORY.push(
+  { title: 'Chapter 7: The Fading Lights', text: 'Some nights the aurora flickers and goes dark. An old sailor says the lights fade whenever the sea lantern is cold. Find the sea.', goal: 'Open the Harbor District', done: () => FAR.harbor.built, reward: 25000 },
+  { title: "Chapter 8: The Keeper's Log", text: 'The last lighthouse keeper hid his log deep under the ice. The harbor folk say it lies three floors below the Ice Cave.', goal: 'Reach Floor 3 of the Endless Depths', done: () => stat('deepest') >= 3, reward: 30000 },
+  { title: 'Chapter 9: A Frozen Heart', text: 'The log says the sea lantern burned on a shard of aurora, and that a Frost Titan swallowed it long ago.', goal: 'Defeat a Frost Titan', done: () => stat('titan') >= 1, reward: 40000 },
+  { title: 'Chapter 10: Light the Beacon', text: 'With the shard in hand, the old lighthouse in the harbor can burn again. It needs fuel, glass and a little magic.', goal: 'Bring 20 lanterns, 5 potions and 3 pearls to the lighthouse beacon in the harbor', done: () => beacon.done, reward: 100000 });
 const story = { ch: 0, seen: -1, t: 0 };
 const cardEl = document.createElement('div'); cardEl.id = 'storycard'; cardEl.hidden = true; document.body.appendChild(cardEl);
 function showCard(title, text, goal, btn = 'Continue') {
@@ -2932,6 +2949,8 @@ function deliverSite(site, c) {
 function updateStory(dt) {
   if (story.ch >= 4 && !light.shown) showLighthouse();
   if (story.ch >= 5 && !altar.shown) showAltar();
+  if (story.ch >= 9 && !beacon.shown && FAR.harbor.built) showBeacon();
+  if (!beacon.done && beacon.shown && Object.entries(beacon.need).every(([t, n]) => beacon.have[t] >= n)) { finishBeacon(false); save(); }
   if (light.g && light.pivot) { light.pivot.rotation.y += dt * 0.8; light.beam.material.opacity = 0.05 + 0.25 * nightK; }
   if (!light.done && light.shown && Object.entries(light.need).every(([t, n]) => light.have[t] >= n)) { finishLighthouse(false); save(); }
   if (!altar.done && altar.shown && Object.entries(altar.need).every(([t, n]) => altar.have[t] >= n)) { finishAltar(false); save(); }
@@ -3266,7 +3285,7 @@ class Station {
     if (this.make > 0) {
       this.make -= dt;
       if (this.make <= 0) {
-        burst(top, this.fx || 0xffd23a, 5); bump(this.stat || (this.out && this.out[0])); research.kp += 0.2;
+        burst(top, this.fx || 0xffd23a, 5); bump(this.stat || (this.out && this.out[0])); research.kp += policyOn('research') ? 0.3 : 0.2;
         const golden = Math.random() < goldenChance(this);
         if (this.outPile) { this.outPile.pending--; const it = makeItem(this.out[0]); if (golden) makeGolden(it, this.out[0]); this.outPile.receive(it, top.clone()); }
         else { this.cash.addValue(this.sell() * (golden ? 5 : 1), top); if (golden) { bump('golden'); burst(top, 0xffd23a, 16); toast('A golden piece! 5x the price.'); } }
@@ -3274,7 +3293,7 @@ class Station {
       return;
     }
     this.t += dt;
-    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul() * (hardOn('slow') ? 1.3 : 1)) return;
+    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul() * (hardOn('slow') ? 1.3 : 1) * (this.worker ? 0.7 : 1) * (policyOn('workers') ? 0.85 : 1)) return;
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
@@ -3292,7 +3311,7 @@ const ITEM_NAME_EXTRA = {};
 const ICON_OF = { feather: 'feather', mushroom: 'mushroom', pearl: 'pearl', quilt: 'quilt', glowfish: 'fish', obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 // ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
 const TIER_SPEED = [1, 0.75, 0.55, 0.42], TIER_NAME = ['Basic', 'Silver', 'Gold', 'Diamond'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33, 0x8ff0ff];
-const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0) + (buffs.luck > 0 ? 0.05 : 0);
+const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0) + (buffs.luck > 0 ? 0.05 : 0) + (policyOn('treasure') ? 0.04 : 0);
 const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
 function makeGolden(m, type) {
   m.material = goldenMat; m.userData.golden = true; m.scale.multiplyScalar(1.15);
@@ -3300,7 +3319,7 @@ function makeGolden(m, type) {
   toast(`Golden ${itemName(type)}! Worth 5x.`); sfx('bell');
 }
 const stationPrice = st => ((PADS.find(p => p.id === st.id) || {}).costs || [2000])[0];
-const tierCost = (st, lvl) => Math.round(stationPrice(st) * [2, 5, 12][lvl] / 100) * 100;
+const tierCost = (st, lvl) => Math.round(stationPrice(st) * [2, 5, 12][lvl] * (policyOn('builders') ? 0.8 : 1) / 100) * 100;
 function applyTier(st, instant) {
   const t = U('tier_' + st.id);
   const rp = (RS('piles') ? 1.25 : 1) * (1 + 0.25 * storage.lvl);
@@ -3360,7 +3379,7 @@ const BELTS = [
   { id: 'lantern', name: 'Lantern Shop → Market Stall', src: () => [workshop.out, 'lantern'], dst: () => market.input, ok: () => workshop.built && market.built },
 ];
 const beltLen = b => d2(b.src()[0].center, b.dst().center);
-const beltCost = b => Math.round((600 + beltLen(b) * 90) * (RS('belts') ? 0.6 : 1) / 50) * 50;
+const beltCost = b => Math.round((600 + beltLen(b) * 90) * (RS('belts') ? 0.6 : 1) * (policyOn('builders') ? 0.8 : 1) / 50) * 50;
 function buildBelt(b, instant) {
   if (b.mesh) return;
   const a = b.src()[0].center, z = b.dst().center, L = d2(a, z);
@@ -4483,6 +4502,11 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['jobs3', 'Full Staff', 'Give 3 villagers a job', () => villagers.filter(v => v.job).length >= 3],
+  ['vill12', 'Bustling Village', 'Welcome all 12 villagers', () => villagers.length >= 12],
+  ['souv50', 'Souvenir Stand', 'Sell 50 souvenirs to tourists', () => stat('souvenirs') >= 50],
+  ['beacon', 'Keeper of the Light', 'Light the harbor beacon', () => beacon.done],
+  ['votes4', 'Town Mayor', 'Vote in 4 council meetings', () => stat('votes') >= 4],
   ['dens3', 'Den Buster', 'Clear all three wolf dens in one week', () => dens.every(d => d.g && !d.alive)],
   ['dugout', 'Snow Shoveler', 'Dig 10 buildings out of avalanches', () => stat('dugout') >= 10],
   ['deep', 'Deep Catch', 'Land 5 fish at the Deep Hole', () => stat('deepcatch') >= 5],
@@ -4743,6 +4767,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'giftshop', label: 'Gift Shop', icon: 'gift', costs: [25000], x: 223.6, z: -9.2, req: () => FAR.harbor.built, apply: (l, i) => giftshop.unlock(i) },
   { id: 'balloon', label: 'Cargo Balloon', icon: 'cart', costs: [16000, 30000], x: -17.5, z: 17.2, req: () => ridge.unlocked, apply: (l, i) => buildBalloon(l, i) },
   { id: 'mill', label: 'Water Mill', icon: 'saw', costs: [12000, 24000], x: 24, z: 11.5, req: () => bridge.unlocked, apply: (l, i) => buildMill(l, i) },
   { id: 'harbor', label: 'Harbor District', icon: 'boat', costs: [30000], x: 13, z: 21, req: () => town.built && STATIONS.filter(st => st.built).length >= 6, apply: (l, i) => buildHarbor(i) },
@@ -4774,7 +4799,7 @@ const PADS = [
   { id: 'steamtunnel', label: 'Steam Tunnel', icon: 'mushroom', costs: [24000], x: 130.6, z: -36.6, req: () => volc.built, apply: (l, i) => buildFar('steam', i) },
   { id: 'greenhouse', label: 'Greenhouse', icon: 'carrot', costs: [15000], x: 176, z: -44, req: () => FAR.steam.built, apply: (l, i) => greenhouse.unlock(i) },
   { id: 'divebell', label: 'Diving Bell', icon: 'pearl', costs: [16000], x: 130.4, z: 54.4, req: () => isle.built, apply: (l, i) => buildFar('cove', i) },
-  { id: 'cottage', label: 'Cottage', icon: 'house', costs: [2500, 4000, 6500, 9500, 13000, 17000], x: -2.4, z: -11.6, req: () => town.built, apply: (l, i) => moveIn(l, i) },
+  { id: 'cottage', label: 'Cottage', icon: 'house', costs: [2500, 4000, 6500, 9500, 13000, 17000, 22000, 28000, 35000, 43000, 52000, 62000], x: -2.4, z: -11.6, req: () => town.built, apply: (l, i) => moveIn(l, i) },
   { id: 'armory', label: 'Armory', icon: 'blade', costs: [4000], x: -8.8, z: 10.0, req: () => town.built, apply: unlockArmory },
   { id: 'dungeon', label: 'Ice Cave', icon: 'exit', costs: [10000], x: -4, z: -27.4, req: () => mine.built, apply: unlockDungeon },
   { id: 'tinker', label: 'Tinker Bench', icon: 'gift', costs: [5000], x: -6.4, z: 24.6, req: () => town.built, apply: unlockBench },
@@ -5138,6 +5163,7 @@ function playerInteract() {
   // story sites
   if (light.shown && !light.done && inZone(pos, light.zone.x, light.zone.z, 1.05) && deliverSite(light, c)) return;
   if (altar.shown && !altar.done && inZone(pos, altar.zone.x, altar.zone.z, 1.05) && deliverSite(altar, c)) return;
+  if (beacon.shown && !beacon.done && inZone(pos, beacon.zone.x, beacon.zone.z, 1.05) && deliverSite(beacon, c)) return;
   // ice cave dungeon
   if (dung.built) {
     const atE = inZone(pos, dung.entrance.x, dung.entrance.z, 1.0), atX = inZone(pos, dung.exitZone.x, dung.exitZone.z, 1.0);
@@ -5467,6 +5493,7 @@ function updateBossCal() {
   else if (ev === 'lanterns') t = 'Lantern Parade (+15% tonight) · ' + t;
   else if (ev === 'sculpt') t = 'Carving Cup · ' + t;
   const hol = HOLIDAYS[holidayFor(day)]; if (hol) t = hol.name + ' · ' + t;
+  if (council.choice && POLICIES[council.choice]) t = POLICIES[council.choice].short + ' · ' + t;
   if (wx.kind === 'sunny') t = 'Sunny spell · ' + t; else if (wx.kind === 'blizzard') t = 'Blizzard! · ' + t; else if (wx.aurora) t = 'Aurora night · ' + t;
   if (t !== bossText) { bossText = t; bossEl.textContent = t; }
 }
@@ -5475,7 +5502,7 @@ function spawnWolf(alpha = false) {
   const p = side === 0 ? [-24, rand(-20, 18)] : side === 1 ? [rand(-20, 12), -28] : [rand(-20, -3), 21];
   new Wolf(p[0], p[1], alpha);
 }
-const maxWolves = () => Math.ceil((2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1) * (light.done ? 0.75 : 1) * (hardOn('wolves') ? 2 : 1) * Math.max(0.25, 1 - 0.25 * dens.filter(d => !d.alive).length));
+const maxWolves = () => Math.ceil((2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1) * (light.done ? 0.75 : 1) * (hardOn('wolves') ? 2 : 1) * Math.max(0.25, 1 - 0.25 * dens.filter(d => !d.alive).length) * (policyOn('safety') ? 0.5 : 1));
 function eventFor(day) { return day % 10 === 0 ? 'siege' : day % 8 === 0 ? 'festival' : day % 9 === 0 ? 'lanterns' : day % 11 === 0 ? 'sculpt' : null; }
 const siege = { active: false, stolen: 0 };
 let festT = 0;
@@ -5615,6 +5642,7 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  giftshop: 'A ferry brings tourists every few minutes. While they wait, the Gift Shop sells souvenirs for extra: toys, ornaments, candles, rings and more.',
   balloon: 'Flies to Ridge Camp and the far lands, picks up their finished goods, and sells them here at home.',
   mill: 'A water wheel on the river. Every building works 15% faster, forever, no fuel needed. Level 2 makes it 20%.',
   harbor: 'Opens a new district by the sea with a fish market, shipyard and café. Research unlocks more shops there.',
@@ -6596,6 +6624,12 @@ const FAVORS = {
   Mira: [{ type: 'bloom', n: 5, title: 'Pressed Flowers', text: 'Mira presses the island flowers into her notebook and writes a poem about your camp.' }, { type: 'lantern', n: 6, title: 'A Night of Poems', text: 'Under the lanterns, Mira reads her poems to the whole camp. Even the wolves seem to listen.' }],
   Otto: [{ type: 'fish', n: 10, title: 'The Fish Fry', text: 'Otto fries up the catch for everyone and tells a story about the one that got away.' }, { type: 'pearl', n: 3, title: "Otto's Treasure", text: 'Otto strings the pearls into a necklace for his sister, far across the sea. He writes her a long letter.' }],
   Saga: [{ type: 'mushroom', n: 6, title: 'Forest Remedy', text: 'Saga brews a remedy from the cave mushrooms. Colds in camp are gone by morning.' }, { type: 'berry', n: 12, title: 'Berry Tonic', text: 'Saga\'s berry tonic makes everyone feel lighter on their feet.' }],
+  Ingrid: [{ type: 'berry', n: 10, title: 'Trail Snacks', text: 'Ingrid packs berries for her ski trail and finally wins the valley race.' }, { type: 'jam', n: 6, title: 'Champion Breakfast', text: 'Jam on toast every morning. Ingrid says it is her secret weapon.' }],
+  Leif: [{ type: 'pearl', n: 2, title: 'The Proposal', text: 'Leif sets the pearls into a ring and asks his sweetheart to marry him. She says yes!' }, { type: 'lantern', n: 8, title: 'A Harbor Wedding', text: 'The whole camp lights lanterns along the harbor for Leif\'s wedding. Everyone dances until dawn.' }],
+  Astrid: [{ type: 'log', n: 12, title: 'The Toy Train', text: 'Astrid carves a whole wooden toy train for the camp children.' }, { type: 'gold', n: 3, title: 'The Golden Top', text: 'Astrid makes a spinning top of pure gold. It hums a little tune.' }],
+  Sven: [{ type: 'ice', n: 6, title: 'Ice Chimes', text: 'Sven hangs ice chimes around camp. The wind plays them all night.' }, { type: 'gem', n: 6, title: 'The Crystal Harp', text: 'Sven builds a harp with gem strings and plays a song about your camp.' }],
+  Freya: [{ type: 'wool', n: 6, title: 'Warm at Last', text: 'Freya knits a big scarf and finally paints without shivering.' }, { type: 'bloom', n: 4, title: 'The Aurora Painting', text: 'Freya paints the northern lights over your camp. She hangs it in the Town Hall.' }],
+  Erik: [{ type: 'bar', n: 4, title: 'New Runners', text: 'Erik fixes his sled with iron runners. He is the fastest in the valley again.' }, { type: 'meat', n: 8, title: 'Sled Dog Feast', text: 'Erik\'s sled dogs get a feast and pull him all the way to the peak.' }],
   Nils: [{ type: 'meat', n: 10, title: 'The Great Feast', text: 'Nils roasts the meat over a fire and tells the tale of how Frostfall Camp began. With you in it.' }, { type: 'ice', n: 8, title: 'The Ice Theater', text: 'Nils builds a little theater from ice blocks and puts on a play every night.' }],
 };
 const favors = {};
@@ -7284,6 +7318,121 @@ document.getElementById('dailybtn').onclick = renderDaily;
 let dailyT = 4;
 function updateDaily(dt) { dailyT -= dt; if (dailyT > 0) return; dailyT = 60; if (tut.step >= 4 && cardEl.hidden) checkDaily(); else dailyT = 5; }
 
+// ================= Villager jobs =================
+const JOB_FIT = { Elsa: 'bakery', Bjorn: 'furniture', Mira: 'chandler', Otto: 'creamery', Saga: 'apoth', Nils: 'soup', Ingrid: 'oven', Leif: 'fishmkt', Astrid: 'toyshop', Sven: 'glass', Freya: 'jeweler', Erik: 'sledworks' };
+const jobStation = v => STATIONS.find(st => st.id === JOB_FIT[v.def.name]);
+function jobBtn(v) {
+  const st = jobStation(v); if (!st) return '';
+  if (v.hearts < 5) return '';
+  if (!st.built) return `<small>Job: ${padLabel(st.id)} (build it first)</small>`;
+  return `<button type="button" data-job="${v.def.name}">${v.job ? 'Stop working' : 'Work at ' + padLabel(st.id)}</button>`;
+}
+function toggleJob(name, quiet) {
+  const v = villagers.find(x => x.def.name === name); if (!v) return; const st = jobStation(v); if (!st || !st.built) return;
+  v.job = !v.job; st.worker = v.job ? v : null;
+  if (v.job) { v.trip = false; bump('jobs'); if (!quiet) toast(`${name} now works at the ${padLabel(st.id)}: it runs 30% faster.`); }
+  else { v.p.group.visible = true; v.p.group.position.copy(v.home); if (!quiet) toast(`${name} takes a break.`); }
+  if (!quiet) { renderPeople(); save(); }
+}
+
+// ================= Gift shop and tourist ferry (Harbor) =================
+const tourists = { list: [], ferry: null, t: 40, state: 'away', waiting: 0, sold: 0 };
+const gp = base => () => { touristBuy(); return base; };
+const giftshop = new Station({ id: 'giftshop', x: 223.6, z: -9.2, inputs: [['*', 223.6, -5.6]], cashAt: [226.8, -5.6], time: 0.9, timeFn: () => (tourists.waiting > 0 ? 0.9 : 1e9), fx: 0xff8ab0,
+  accepts: { toy: gp(150), ornament: gp(130), candle: gp(70), jam: gp(35), ring: gp(260), chair: gp(110), quilt: gp(300), globe: gp(250), cheese: gp(90), pie: gp(55) },
+  hint: 'Tourists pay extra for souvenirs: toys, ornaments, candles, rings and more. The shop only sells while tourists are waiting.',
+  build: g => { hut(g, 0xffe8f0, 0xff8ab0, 2.4, 1.8); mesh(new THREE.BoxGeometry(2.6, 0.1, 0.8), 0xffd23a, 0, 1.45, 1.2, g); } });
+VENDORS.push({ name: 'Gift Shop', pos: giftshop.pos, ok: () => giftshop.built, station: giftshop, about: giftshop.hint, needs: [{ pile: giftshop.ins[0].pile, types: Object.keys(giftshop.accepts), n: 1 }], makes: null, pays: t => ({ toy: 150, ornament: 130, candle: 70, jam: 35, ring: 260, chair: 110, quilt: 300, globe: 250, cheese: 90, pie: 55 })[t], payWord: '', cash: () => giftshop.cash });
+function touristBuy() {
+  const t = tourists.list.find(x => x.state === 'wait'); if (!t) return;
+  t.budget--; bump('souvenirs'); burst(t.p.group.position.clone().setY(1.6), 0xff8ab0, 4);
+  if (t.budget <= 0) { t.state = 'leave'; tourists.waiting--; }
+}
+function updateTourists(dt) {
+  if (!giftshop.built) return;
+  if (!tourists.ferry) {
+    const g = new THREE.Group(); scene.add(g); g.position.set(275, 0, 0); tourists.ferry = g;
+    mesh(new THREE.BoxGeometry(3.0, 0.9, 6), 0xffffff, 0, 0.3, 0, g); mesh(new THREE.BoxGeometry(3.05, 0.15, 6.05), 0x3f8fc8, 0, 0.8, 0, g);
+    mesh(new THREE.BoxGeometry(2.4, 1.2, 2.6), 0xf0f6ff, 0, 1.4, -0.6, g); mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.2, 8), 0xe8433a, 0, 2.4, -1.2, g);
+  }
+  const f = tourists.ferry; tourists.t -= dt;
+  if (tourists.state === 'away' && tourists.t <= 0) { tourists.state = 'in'; }
+  if (tourists.state === 'in') { f.position.x += (254.5 - f.position.x) * Math.min(1, dt * 0.8); if (Math.abs(f.position.x - 254.5) < 0.3) { tourists.state = 'docked'; tourists.t = 50; spawnTourists(); } }
+  if (tourists.state === 'docked' && (tourists.t <= 0 || !tourists.list.length)) { tourists.state = 'out'; for (const t of tourists.list) if (t.state !== 'leave') { if (t.state === 'wait') tourists.waiting--; t.state = 'leave'; } }
+  if (tourists.state === 'out') { f.position.x += dt * 6; if (f.position.x > 275 && !tourists.list.length) { tourists.state = 'away'; tourists.t = rand(90, 150); } }
+  const q = new V3(223.6, 0, -3.8);
+  tourists.list.forEach((t, i) => {
+    const g = t.p.group; let mv = false;
+    if (t.state === 'walk') { const spot = q.clone().add(new V3(1.2 + t.slot * 0.9, 0, 0)); mv = !stepToward(g, spot, 2.2, dt, 0.25); if (!mv) { t.state = 'wait'; tourists.waiting++; g.rotation.y = Math.atan2(giftshop.pos.x - g.position.x, giftshop.pos.z - g.position.z); } }
+    else if (t.state === 'leave') { mv = !stepToward(g, new V3(251.2, 0, 0), 2.4, dt, 0.4); if (!mv) { scene.remove(g); t.gone = true; } }
+    animPerson(t.p, mv, dt);
+  });
+  tourists.list = tourists.list.filter(t => !t.gone);
+}
+function spawnTourists() {
+  const n = randi(4, 6);
+  for (let i = 0; i < n; i++) {
+    const p = makePerson([0xff8ab0, 0x5fd0e6, 0xffd23a, 0x9a5ad8, 0x6ac08a, 0xff9a3a][i % 6], null, 0.9);
+    mesh(new THREE.BoxGeometry(0.22, 0.16, 0.12), 0x2b3442, 0, 1.0, 0.36, p.group);
+    p.group.position.set(251.2, 0, rand(-1, 1)); scene.add(p.group);
+    tourists.list.push({ p, state: 'walk', budget: randi(2, 3), slot: i });
+  }
+  bump('touristvisits', n);
+  if (farOf(player.g.position) === 'harbor') toast(`A ferry brought ${n} tourists! Keep the Gift Shop stocked.`);
+}
+
+// ================= Lighthouse beacon (story chapter 10) =================
+const beacon = { shown: false, done: false, need: { lantern: 20, potion: 5, pearl: 3 }, have: { lantern: 0, potion: 0, pearl: 0 }, zone: new V3(247.6, 0, -12.2) };
+function showBeacon() {
+  beacon.shown = true; zoneMarker(beacon.zone.x, beacon.zone.z, 'lantern', '#ffe08a');
+  if (beacon.done) finishBeacon(true);
+}
+function finishBeacon(instant) {
+  beacon.done = true;
+  if (!beacon.beam) { const b = new THREE.Mesh(new THREE.ConeGeometry(2.4, 18, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })); b.rotation.z = PI / 2; b.position.set(250.4 + 9, 6.5, -12.4); const piv = new THREE.Group(); piv.position.set(250.4, 0, -12.4); scene.add(piv); b.position.set(9, 6.5, 0); piv.add(b); beacon.beam = piv; }
+  wx.aurora = true;
+  if (!instant) { toast('The beacon blazes! The northern lights return, and everything you earn is 10% higher.'); for (let k = 0; k < 6; k++) setTimeout(() => firework(player.g.position.clone()), k * 250); }
+}
+function updateBeacon(dt) { if (beacon.beam) beacon.beam.rotation.y += dt * 0.7; }
+
+// ================= Town council =================
+const POLICIES = {
+  market: { name: 'Market Week', short: 'Market Week (+15%)', desc: 'Everything earns 15% more.' },
+  workers: { name: "Workers' Week", short: "Workers' Week", desc: 'Every building works 15% faster.' },
+  safety: { name: 'Safety Week', short: 'Safety Week', desc: 'Half as many wolves at night.' },
+  harvest: { name: 'Harvest Week', short: 'Harvest Week', desc: 'Berries, wheat and carrots give double.' },
+  builders: { name: "Builders' Week", short: "Builders' Week", desc: 'Building tiers and belts cost 20% less.' },
+  treasure: { name: 'Treasure Week', short: 'Treasure Week', desc: '+4% golden pieces everywhere.' },
+  research: { name: 'Science Week', short: 'Science Week', desc: 'Research points come 50% faster.' },
+};
+const council = { week: -1, offers: [], choice: null, asked: false };
+const policyOn = id => council.choice === id;
+function councilHtml() {
+  const week = council.week + 1;
+  if (council.choice) return `<p>Week ${week} policy: <b>${POLICIES[council.choice].name}</b>. ${POLICIES[council.choice].desc} A new vote comes next week.</p>`;
+  return `<p>The council meets! Pick this week's policy. It lasts 7 days.</p>` + council.offers.map(id => `<button type="button" class="polbtn" data-pol="${id}"><b>${POLICIES[id].name}</b><small>${POLICIES[id].desc}</small></button>`).join('');
+}
+function vote(id) { council.choice = id; bump('votes'); sfx('bell'); toast(`${POLICIES[id].name} is on for the week! ${POLICIES[id].desc}`); save(); }
+function showCouncil() {
+  if (council.week < 0 || council.choice || !council.offers.length) return;
+  cardEl.innerHTML = `<div role="dialog" aria-label="Town Council"><h2>Town Council · week ${council.week + 1}</h2><div>${councilHtml()}</div></div>`;
+  cardEl.hidden = false;
+  cardEl.querySelectorAll('[data-pol]').forEach(b => b.onclick = () => { vote(b.dataset.pol); cardEl.hidden = true; });
+}
+function renderCouncil() {
+  menuBody.innerHTML = `<h4>Town Council</h4>${council.week < 0 ? '<p>The council first meets on day 3.</p>' : councilHtml()}`;
+  menuBody.querySelectorAll('[data-pol]').forEach(b => b.onclick = () => { vote(b.dataset.pol); renderCouncil(); });
+}
+document.getElementById('councilbtn').onclick = renderCouncil;
+let councilT = 3;
+function updateCouncil(dt) {
+  councilT -= dt; if (councilT > 0) return; councilT = 2;
+  const day = Math.floor(dayT / CYCLE) + 1; if (day < 3) return;
+  const week = Math.floor((day - 1) / 7);
+  if (council.week !== week) { council.week = week; council.choice = null; council.asked = false; council.offers = Object.keys(POLICIES).sort(() => Math.random() - 0.5).slice(0, 3); }
+  if (!council.choice && !council.asked && cardEl.hidden && shopEl.hidden && tut.step >= 4) { council.asked = true; showCouncil(); }
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -7410,17 +7559,20 @@ function renderPeople() {
   if (c) h += `<div class="wh"><b>${c.name}</b><span class="chip warn">Target ${rival.goal}</span><small>You so far: ${contestVal(c) - rival.start}</small></div>`;
   h += `<h4>Villagers</h4><p>Build cottages north of camp so villagers move in. Walk up to one while carrying their favorite to make friends. Best friends add 5% to all income.</p>`;
   h += VILLAGERS.map((d, i) => { const v = villagers.find(x => x.def === d); return v
-    ? `<div class="wh"><b>${d.name}</b><span class="chip ${v.hearts >= 10 ? 'ok' : 'warn'}">\u2665 ${v.hearts}/10</span><small>${capFirst(d.about)}. Loves ${itemName(d.fav, 2)}. On trips: ${TRIP_SKILL[d.name][1]}.${favorLine(v)}</small>${v.hearts >= 3 ? `<div class="rowbtns"><button type="button" data-trip="${d.name}">${v.trip ? 'Send home' : 'Bring along'}</button></div>` : '<small>Reach 3 hearts to take them on day trips.</small>'}</div>`
+    ? `<div class="wh"><b>${d.name}</b><span class="chip ${v.hearts >= 10 ? 'ok' : 'warn'}">\u2665 ${v.hearts}/10</span><small>${capFirst(d.about)}. Loves ${itemName(d.fav, 2)}. On trips: ${TRIP_SKILL[d.name][1]}.${favorLine(v)}</small>${v.hearts >= 3 ? `<div class="rowbtns"><button type="button" data-trip="${d.name}">${v.trip ? 'Send home' : 'Bring along'}</button>${jobBtn(v)}</div>` : '<small>Reach 3 hearts to take them on day trips.</small>'}</div>`
     : `<div class="wh"><b>Empty cottage ${i + 1}</b><span class="chip bad">Not built</span><small>Build it to welcome a new villager.</small></div>`; }).join('');
   menuBody.innerHTML = h;
   menuBody.querySelectorAll('[data-trip]').forEach(b => b.onclick = () => toggleTrip(b.dataset.trip));
+  menuBody.querySelectorAll('[data-job]').forEach(b => b.onclick = () => toggleJob(b.dataset.job));
 }
 const TRIP_SKILL = { Elsa: ['farm', 'an extra berry, wheat or carrot each harvest'], Bjorn: ['wood', 'an extra log each chop'], Mira: ['art', '+3% golden pieces'],
-  Otto: ['fish', 'fish bite twice as fast'], Saga: ['heal', 'you never drop items when hit'], Nils: ['story', '+10% income'] };
+  Otto: ['fish', 'fish bite twice as fast'], Saga: ['heal', 'you never drop items when hit'], Nils: ['story', '+10% income'],
+  Ingrid: ['wood', 'an extra log each chop'], Leif: ['fish', 'fish bite twice as fast'], Astrid: ['art', '+3% golden pieces'], Sven: ['story', '+10% income'], Freya: ['art', '+3% golden pieces'], Erik: ['farm', 'an extra berry, wheat or carrot each harvest'] };
 function companionSkill() { const v = villagers.find(x => x.trip); return v ? TRIP_SKILL[v.def.name][0] : null; }
 function toggleTrip(name) {
   const v = villagers.find(x => x.def.name === name); if (!v) return;
   const was = v.trip; for (const o of villagers) o.trip = false;
+  if (!was && v.job) toggleJob(name, true);
   v.trip = !was; if (v.trip) { v.p.group.position.copy(player.g.position).add(new V3(1, 0, 1)); bump('trips'); toast(`${name} comes along: ${TRIP_SKILL[name][1]}. They'll head home at dawn.`); }
   else toast(`${name} heads home.`);
   renderPeople();
@@ -7588,7 +7740,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f4: { buffs }, g2: { dens: dens.map(d => [d.week, d.hp, d.alive]), aval: aval.list.map(a => a.st.id), tour: [tour.day, tour.start, tour.rivals] }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f4: { buffs }, g3: { jobs: villagers.filter(v => v.job).map(v => v.def.name), council, beacon: [beacon.have, beacon.done] }, g2: { dens: dens.map(d => [d.week, d.hp, d.alive]), aval: aval.list.map(a => a.st.id), tour: [tour.day, tour.start, tour.rivals] }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -7597,6 +7749,8 @@ if (saved && saved.pads) {
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
   if (saved.f4 && saved.f4.buffs) Object.assign(buffs, saved.f4.buffs);
+  if (saved.g3) { if (saved.g3.council) Object.assign(council, saved.g3.council); if (saved.g3.beacon) { Object.assign(beacon.have, saved.g3.beacon[0]); beacon.done = !!saved.g3.beacon[1]; }
+    setTimeout(() => { for (const n of saved.g3.jobs || []) toggleJob(n, true); }, 0); }
   if (saved.g2) setTimeout(() => {
     (saved.g2.dens || []).forEach(([w, hp, alive], i) => { const d = dens[i]; if (!d) return; if (!d.g) buildDen(d); d.week = w; d.max = denMax(Math.max(0, w)); d.hp = hp; d.alive = alive; d.g.visible = alive; drawDenBar(d); });
     if (saved.g2.tour) [tour.day, tour.start, tour.rivals] = saved.g2.tour;
@@ -7662,7 +7816,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateDens(dt); updateAvalanche(dt); updateDeep(dt); updateTour(dt); updateDaily(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateDens(dt); updateAvalanche(dt); updateDeep(dt); updateTour(dt); updateDaily(dt); updateTourists(dt); updateBeacon(dt); updateCouncil(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -7699,7 +7853,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { toggleJob, giftshop, tourists, spawnTourists, beacon, council, showCouncil, STORY, dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
