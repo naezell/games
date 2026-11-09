@@ -60,6 +60,14 @@
     background: var(--panel); color: var(--white); font: 15px var(--font-body); font-weight: 800; cursor: pointer;
   }
   #mute:focus-visible, #reset:focus-visible { outline: 3px solid var(--white); }
+  /* Thumb-sized, bottom right, above the goal bar; only shown while the pack has something in it. */
+  #droppack {
+    position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+    border: 3px solid rgba(255,255,255,0.85); border-radius: 14px; padding: 10px 16px;
+    background: var(--panel); color: var(--white); font: 800 16px var(--font-body); cursor: pointer;
+  }
+  #droppack:focus-visible { outline: 3px solid var(--white); }
+  #droppack[hidden] { display: none; }
   #goal {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
@@ -156,6 +164,7 @@
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
+<button id="droppack" type="button" hidden title="Drop everything in your pack (Q)">Drop pack</button>
 <div id="joy" hidden><div id="knob"></div></div>
 <div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
@@ -915,15 +924,17 @@ const groundItems = [];
 function dropGround(type, pos) {
   const m = makeItem(type), to = pos.clone().add(new V3(rand(-0.9, 0.9), 0, rand(-0.9, 0.9)));
   to.y = 0.1;
-  const gi = { type, m, ready: false };
+  const gi = { type, m, ready: false, src: 'loot' };
   groundItems.push(gi);
   fly(m, pos.clone().add(new V3(0, 0.6, 0)), () => to, 0.35, () => { gi.ready = true; m.rotation.y = rand(0, 3); }, 1.4);
 }
-function dropFromCarrier(carrier, n) {
+// src 'knocked' = an enemy hit it off your back (the husky fetches it back);
+// src 'player' = you dropped it on purpose (the husky leaves it alone).
+function dropFromCarrier(carrier, n, src = 'knocked') {
   for (let i = 0; i < n; i++) {
     const it = carrier.take(); if (!it) break;
     const to = it.pos.clone().add(new V3(rand(-1.6, 1.6), 0, rand(-1.6, 1.6))); to.y = 0.1;
-    const gi = { type: it.type, m: it.m, ready: false }; groundItems.push(gi);
+    const gi = { type: it.type, m: it.m, ready: false, src }; groundItems.push(gi);
     fly(it.m, it.pos, () => to, 0.45, () => { gi.ready = true; }, 1.6);
   }
 }
@@ -938,6 +949,8 @@ function pickupGround(carrier, pos, type, r = 1.3) {
       continue;
     }
     if (gi.type === 'cash') continue;
+    // Something you just dropped stays put until you've walked away from it once.
+    if (gi.src === 'player' && !gi.away && carrier === player.c) { if (gi.ready && d2(gi.m.position, pos) > r + 1.5) gi.away = true; continue; }
     if (!gi.ready || (type && gi.type !== type) || carrier.full()) continue;
     if (d2(gi.m.position, pos) < r) { groundItems.splice(i, 1); carrier.receive(gi.type, gi.m, gi.m.position.clone()); }
   }
@@ -1507,7 +1520,7 @@ function updateHusky(dt) {
   husky.t += dt; let moving = true;
   husky.tail.rotation.y = Math.sin(performance.now() / 90) * 0.6;
   const wolf = nearest(wolves, pos, w => w.pos);
-  const loot = nearest(groundItems.filter(gi => gi.ready && d2(gi.m.position, pp) < 9 && (gi.type === 'cash' || !player.c.full())), pos, gi => gi.m.position);
+  const loot = nearest(groundItems.filter(gi => gi.ready && gi.src !== 'player' && d2(gi.m.position, pp) < 9 && (gi.type === 'cash' || !player.c.full())), pos, gi => gi.m.position);
   if (d2(pos, pp) > 22) { pos.copy(pp).add(new V3(1, 0, 1)); }
   if (wolf && d2(wolf.pos, pos) < 7) {
     moving = !navStep(g, wolf.pos, 6.5, dt, 1.0);
@@ -3316,6 +3329,8 @@ function updatePlayer(dt) {
   player.tick = Math.min(player.tick, 0.07);
 
   maxLabel.visible = player.c.full();
+  const hasPack = player.c.items.length > 0;
+  if (dropBtn.hidden === hasPack) dropBtn.hidden = !hasPack;
   if (maxLabel.visible) maxLabel.position.copy(player.c.topWorld()).add(new V3(0, 0.45, 0));
 }
 
@@ -3552,6 +3567,15 @@ cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', e
 addEventListener('keydown', e => { audioInit(); keys.add(e.key.toLowerCase()); });
 addEventListener('keyup', e => { keys.delete(e.key.toLowerCase()); });
 addEventListener('blur', () => keys.clear());
+
+// Drop pack: everything on your back goes on the ground around you.
+const dropBtn = document.getElementById('droppack');
+function dropPack() {
+  const n = player.c.items.length; if (!n) return;
+  dropFromCarrier(player.c, n, 'player'); sfx('drop');
+}
+dropBtn.onclick = () => { audioInit(); dropPack(); };
+addEventListener('keydown', e => { if (e.key.toLowerCase() === 'q' && !e.repeat) dropPack(); });
 
 const confirmEl = document.getElementById('confirm');
 document.getElementById('reset').onclick = () => { confirmEl.hidden = false; };
