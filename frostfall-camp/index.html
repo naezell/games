@@ -2933,7 +2933,7 @@ function renderLegacy() {
   shopList.innerHTML = `<div class="legacy">
     <p class="big">★ ${legacy.stars} Golden Star${legacy.stars === 1 ? '' : 's'}</p>
     <p>Every star adds <b>+10% to all money you earn</b> and <b>$100 of starting cash</b>, forever. Trophies stay with you.</p>
-    <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. The more you have built, the more stars you get.</p>
+    <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. Land plots you have bought stay yours. The more you have built, the more stars you get.</p>
     <p>You would earn <b>${gain} star${gain === 1 ? '' : 's'}</b> now.${gain < 1 ? ' Build more to earn your first star.' : ''}</p>
     <div class="row2">${legacyConfirm
       ? `<button type="button" class="red" id="lgo">Yes, restart for ${gain} ★</button><button type="button" class="no" id="lno">Not yet</button>`
@@ -2942,7 +2942,7 @@ function renderLegacy() {
   if (q('lask')) q('lask').onclick = () => { legacyConfirm = true; renderLegacy(); };
   if (q('lno')) q('lno').onclick = () => { legacyConfirm = false; renderLegacy(); };
   if (q('lgo')) q('lgo').onclick = () => {
-    legacy.stars += gain; bump('prestige'); saveLegacy();
+    legacy.stars += gain; legacy.plots = ownedPlotPrices(); bump('prestige'); saveLegacy();
     try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
     resetting = true; location.reload();
   };
@@ -3102,8 +3102,8 @@ const PADS = [
 // ---------------- land plots ----------------
 // Misty land rings the map. Walk onto a plot's pad to buy it: the mist lifts, a forest
 // grows in and boars move into its clearing. Each plot costs more than the last one bought.
-// Plots belong to the camp, so Restart and a Golden Restart clear them (their price counts
-// toward Golden Stars like any other build).
+// Bought land is kept through a Golden Restart (saved with the stars in legacy.plots, and not
+// counted toward stars a second time); the Restart button clears it with the rest of the camp.
 const PLOT_BASE = 2000, PLOT_GROWTH = 1.35, PLOT_BOARS = 3, MIST_A = 0.3;
 const plotPrice = n => { const v = PLOT_BASE * Math.pow(PLOT_GROWTH, n), s = v < 10000 ? 100 : 1000; return Math.round(v / s) * s; };
 // each plot: its land, its buy pad (on land you already own) and the plot it is bought from ('' = the starting map)
@@ -3231,6 +3231,11 @@ function clampToLand(pos, m) {
   }
   pos.x = bx; pos.z = bz;
 }
+// land kept from before a Golden Restart: owned again with no pad to pay
+function keepLegacyPlots() {
+  for (const id in legacy.plots || {}) { const pl = plotById(id); if (pl && !pl.owned) { pl.pad.costs[0] = legacy.plots[id]; ownPlot(pl, true); } }
+}
+const ownedPlotPrices = () => Object.fromEntries(PLOTS.filter(pl => pl.owned).map(pl => [pl.id, pl.pad.costs[0]]));
 // minimap frame: the land you own, a step of margin around it
 function landBox() {
   const b = { x0: BOUNDS.x0, x1: BOUNDS.x1, z0: BOUNDS.z0, z1: BOUNDS.z1 };
@@ -3240,7 +3245,7 @@ function landBox() {
 PLOTS.forEach(makeMist);
 PADS.push(...PLOTS.map(pl => (pl.pad = {
   id: pl.id, label: pl.name, icon: 'plot', costs: [plotPrice(0)], x: pl.px, z: pl.pz, plot: pl,
-  req: () => (pl.east ? bridge.unlocked : sawmill.unlocked) && (!pl.from || plotById(pl.from).owned),
+  req: () => !pl.owned && (pl.east ? bridge.unlocked : sawmill.unlocked) && (!pl.from || plotById(pl.from).owned),
   apply: (l, instant) => ownPlot(pl, instant),
 })));
 window.__plots = PLOTS;
@@ -3759,6 +3764,7 @@ document.getElementById('reset').onclick = () => { confirmEl.hidden = false; };
 document.getElementById('no').onclick = () => { confirmEl.hidden = true; };
 document.getElementById('yes').onclick = () => {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  delete legacy.plots; saveLegacy(); // a plain Restart gives the land back too
   resetting = true; location.reload();
 };
 let resetting = false;
@@ -4022,6 +4028,7 @@ if (saved && saved.pads) {
   if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
   setTimeout(() => offlineReport(saved), 600);
 } else if (legacy.stars) { W.cash = 100 * legacy.stars; }
+keepLegacyPlots();
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false); renderTrophies();
 document.getElementById('rankname').title = legacy.stars ? legacy.stars + ' Golden Stars' : '';
 setInterval(save, 3000);
