@@ -167,10 +167,12 @@
   .legacy .red { background: #d84a3a; color: var(--white); }
   #shopx { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
   #shop .tabs { display: flex; gap: 8px; margin: 10px 0 4px; }
-  #shop .tabs button { flex: 1; border: 0; border-radius: 10px; padding: 9px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  #shop .tabs { flex-wrap: wrap; }
+  #shop .tabs button { flex: 1 1 auto; border: 0; border-radius: 10px; padding: 9px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
   #shop .tabs button.on { background: var(--ink); color: var(--white); }
   .urow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid #e3e9f0; }
   .urow b { font: 800 15px var(--font-body); }
+  .tabnote { margin: 8px 0 4px; font: 700 13px/1.45 var(--font-body); color: #5a6878; }
   .urow small { display: block; color: #5a6878; font: 700 12px var(--font-body); }
   .pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
   .pips i { width: 8px; height: 8px; border-radius: 50%; background: #d5dde6; }
@@ -220,14 +222,14 @@
 <div id="goal">Drag anywhere to move</div>
 <button id="droppack" type="button" hidden title="Drop everything in your pack (Q)">Drop pack</button>
 <div id="joy" hidden><div id="knob"></div></div>
-<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
+<div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decor</button><button type="button" data-tab="tiers">Buildings</button><button type="button" data-tab="belts">Belts</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
 <div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -508,6 +510,9 @@ function drawIcon(c, icon, cx, cy, s) {
   } else if (icon === 'ornament') {
     c.fillStyle = '#e8433a'; c.beginPath(); c.arc(0, 8, 30, 0, 2 * PI); c.fill();
     c.fillStyle = '#ffd23a'; c.fillRect(-8, -32, 16, 12); c.fillRect(-30, 4, 60, 6);
+  } else if (icon === 'gift') {
+    c.fillStyle = '#e8433a'; c.fillRect(-36, -18, 72, 56); c.fillStyle = W_; c.fillRect(-8, -18, 16, 56); c.fillRect(-40, -26, 80, 12);
+    c.strokeStyle = W_; c.lineWidth = 7; c.beginPath(); c.ellipse(-14, -34, 14, 9, 0.4, 0, 2 * PI); c.ellipse(14, -34, 14, 9, -0.4, 0, 2 * PI); c.stroke();
   } else if (icon === 'obsidian') {
     c.fillStyle = '#2a1a3a'; c.beginPath(); c.moveTo(0, -46); c.lineTo(26, 0); c.lineTo(0, 46); c.lineTo(-26, 0); c.closePath(); c.fill();
     c.strokeStyle = '#ff7a2a'; c.lineWidth = 4; c.stroke();
@@ -663,6 +668,7 @@ function makeItem(t) {
   else if (t === 'steak') m = new THREE.Mesh(GEO.steak, mat(0x94512d));
   else if (t === 'gem') m = new THREE.Mesh(GEO.gem, gemMat);
   else if (t === 'obsidian') m = new THREE.Mesh(GEO.obsidian, obsidianMat);
+  else if (typeof RECIPE_BY !== 'undefined' && RECIPE_BY[t]) { m = new THREE.Mesh(GIFT_GEO, mat(RECIPE_BY[t].color)); const rb = new THREE.Mesh(RIBBON_GEO, mat(0xffffff)); m.add(rb); const bw = new THREE.Mesh(BOW_GEO, mat(0xe8433a)); bw.position.y = 0.16; m.add(bw); }
   else if (t === 'blade') m = new THREE.Mesh(GEO.blade, vcMat);
   else if (t === 'gold') m = new THREE.Mesh(GEO.gold, goldMat);
   else if (t === 'shard') m = new THREE.Mesh(GEO.shard, shardMat);
@@ -677,6 +683,7 @@ function makeItem(t) {
   else if (t === 'wool') m = new THREE.Mesh(GEO.wool, mat(0xf3ead8));
   else m = new THREE.Mesh(GEO.cash, mat(0x45b04f));
   m.castShadow = true;
+  m.userData.type = t;
   return m;
 }
 
@@ -1852,7 +1859,7 @@ function updateDepot(dt) {
       depot.load = 0;
       while (depot.input.n) {
         const m = depot.input.take(), type = depot.types.pop();
-        depot.load += SHIP_PRICE[type] || 5;
+        depot.load += (SHIP_PRICE[type] || 5) * (m.userData.golden ? 5 : 1);
         const slot = depot.cargo.children.length;
         fly(m, m.position.clone(), () => g.position.clone().add(new V3(0, 1.1, -0.6)), 0.3, () => { scene.remove(m); if (depot.cargo.children.length < 9) { const c = makeItem(type); c.position.set((slot % 3 - 1) * 0.4, 1.05 + Math.floor(slot / 9) * 0.3, (Math.floor(slot / 3) % 3 - 1) * 0.5); depot.cargo.add(c); } });
       }
@@ -1886,6 +1893,8 @@ function campXP() {
   for (const p of PADS) { const st = padState[p.id]; for (let l = 0; l < st.level; l++) xp += p.costs[l]; }
   for (const u of UPGRADES) for (let l = 0; l < U(u.id); l++) xp += u.costs[l];
   for (const d of DECOS) if (UP[d.id]) xp += d.cost;
+  for (const st of STATIONS) for (let l = 0; l < U('tier_' + st.id); l++) xp += tierCost(st, l);
+  for (const b of BELTS) if (UP['belt_' + b.id]) xp += 1000;
   return xp;
 }
 function updateRank(celebrate) {
@@ -2212,6 +2221,8 @@ function applyUpgrade(id, instant) {
   if (id === 'wcap') for (const w of workers) w.c.cap = (w.kind === 'server' ? 8 : 6) + 2 * U('wcap');
   if (id === 'gatehp') for (const g of GATES) if (!g.broken) g.hp = 8 + 6 * U('gatehp');
   if (id === 'sled') depot.input.max = 20 + 10 * U('sled');
+  if (id.startsWith('tier_')) { const st = STATIONS.find(x => 'tier_' + x.id === id); if (st) applyTier(st, instant); return; }
+  if (id.startsWith('belt_')) { const b = BELTS.find(x => 'belt_' + x.id === id); if (b && b.ok()) buildBelt(b, instant); return; }
   if (id === 'penguinpet') adoptPenguin(instant);
   else if (id === 'foxpet') adoptFox(instant);
   else if (id === 'reindeer') buildMount(instant);
@@ -2232,6 +2243,8 @@ let shopTab = 'up';
 function renderShop() {
   if (shopEl.hidden) return;
   if (shopTab === 'legacy') { renderLegacy(); return; }
+  if (shopTab === 'tiers') { renderTiers(); return; }
+  if (shopTab === 'belts') { renderBelts(); return; }
   const rows = shopTab === 'up'
     ? UPGRADES.filter(u => !u.req || u.req()).map(u => {
       const lvl = U(u.id), cost = u.costs[lvl];
@@ -2248,7 +2261,10 @@ function refreshShopButtons() {
   if (shopEl.hidden) return;
   for (const b of shopList.querySelectorAll('button[data-cost]')) b.disabled = W.cash < +b.dataset.cost;
 }
-shopList.addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b && !b.disabled) buyItem(b.dataset.id); });
+shopList.addEventListener('click', e => {
+  const b = e.target.closest('button[data-id], button[data-tier], button[data-belt]'); if (!b || b.disabled) return;
+  if (b.dataset.tier) buyTier(b.dataset.tier); else if (b.dataset.belt) buyBelt(b.dataset.belt); else buyItem(b.dataset.id);
+});
 for (const t of document.querySelectorAll('#shop .tabs button')) t.addEventListener('click', () => {
   shopTab = t.dataset.tab; legacyConfirm = false; for (const o of document.querySelectorAll('#shop .tabs button')) o.classList.toggle('on', o === t); renderShop();
 });
@@ -2652,17 +2668,18 @@ class Station {
       this.make -= dt;
       if (this.make <= 0) {
         burst(top, this.fx || 0xffd23a, 5); bump(this.stat || (this.out && this.out[0]));
-        if (this.outPile) { this.outPile.pending--; this.outPile.receive(makeItem(this.out[0]), top.clone()); }
-        else this.cash.addValue(this.sell(), top);
+        const golden = Math.random() < goldenChance(this);
+        if (this.outPile) { this.outPile.pending--; const it = makeItem(this.out[0]); if (golden) makeGolden(it, this.out[0]); this.outPile.receive(it, top.clone()); }
+        else { this.cash.addValue(this.sell() * (golden ? 5 : 1), top); if (golden) { bump('golden'); burst(top, 0xffd23a, 16); toast('A golden piece! 5x the price.'); } }
       }
       return;
     }
     this.t += dt;
-    if (this.t < (this.timeFn ? this.timeFn() : this.time)) return;
+    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)]) return;
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
-      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type](), top); });
+      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type]() * (m.userData.golden ? 5 : 1), top); if (m.userData.golden) burst(top, 0xffd23a, 14); });
       return;
     }
     if (!this.ins.every(i => i.pile.n >= i.n)) return;
@@ -2672,7 +2689,163 @@ class Station {
     for (const i of this.ins) for (let k = 0; k < i.n; k++) { const m = i.pile.take(); fly(m, m.position.clone(), () => top, 0.25, () => scene.remove(m)); }
   }
 }
+const ITEM_NAME_EXTRA = {};
 const ICON_OF = { obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
+// ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
+const TIER_SPEED = [1, 0.75, 0.55], TIER_NAME = ['Basic', 'Silver', 'Gold'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33];
+const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id);
+const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
+function makeGolden(m, type) {
+  m.material = goldenMat; m.userData.golden = true; m.scale.multiplyScalar(1.15);
+  bump('golden'); burst(m.position, 0xffd23a, 8);
+  toast(`Golden ${itemName(type)}! Worth 5x.`); sfx('bell');
+}
+const stationPrice = st => ((PADS.find(p => p.id === st.id) || {}).costs || [2000])[0];
+const tierCost = (st, lvl) => Math.round(stationPrice(st) * [2, 5][lvl] / 100) * 100;
+function applyTier(st, instant) {
+  const t = U('tier_' + st.id);
+  for (const i of st.ins) { i.pile.baseMax = i.pile.baseMax || i.pile.max; i.pile.max = Math.round(i.pile.baseMax * (1 + 0.5 * t)); }
+  if (st.outPile) { st.outPile.baseMax = st.outPile.baseMax || st.outPile.max; st.outPile.max = Math.round(st.outPile.baseMax * (1 + 0.5 * t)); }
+  if (st.g && t) {
+    if (st.badge) st.g.remove(st.badge);
+    const [w, d] = st.size || [2.2, 1.6];
+    st.badge = new THREE.Mesh(new THREE.TorusGeometry(Math.hypot(w, d) * 0.62, 0.09, 6, 28), new THREE.MeshLambertMaterial({ color: TIER_COLOR[t], emissive: t === 2 ? 0x4a3300 : 0x222222 }));
+    st.badge.rotation.x = PI / 2; st.badge.position.y = 0.06; st.g.add(st.badge);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: TIER_COLOR[t] })); star.position.y = 3.1; st.badge.add(star); star.rotation.x = -PI / 2;
+    if (!instant) { burst(st.pos, TIER_COLOR[t], 18); firework(st.pos.clone()); }
+  }
+}
+function buyTier(id) {
+  const st = STATIONS.find(x => x.id === id), lvl = U('tier_' + id), cost = tierCost(st, lvl);
+  if (lvl >= 2 || W.cash < cost) return;
+  W.cash -= cost; UP['tier_' + id] = lvl + 1; setCash(); applyTier(st, false); sfx('buy');
+  toast(`${padLabel(id)} upgraded to ${TIER_NAME[lvl + 1]}!`); save(); renderShop(); updateRank(true);
+}
+function renderTiers() {
+  const list = STATIONS.filter(st => st.built);
+  shopList.innerHTML = `<p class="tabnote">Upgrade a building to Silver, then Gold: it works faster, holds more, and makes more golden pieces worth 5x.</p>` + (list.map(st => {
+    const lvl = U('tier_' + st.id), cost = lvl < 2 ? tierCost(st, lvl) : undefined;
+    const pips = [1, 2].map(i => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
+    return `<div class="urow"><div><b>${padLabel(st.id)}</b><span class="pips">${pips}</span><small>${TIER_NAME[lvl]} · ${Math.round(100 / TIER_SPEED[lvl])}% speed · ${Math.round(goldenChance(st) * 100)}% golden</small></div>` +
+      (cost === undefined ? `<button class="buy max" type="button" disabled>Gold</button>` : `<button class="buy" type="button" data-tier="${st.id}" data-cost="${cost}">$${fmt(cost)}</button>`) + `</div>`;
+  }).join('') || '<p>Build a workshop first, like the Jam Kitchen.</p>');
+  refreshShopButtons();
+}
+
+// ---- conveyor belts: goods slide between buildings on their own ----
+const beltTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 16; const x = c.getContext('2d'); x.fillStyle = '#3a4250'; x.fillRect(0, 0, 64, 16); x.fillStyle = '#56606f'; for (let i = 0; i < 64; i += 16) x.fillRect(i, 0, 8, 16); const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; return t; })();
+const BELTS = [
+  { id: 'grill', name: 'Grill → Steak Counter', src: () => [grill.output, 'steak'], dst: () => counter.input, ok: () => true },
+  { id: 'jam', name: 'Jam Kitchen → General Store', src: () => [kitchen.outPile, 'jam'], dst: () => store.ins[0].pile, ok: () => kitchen.built && store.built },
+  { id: 'pie', name: 'Pie Bakery → General Store', src: () => [bakery.outPile, 'pie'], dst: () => store.ins[0].pile, ok: () => bakery.built && store.built },
+  { id: 'tool', name: 'Blacksmith → General Store', src: () => [smithy.outPile, 'tool'], dst: () => store.ins[0].pile, ok: () => smithy.built && store.built },
+  { id: 'comb', name: 'Bee Yard → Candle Maker', src: () => [beeyard.outPile, 'comb'], dst: () => chandler.ins[0].pile, ok: () => beeyard.built && chandler.built },
+  { id: 'candle', name: 'Candle Maker → General Store', src: () => [chandler.outPile, 'candle'], dst: () => store.ins[0].pile, ok: () => chandler.built && store.built },
+  { id: 'chair', name: 'Furniture Shop → General Store', src: () => [furniture.outPile, 'chair'], dst: () => store.ins[0].pile, ok: () => furniture.built && store.built },
+  { id: 'ring', name: 'Jeweler → General Store', src: () => [jeweler.outPile, 'ring'], dst: () => store.ins[0].pile, ok: () => jeweler.built && store.built },
+  { id: 'bread', name: 'Bread Oven → General Store', src: () => [oven.outPile, 'bread'], dst: () => store.ins[0].pile, ok: () => oven.built && store.built },
+  { id: 'stew', name: 'Soup Kitchen → General Store', src: () => [soup.outPile, 'stew'], dst: () => store.ins[0].pile, ok: () => soup.built && store.built },
+  { id: 'ice', name: 'Ice Saw → Ice Carver', src: () => [icesaw.outPile, 'ice'], dst: () => carver.ins[0].pile, ok: () => icesaw.built && carver.built },
+  { id: 'milk', name: 'Milking Barn → Creamery', src: () => [barn.outPile, 'milk'], dst: () => creamery.ins[0].pile, ok: () => barn.built && creamery.built },
+  { id: 'wool', name: 'Yak Pen → Tailor', src: () => [pen.out, 'wool'], dst: () => tailor.input, ok: () => pen.built && tailor.built },
+  { id: 'lantern', name: 'Lantern Shop → Market Stall', src: () => [workshop.out, 'lantern'], dst: () => market.input, ok: () => workshop.built && market.built },
+];
+const beltLen = b => d2(b.src()[0].center, b.dst().center);
+const beltCost = b => Math.round((600 + beltLen(b) * 90) / 50) * 50;
+function buildBelt(b, instant) {
+  if (b.mesh) return;
+  const a = b.src()[0].center, z = b.dst().center, L = d2(a, z);
+  const tex = beltTex.clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(1, L / 1.2), 1);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(L, 0.1, 0.45), [mat(0x2b3442), mat(0x2b3442), new THREE.MeshLambertMaterial({ map: tex }), mat(0x2b3442), mat(0x2b3442), mat(0x2b3442)]);
+  m.position.set((a.x + z.x) / 2, 0.06, (a.z + z.z) / 2); m.rotation.y = -Math.atan2(z.z - a.z, z.x - a.x); m.receiveShadow = true; scene.add(m);
+  b.mesh = m; b.tex = tex; b.t = 0;
+  if (!instant) { burst(a, 0x8d97a6, 10); burst(z, 0x8d97a6, 10); }
+}
+function buyBelt(id) {
+  const b = BELTS.find(x => x.id === id), cost = beltCost(b);
+  if (UP['belt_' + id] || W.cash < cost) return;
+  W.cash -= cost; UP['belt_' + id] = 1; setCash(); buildBelt(b, false); sfx('buy'); bump('belts');
+  toast(`Conveyor belt built: ${b.name}`); save(); renderShop(); updateRank(true);
+}
+function renderBelts() {
+  const list = BELTS.filter(b => b.ok());
+  shopList.innerHTML = `<p class="tabnote">Belts carry goods between buildings by themselves, so nobody has to walk them over.</p>` + (list.map(b => {
+    const owned = UP['belt_' + b.id], cost = beltCost(b);
+    return `<div class="urow"><div><b>${b.name}</b><small>${Math.round(beltLen(b))} steps long</small></div>` +
+      (owned ? `<button class="buy max" type="button" disabled>Built</button>` : `<button class="buy" type="button" data-belt="${b.id}" data-cost="${cost}">$${fmt(cost)}</button>`) + `</div>`;
+  }).join('') || '<p>Belts appear here once both buildings at each end are built.</p>');
+  refreshShopButtons();
+}
+function updateBelts(dt) {
+  for (const b of BELTS) {
+    if (!b.mesh) continue;
+    b.tex.offset.x -= dt * 0.8;
+    b.t += dt; if (b.t < 1.4) continue;
+    const [src, type] = b.src(), dst = b.dst();
+    if (!src.n || dst.free() <= 0) continue;
+    b.t = 0;
+    const m = src.take(), start = src.center.clone().setY(0.25), end = dst.center.clone().setY(0.25);
+    dst.pending++;
+    fly(m, start, () => end, d2(start, end) / 3.5, () => { dst.pending--; if (dst.typed) dst.receiveT(m, end, type); else dst.receive(m, end); }, 0.05);
+  }
+}
+
+// ---- Tinker Bench: combine two different goods to discover recipes ----
+const RECIPES = [
+  { id: 'cocoa', name: 'Hot Cocoa', a: 'milk', b: 'comb', price: 60, color: 0x7a4a2a, hint: 'Something warm and sweet from the barn and the hive.' },
+  { id: 'sandwich', name: 'Jam Sandwich', a: 'bread', b: 'jam', price: 55, color: 0xc88a40, hint: 'Something from the oven and something from the kitchen.' },
+  { id: 'fishpie', name: 'Fish Pie', a: 'fish', b: 'bread', price: 58, color: 0xd8a060, hint: 'The river meets the oven.' },
+  { id: 'feast', name: "Hunter's Feast", a: 'steak', b: 'stew', price: 90, color: 0x9a5a2a, hint: 'The grill and the soup pot together.' },
+  { id: 'globe', name: 'Snow Globe', a: 'ice', b: 'ornament', price: 150, color: 0xbfe8ff, hint: 'River ice and a glass bauble.' },
+  { id: 'perfume', name: 'Snowbloom Perfume', a: 'bloom', b: 'candle', price: 120, color: 0xd9b3ff, hint: 'An island flower and a little wax.' },
+  { id: 'rocker', name: 'Rocking Horse', a: 'toy', b: 'chair', price: 190, color: 0xa86a3a, hint: 'Two things children love.' },
+  { id: 'watch', name: 'Gold Pocket Watch', a: 'gold', b: 'tool', price: 210, color: 0xffcc33, hint: 'Gold from the mine meets the blacksmith.' },
+];
+const RECIPE_BY = Object.fromEntries(RECIPES.map(rc => [rc.id, rc]));
+legacy.recipes = legacy.recipes || {};
+const GIFT_GEO = new THREE.BoxGeometry(0.34, 0.26, 0.34), RIBBON_GEO = new THREE.BoxGeometry(0.36, 0.28, 0.08), BOW_GEO = new THREE.TorusGeometry(0.07, 0.025, 4, 10);
+for (const rc of RECIPES) { H[rc.id] = 0.3; SHIP_PRICE[rc.id] = Math.round(rc.price * 1.25); }
+const bench = { built: false, zone: new V3(-6.4, 0, 24.6), slots: [], t: 0, out: new Pile(-9.8, 0, 3, 3, 24, 0.6, 0.6, 0.3) };
+bench.out.x = -9.8; bench.out.z = 21.8; bench.out.center.set(-9.8, 0, 21.8);
+function unlockBench(instant) {
+  if (bench.built) return;
+  bench.built = true;
+  const g = stationGroup(-7.8, 22.2);
+  mesh(new THREE.BoxGeometry(1.6, 0.12, 0.8), 0xa86a3a, 0, 0.8, 0, g);
+  for (const [x, z] of [[-0.7, -0.3], [0.7, -0.3], [-0.7, 0.3], [0.7, 0.3]]) mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), 0x7a4a26, x, 0.4, z, g);
+  mesh(new THREE.BoxGeometry(0.4, 0.1, 0.12), 0xb8c2cc, -0.4, 0.92, 0.1, g); mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.2, 8), 0xd84a3a, 0.4, 0.96, -0.1, g);
+  colliders.push({ x0: -8.6, x1: -7.0, z0: 21.8, z1: 22.6 });
+  zoneMarker(bench.zone.x, bench.zone.z, 'gift', '#ffd23a'); zoneMarker(bench.out.x, bench.out.z, 'gift', '#7be38a');
+  if (!instant) { popIn(g); burst(new V3(-7.8, 0, 22.2), 0xa86a3a, 14); toast('Drop two different goods on the Tinker Bench to discover recipes!'); }
+}
+function benchDrop(c) {
+  if (bench.slots.length >= 2) return false;
+  const have = bench.slots[0] && bench.slots[0].type;
+  let pick = null;
+  for (let i = c.items.length - 1; i >= 0; i--) { const t = c.items[i].type; if (t !== have && ITEM_NAME[t] && !RECIPE_BY[t]) { pick = t; break; } }
+  if (!pick) return false;
+  const it = c.take(pick); const spot = new V3(-7.8 + (bench.slots.length ? 0.3 : -0.3), 1.0, 22.2);
+  bench.slots.push({ type: pick, m: it.m });
+  fly(it.m, it.pos, () => spot, 0.3, null); bench.t = 0; sfx('drop');
+  return true;
+}
+function updateBench(dt) {
+  if (!bench.built || bench.slots.length < 2) return;
+  bench.t += dt; if (bench.t < 0.8) return;
+  const [x, y] = bench.slots; bench.slots = [];
+  const rc = RECIPES.find(q => (q.a === x.type && q.b === y.type) || (q.a === y.type && q.b === x.type));
+  if (rc) {
+    scene.remove(x.m); scene.remove(y.m);
+    const top = new V3(-7.8, 1.2, 22.2); burst(top, rc.color, 14); sfx('buy');
+    if (bench.out.free() > 0) bench.out.receive(makeItem(rc.id), top);
+    bump('tinker');
+    if (!legacy.recipes[rc.id]) { legacy.recipes[rc.id] = 1; saveLegacy(); toast(`New recipe: ${rc.name}! Sell it at the General Store.`); for (let k = 0; k < 2; k++) setTimeout(() => firework(top.clone().setY(0)), k * 300); }
+  } else {
+    toast(`${capFirst(itemName(x.type))} and ${itemName(y.type)} don't mix.`);
+    for (const sl of [x, y]) { const gi = { type: sl.type, m: sl.m, ready: false }; groundItems.push(gi); const to = new V3(-6.4 + rand(-1.2, 1.2), 0.1, 26 + rand(0, 1)); fly(sl.m, sl.m.position.clone(), () => to, 0.4, () => { gi.ready = true; }, 1.2); }
+  }
+}
+
 const hut = (g, wall, roof, w = 2.2, d = 1.6) => {
   mesh(new THREE.BoxGeometry(w, 1.4, d), wall, 0, 0.7, 0, g);
   const rf = mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.6, 1.0, 4), roof, 0, 1.9, 0, g); rf.rotation.y = PI / 4; rf.scale.z = d / w;
@@ -2850,6 +3023,8 @@ function deliverOrder(c, pos) {
   }
   return false;
 }
+
+for (const rc of RECIPES) { store.accepts[rc.id] = () => rc.price; ICON_OF[rc.id] = 'gift'; ITEM_NAME_EXTRA[rc.id] = [rc.name.toLowerCase(), rc.name.toLowerCase() + 's']; }
 
 // Market Town plaza
 const town = { built: false, folk: [] };
@@ -3253,6 +3428,10 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['golden10', 'Midas Touch', 'Make 10 golden pieces', () => stat('golden') >= 10],
+  ['belts5', 'Conveyor King', 'Build 5 conveyor belts', () => stat('belts') >= 5],
+  ['tierGold', 'Gold Standard', 'Upgrade a building to Gold', () => STATIONS.some(st => U('tier_' + st.id) >= 2)],
+  ['recipes8', 'Master Tinkerer', 'Discover all 8 recipes', () => RECIPES.every(rc => legacy.recipes[rc.id])],
   ['volcano', 'Into the Fire', 'Enter the Ember Volcano', () => stat('volcano') >= 1],
   ['blade10', 'Bladesmith', 'Forge 10 obsidian blades', () => stat('blade') >= 10],
   ['fire25', 'Firefighter', 'Smash 25 fire golems', () => stat('firegolem') >= 25],
@@ -3447,6 +3626,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'tinker', label: 'Tinker Bench', icon: 'gift', costs: [5000], x: -6.4, z: 24.6, req: () => town.built, apply: unlockBench },
   { id: 'farm', label: 'Farm Field', icon: 'wheat', costs: [2500], x: 16.1, z: 19.2, req: () => town.built, apply: unlockFarm },
   { id: 'oven', label: 'Bread Oven', icon: 'bread', costs: [3000], x: 24.8, z: 17.6, req: () => farm.built, apply: (l, i) => oven.unlock(i) },
   { id: 'soup', label: 'Soup Kitchen', icon: 'stew', costs: [3500], x: 24.8, z: 21.8, req: () => farm.built, apply: (l, i) => soup.unlock(i) },
@@ -3817,9 +3997,12 @@ function playerInteract() {
   }
   // sled depot takes steaks, gems and fish
   if (depot.built && depot.state === 'load' && inZone(pos, depot.input.x, depot.input.z) && depot.input.free() > 0) {
-    const it = c.take('steak') || c.take('gem') || c.take('fish') || c.take('jam') || c.take('tool') || c.take('potion') || c.take('pie') || c.take('candle') || c.take('chair') || c.take('ring') || c.take('cheese') || c.take('toy') || c.take('ornament') || c.take('bread') || c.take('stew') || c.take('blade');
+    let it = null; for (const ty of Object.keys(SHIP_PRICE)) { it = c.take(ty); if (it) break; }
     if (it) { depotReceive(it.type, it); sfx('drop'); return; }
   }
+  // tinker bench
+  if (bench.built && inZone(pos, bench.zone.x, bench.zone.z) && benchDrop(c)) return;
+  if (bench.built && inZone(pos, bench.out.x, bench.out.z) && bench.out.n > 0 && !c.full()) { const m = bench.out.take(); c.receive(m.userData.type, m, m.position.clone()); return; }
   // villager order board
   if (board.built && inZone(pos, board.zone.x, board.zone.z) && deliverOrder(c, pos)) return;
   // wardrobe: step in to switch outfits
@@ -4186,6 +4369,7 @@ const ITEM_NAME = { meat: ['raw meat', 'raw meat'], steak: ['steak', 'steaks'], 
   chair: ['chair', 'chairs'], ring: ['ring', 'rings'], pie: ['pie', 'pies'], milk: ['milk', 'milk'], cheese: ['cheese', 'cheeses'],
   toy: ['toy bear', 'toy bears'], ornament: ['ornament', 'ornaments'], wheat: ['wheat', 'wheat'], carrot: ['carrot', 'carrots'],
   bread: ['loaf of bread', 'loaves of bread'], stew: ['bowl of stew', 'bowls of stew'], obsidian: ['obsidian', 'obsidian'], blade: ['obsidian blade', 'obsidian blades'] };
+Object.assign(ITEM_NAME, ITEM_NAME_EXTRA);
 const itemName = (t, n = 1) => (ITEM_NAME[t] || [t, t + 's'])[n === 1 ? 0 : 1];
 const capFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
 const iconOfItem = t => ICON_OF[t] || t;
@@ -4428,8 +4612,17 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup']]) document.getElementById(id).classList.toggle('on', v === key);
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes']]) document.getElementById(id).classList.toggle('on', v === key);
+  if (v === 'recipes') { renderRecipes(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+}
+document.getElementById('recipebtn').onclick = () => showMenuView(menuView === 'recipes' ? '' : 'recipes');
+function renderRecipes() {
+  const known = RECIPES.filter(rc => legacy.recipes[rc.id]).length;
+  menuBody.innerHTML = `<h4>Recipe book (${known}/${RECIPES.length})</h4><p>Drop two different goods on the Tinker Bench in Market Town. If they make something, the recipe is saved here.</p>` +
+    RECIPES.map(rc => legacy.recipes[rc.id]
+      ? `<div class="wh"><b>${rc.name}</b><span class="chip ok">$${rc.price}</span><small>${capFirst(itemName(rc.a))} + ${itemName(rc.b)}</small></div>`
+      : `<div class="wh"><b>???</b><span class="chip warn">Undiscovered</span><small>Hint: ${rc.hint}</small></div>`).join('');
 }
 document.getElementById('travelbtn').onclick = () => showMenuView(menuView === 'travel' ? '' : 'travel');
 document.getElementById('whbtn').onclick = () => showMenuView(menuView === 'wh' ? '' : 'wh');
@@ -4624,7 +4817,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -4660,7 +4853,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
