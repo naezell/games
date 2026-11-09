@@ -73,6 +73,10 @@
   .statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
   .statgrid span { background: #e3e9f0; border-radius: 10px; padding: 8px 4px; text-align: center; font: 700 11px var(--font-body); color: #5a6878; }
   .statgrid span b { display: block; font: 18px var(--font-display); color: #1d2433; }
+  #obsgame { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,10,25,.6); z-index: 20; }
+  #obsgame[hidden] { display: none; }
+  #obscv { width: 100%; height: auto; border-radius: 12px; touch-action: none; margin: 8px 0; }
+  #obsquit { border: 0; border-radius: 10px; padding: 8px 14px; background: #e3e9f0; font: 800 13px var(--font-body); cursor: pointer; }
   .hardrow { display: block; margin: 6px 0; font: 700 13px var(--font-body); } .hardrow small { color: #5a6878; }
   #toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); box-sizing: border-box;
     background: rgba(20,28,48,.85); color: var(--white); border-radius: 16px; padding: 12px 20px; text-align: center;
@@ -283,7 +287,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="petsbtn" type="button">Pets</button><button id="ridebtn2" type="button">Balloon ride $500</button><button id="dailybtn" type="button">Daily rewards</button><button id="councilbtn" type="button">Town Council</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="museumbtn" type="button">Museum &amp; Castle</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="petsbtn" type="button">Pets</button><button id="ridebtn2" type="button">Balloon ride $500</button><button id="dailybtn" type="button">Daily rewards</button><button id="councilbtn" type="button">Town Council</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -859,6 +863,7 @@ class CashPile extends Pile {
     if (buffs.cash > 0) v = Math.round(v * 1.25);
     if (policyOn('market')) v = Math.round(v * 1.15);
     if (beacon.done) v = Math.round(v * 1.1);
+    v = Math.round(v * (1 + 0.02 * museum.done.length + (castle.stage >= CASTLE.length ? 0.1 : 0)));
     if (hardOn('poor')) v = Math.round(v * 0.75);
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'lanterns' && isNight()) v = Math.round(v * 1.15);
     if (typeof favorBonus === 'function') v = Math.round(v * favorBonus());
@@ -2842,6 +2847,7 @@ function updateVillagers(dt) {
   const pp = player.g.position;
   for (const v of villagers) {
     const g = v.p.group; v.cd -= dt;
+    if (v.fight) continue;
     if (v.trip) { const mv = petFollow(g, 1.1, dt, W.speed * (riding() ? 1.7 : 1.1)); animPerson(v.p, mv, dt); if (d2(g.position, pp) > 30) g.position.copy(pp).add(new V3(1, 0, 1)); continue; }
     if (v.job) { const st = jobStation(v); if (st && st.built) { if (st.x >= 90) { g.visible = false; continue; } g.visible = true; const spot = st.pos.clone().add(new V3(1.7, 0, 1.3)); const mv = !navStep(g, spot, 1.8, dt, 0.3); animPerson(v.p, mv, dt); if (!mv) g.rotation.y = Math.atan2(st.pos.x - g.position.x, st.pos.z - g.position.z); continue; } }
     let moving = false;
@@ -4508,6 +4514,11 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['skigold', 'Downhill Champion', 'Win Gold on the ski slope', () => stat('skiGold') >= 1],
+  ['snow3', 'Snowball Champ', 'Win 3 snowball fights', () => stat('snowwins') >= 3],
+  ['museum5', 'Curator', 'Complete all five museum exhibits', () => museum.done.length >= 5],
+  ['castle', 'Ice Monarch', 'Finish the Ice Castle', () => castle.stage >= CASTLE.length],
+  ['stars12', 'Star Chart', 'Find all 12 constellations', () => Object.keys(legacy.consts || {}).length >= 12],
   ['named', 'Home Sweet Name', 'Name your camp', () => !!legacy.campName],
   ['tricks5', 'Show Off', 'Teach your pets 5 tricks', () => stat('tricks') >= 5],
   ['ride', 'Bird\'s Eye', 'Take a balloon ride over the valley', () => stat('rides') >= 1],
@@ -4778,6 +4789,11 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'skislope', label: 'Ski Slope', icon: 'sled', costs: [20000], x: 166.6, z: -11, req: () => FAR.peak.built, apply: (l, i) => buildSki(i) },
+  { id: 'arena', label: 'Snowball Arena', icon: 'gift', costs: [5000], x: 33.4, z: 26.9, req: () => bridge.unlocked && town.built, apply: (l, i) => buildArena(i) },
+  { id: 'museum', label: 'Museum', icon: 'gem', costs: [25000], x: 35, z: 21, req: () => bridge.unlocked && town.built, apply: (l, i) => buildMuseum(i) },
+  { id: 'castle', label: 'Ice Castle', icon: 'ice', costs: [15000], x: 45, z: 21.8, req: () => bridge.unlocked && icesaw.built, apply: (l, i) => buildCastle(i) },
+  { id: 'observatory', label: 'Observatory', icon: 'owl', costs: [18000], x: 54, z: 25.2, req: () => bridge.unlocked && town.built, apply: (l, i) => buildObs(i) },
   { id: 'icecream', label: 'Ice Cream Stand', icon: 'milk', costs: [14000], x: 223.6, z: 9.2, req: () => FAR.harbor.built, apply: (l, i) => icecream.unlock(i) },
   { id: 'giftshop', label: 'Gift Shop', icon: 'gift', costs: [25000], x: 223.6, z: -9.2, req: () => FAR.harbor.built, apply: (l, i) => giftshop.unlock(i) },
   { id: 'balloon', label: 'Cargo Balloon', icon: 'cart', costs: [16000, 30000], x: -17.5, z: 17.2, req: () => ridge.unlocked, apply: (l, i) => buildBalloon(l, i) },
@@ -5176,6 +5192,8 @@ function playerInteract() {
   if (light.shown && !light.done && inZone(pos, light.zone.x, light.zone.z, 1.05) && deliverSite(light, c)) return;
   if (altar.shown && !altar.done && inZone(pos, altar.zone.x, altar.zone.z, 1.05) && deliverSite(altar, c)) return;
   if (beacon.shown && !beacon.done && inZone(pos, beacon.zone.x, beacon.zone.z, 1.05) && deliverSite(beacon, c)) return;
+  if (museum.built && inZone(pos, museum.zone.x, museum.zone.z, 1.05) && museumDonate(c)) return;
+  if (castle.built && castle.stage < CASTLE.length && inZone(pos, castle.zone.x, castle.zone.z, 1.05) && castleDeliver(c)) return;
   // ice cave dungeon
   if (dung.built) {
     const atE = inZone(pos, dung.entrance.x, dung.entrance.z, 1.0), atX = inZone(pos, dung.exitZone.x, dung.exitZone.z, 1.0);
@@ -5263,6 +5281,7 @@ function playerInteract() {
 }
 
 function updatePlayer(dt) {
+  if (ski.active) { skiStep(dt); return; }
   const dir = new V3(), f = new V3(-CAM.x, 0, -CAM.z).normalize(), r = new V3(-f.z, 0, f.x);
   let jx = joy.dx, jy = joy.dy;
   if (keys.size) {
@@ -5658,6 +5677,11 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  skislope: 'A chairlift and a slalom course on Sky Peak. Race through the gates for medals.',
+  arena: 'Step on its square to start a 40-second snowball fight with your villager friends.',
+  museum: 'Donate rare finds to fill five exhibits. Each finished exhibit adds 2% to all income, and visitors pay to come in.',
+  castle: 'A grand project in four stages. Deliver huge loads of ice and treasure; the finished castle adds 10% to all income.',
+  observatory: 'At night, look through the telescope and draw constellations. There are 12 to find.',
   icecream: 'Open only during summer week: milk and berries make ice cream worth $95.',
   giftshop: 'A ferry brings tourists every few minutes. While they wait, the Gift Shop sells souvenirs for extra: toys, ornaments, candles, rings and more.',
   balloon: 'Flies to Ridge Camp and the far lands, picks up their finished goods, and sells them here at home.',
@@ -7615,6 +7639,316 @@ function renderStats() {
 }
 document.getElementById('statsbtn').onclick = renderStats;
 
+// ================= Ski slope (Sky Peak) =================
+const ski = { built: false, active: false, start: new V3(166.6, 0, -11), t: 0, x0: 167, xEnd: 190.5, gates: [], miss: 0, next: 0, cd: 0, wasIn: false, chairs: [] };
+function buildSki(instant) {
+  if (ski.built) return; ski.built = true;
+  for (let i = 0; i < 8; i++) {
+    const gx = 169.5 + i * 2.7, gz = -11 + rand(-2, 2), col = i % 2 ? 0x3f8fd8 : 0xe8433a, gg = new THREE.Group(); scene.add(gg);
+    for (const s2 of [-1, 1]) { mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.4, 5), col, gx, 0.7, gz + s2 * 0.95, gg); mesh(new THREE.BoxGeometry(0.03, 0.35, 0.45), col, gx, 1.2, gz + s2 * 0.95 - s2 * 0.25, gg); }
+    ski.gates.push({ x: gx, z: gz, g: gg });
+  }
+  const fin = mesh(new THREE.BoxGeometry(0.15, 0.04, 6.2), 0xffd23a, ski.xEnd, 0.03, -11); fin.castShadow = false;
+  for (const z of [-14.2, -7.8]) mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), 0x2b3442, ski.xEnd, 1.2, z);
+  mesh(new THREE.BoxGeometry(0.1, 0.5, 6.4), 0xe8433a, ski.xEnd, 2.4, -11);
+  for (const x of [166, 178, 190]) mesh(new THREE.BoxGeometry(0.25, 5, 0.25), 0x6a7480, x, 2.5, -14.6);
+  const wire = mesh(new THREE.BoxGeometry(24, 0.04, 0.04), 0x2b3442, 178, 4.9, -14.6); wire.castShadow = false;
+  for (let i = 0; i < 5; i++) { const ch = new THREE.Group(); scene.add(ch); mesh(new THREE.BoxGeometry(0.04, 0.9, 0.04), 0x2b3442, 0, -0.45, 0, ch); mesh(new THREE.BoxGeometry(0.7, 0.1, 0.5), 0xe8433a, 0, -0.9, 0, ch); ch.position.set(166 + i * 4.8, 4.9, -14.6); ski.chairs.push(ch); }
+  zoneMarker(ski.start.x, ski.start.z, 'sled', '#ffd23a');
+  if (!instant) toast('The ski slope is open on Sky Peak! Step on the start square to race the gates.');
+}
+function skiJy() {
+  let jy = joy.dy;
+  if (keys.size) jy = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
+  return jy;
+}
+function startSki() {
+  Object.assign(ski, { active: true, t: 0, miss: 0, next: 0, ride: W.ride }); W.ride = false;
+  if (!ski.boards) { ski.boards = new THREE.Group(); for (const x of [-0.14, 0.14]) { mesh(new THREE.BoxGeometry(0.1, 0.04, 1.5), 0xffcc33, x, 0.03, 0.1, ski.boards); } player.g.add(ski.boards); }
+  ski.boards.visible = true;
+  player.g.position.set(ski.x0, 0, -11); player.g.rotation.y = PI / 2; sfx('whoosh');
+  toast('Go! Steer up and down through the gates. Each missed gate adds 2 seconds.');
+}
+function skiStep(dt) {
+  const pos = player.g.position; ski.t += dt;
+  const sp = Math.min(9, 4.5 + ski.t * 1.3), jy = skiJy();
+  pos.x += sp * dt; pos.z = clamp(pos.z + jy * 5.5 * dt, -14, -8);
+  player.g.rotation.y = PI / 2 - jy * 0.4; player.g.rotation.z = -jy * 0.15;
+  if (Math.random() < dt * 10) burst(pos.clone().setY(0.1), 0xffffff, 2);
+  animPerson(player.p, false, dt);
+  const gt = ski.gates[ski.next];
+  if (gt && pos.x >= gt.x) {
+    ski.next++;
+    if (Math.abs(pos.z - gt.z) < 0.95) { burst(new V3(gt.x, 1, gt.z), 0x7be38a, 8); sfx('coin'); }
+    else { ski.miss++; burst(new V3(gt.x, 1, gt.z), 0xe8433a, 8); sfx('hit'); }
+  }
+  if (pos.x >= ski.xEnd) {
+    ski.active = false; player.g.rotation.z = 0; ski.cd = 2; W.ride = ski.ride; ski.boards.visible = false; showRide();
+    const total = ski.t + 2 * ski.miss, medal = total < 5.2 ? 3 : total < 6.5 ? 2 : total < 8.5 ? 1 : 0;
+    const best = legacy.skiBest || 99; if (total < best) { legacy.skiBest = Math.round(total * 100) / 100; saveLegacy(); }
+    bump('skiruns');
+    let msg = `Finish! ${total.toFixed(2)}s (${ski.miss} missed)`;
+    if (medal) { const prize = Math.round(medal * Math.max(800, incomeRate * 20) / 50) * 50; W.cash += prize; setCash(); bump('ski' + MEDAL[medal]); msg += ` · ${MEDAL[medal]} medal! +$${fmt(prize)}`; sfx('buy'); }
+    if (total < best) msg += ' · New best!';
+    toast(msg); setTimeout(() => { if (!ski.active) player.g.position.set(ski.start.x, 0, ski.start.z + 2.4); }, 1200);
+  }
+}
+function updateSki(dt) {
+  if (!ski.built) return;
+  ski.cd -= dt;
+  for (const ch of ski.chairs) { ch.position.x += dt * 1.6; if (ch.position.x > 190) ch.position.x -= 24; }
+  if (ski.active) return;
+  const on = inZone(player.g.position, ski.start.x, ski.start.z, 1.0);
+  if (on && !ski.wasIn && ski.cd <= 0) startSki();
+  ski.wasIn = on;
+}
+
+// ================= Snowball fights =================
+const arena = { built: false, at: new V3(34.5, 0, 30), zone: new V3(33.4, 0, 26.9), on: false, t: 0, foes: [], balls: [], mine: 0, theirs: 0, cd: 0, wasIn: false, throwT: 0, temp: [] };
+function buildArena(instant) {
+  if (arena.built) return; arena.built = true;
+  for (const [x, z, ry] of [[-3, -1, 0.3], [3, -1, -0.3], [-2.5, 2.4, 0], [2.5, 2.4, 0], [0, 0.8, 0]]) { const w = mesh(new THREE.BoxGeometry(1.6, 0.6, 0.5), 0xf6f8fb, arena.at.x + x, 0.3, arena.at.z + z); w.rotation.y = ry; }
+  const ring = new THREE.Mesh(new THREE.RingGeometry(4.3, 4.5, 40), new THREE.MeshBasicMaterial({ color: 0x9fd2f5 })); ring.rotation.x = -PI / 2; ring.position.set(arena.at.x, 0.03, arena.at.z); scene.add(ring);
+  zoneMarker(arena.zone.x, arena.zone.z, 'gift', '#9fd2f5');
+  if (!instant) toast('Snowball arena built, east of the river! Step on its square to start a snowball fight.');
+}
+function startFight() {
+  const picks = villagers.slice().sort((a, b) => b.hearts - a.hearts).slice(0, 3);
+  arena.foes = []; arena.temp = [];
+  const spots = [[-2.6, 3.4], [0, 3.8], [2.6, 3.4]];
+  for (let i = 0; i < 3; i++) {
+    let v = picks[i], g;
+    if (v) { v.fight = true; v.trip = false; g = v.p.group; g.visible = true; }
+    else { const p = makePerson([0xff8ab0, 0x5fd0e6, 0xffd23a][i], null, 0.75); scene.add(p.group); arena.temp.push(p.group); g = p.group; v = { p, temp: true }; }
+    const home = arena.at.clone().add(new V3(spots[i][0], 0, spots[i][1])); g.position.copy(home);
+    arena.foes.push({ v, g, home, ph: rand(0, 6), cd: rand(1.2, 2.2), off: 0 });
+  }
+  Object.assign(arena, { on: true, t: 40, mine: 0, theirs: 0, throwT: 1, balls: [] });
+  player.g.position.copy(arena.at).add(new V3(0, 0, -2.6)); sfx('bell');
+  toast('Snowball fight! Keep moving to dodge. You throw by yourself. Most hits in 40 seconds wins.');
+}
+function throwBall(from, toFn, mineSide) {
+  const m = mesh(new THREE.SphereGeometry(0.13, 8, 6), 0xffffff, from.x, 1.3, from.z);
+  const target = toFn().clone(); arena.balls.push({ m, from: from.clone().setY(1.3), to: target.setY(0.9), t: 0, dur: Math.max(0.35, d2(from, target) / 11), mine: mineSide, toFn });
+}
+function endFight() {
+  arena.on = false; arena.cd = 120;
+  for (const b of arena.balls) scene.remove(b.m); arena.balls = [];
+  for (const f of arena.foes) if (!f.v.temp) { f.v.fight = false; f.g.position.copy(f.v.home); }
+  for (const g of arena.temp) scene.remove(g); arena.temp = [];
+  if (arena.mine > arena.theirs) {
+    const prize = Math.round(Math.max(1500, incomeRate * 30) / 50) * 50; W.cash += prize; setCash(); bump('snowwins'); sfx('buy');
+    for (const f of arena.foes) if (!f.v.temp && f.v.hearts < 10) { f.v.hearts++; drawTag(f.v); }
+    toast(`You win the snowball fight, ${arena.mine} to ${arena.theirs}! +$${fmt(prize)} and a heart from each friend.`);
+    for (let k = 0; k < 3; k++) setTimeout(() => firework(player.g.position.clone()), k * 250);
+  } else { W.cash += 200; setCash(); toast(`Snowball fight over: ${arena.mine} to ${arena.theirs}. ${arena.mine === arena.theirs ? 'A tie!' : 'They got you this time.'} +$200 for playing.`); }
+  save();
+}
+function updateArena(dt) {
+  if (!arena.built) return;
+  arena.cd -= dt;
+  const pp = player.g.position;
+  if (!arena.on) { const on = inZone(pp, arena.zone.x, arena.zone.z, 1.0); if (on && !arena.wasIn) { if (arena.cd > 0) toast(`Everyone is still drying off. Next fight in ${Math.ceil(arena.cd)}s.`); else startFight(); } arena.wasIn = on; return; }
+  arena.t -= dt;
+  chalEl.hidden = false; chalEl.textContent = `Snowball fight · ${Math.max(0, Math.ceil(arena.t))}s · You ${arena.mine} - ${arena.theirs} Them`;
+  if (d2(pp, arena.at) > 6.5) { chalEl.hidden = true; toast('You left the arena!'); arena.t = 0; }
+  for (const f of arena.foes) {
+    f.ph += dt * 1.3; f.off = Math.sin(f.ph) * 1.6; f.g.position.set(f.home.x + f.off, 0, f.home.z + Math.cos(f.ph * 0.7) * 0.5);
+    f.g.rotation.y = Math.atan2(pp.x - f.g.position.x, pp.z - f.g.position.z); animPerson(f.v.p, true, dt);
+    f.cd -= dt; if (f.cd <= 0) { f.cd = rand(1.3, 2.3); throwBall(f.g.position, () => player.g.position, false); }
+  }
+  arena.throwT -= dt;
+  if (arena.throwT <= 0) { arena.throwT = 0.8; const f = nearest(arena.foes, pp, x => x.g.position); if (f) { player.p.swing = 1; throwBall(pp, () => f.g.position, true); arena.balls[arena.balls.length - 1].foe = f; } }
+  for (let i = arena.balls.length - 1; i >= 0; i--) {
+    const b = arena.balls[i]; b.t += dt; const k = Math.min(1, b.t / b.dur);
+    b.m.position.lerpVectors(b.from, b.to, k); b.m.position.y += Math.sin(k * PI) * 1.2;
+    if (k >= 1) {
+      const tgt = b.mine ? b.foe.g.position : player.g.position;
+      if (d2(tgt, b.to) < 0.75) { burst(b.to, 0xffffff, 8); if (b.mine) arena.mine++; else { arena.theirs++; camShake = 0.12; } sfx('pop'); }
+      scene.remove(b.m); arena.balls.splice(i, 1);
+    }
+  }
+  if (arena.t <= 0) { chalEl.hidden = true; endFight(); }
+}
+
+// ================= Museum =================
+const EXHIBITS = [
+  { id: 'gems', name: 'Gem Gallery', need: { gem: 10, ring: 3 } },
+  { id: 'treasure', name: 'Treasure Room', need: { gold: 6, blade: 1, pearl: 4 } },
+  { id: 'crafts', name: 'Hall of Crafts', need: { toy: 2, ornament: 2, chair: 2, quilt: 2, candle: 2 } },
+  { id: 'nature', name: 'Natural History', need: { feather: 4, mushroom: 4, bloom: 4, shard: 4 } },
+  { id: 'sea', name: 'Hall of the Sea', need: { glowfish: 3, fish: 10, pearl: 2 } },
+];
+const museum = { built: false, at: new V3(35, 0, 21), zone: new V3(35, 0, 24.2), have: {}, done: [], cash: null, t: 0, banners: [] };
+function buildMuseum(instant) {
+  if (museum.built) return; museum.built = true;
+  const g = stationGroup(museum.at.x, museum.at.z); museum.g = g;
+  mesh(new THREE.BoxGeometry(4.2, 0.3, 2.8), 0xd8dde4, 0, 0.15, 0, g);
+  mesh(new THREE.BoxGeometry(3.8, 2.0, 2.2), 0xf2ead8, 0, 1.3, -0.2, g);
+  for (let i = 0; i < 5; i++) mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.0, 8), 0xffffff, -1.7 + i * 0.85, 1.3, 1.1, g);
+  const pd = mesh(new THREE.ConeGeometry(2.8, 0.9, 4), 0xd8dde4, 0, 2.75, 0.1, g); pd.rotation.y = PI / 4; pd.scale.z = 0.62;
+  colliders.push({ x0: museum.at.x - 2.1, x1: museum.at.x + 2.1, z0: museum.at.z - 1.4, z1: museum.at.z + 1.4 });
+  zoneMarker(museum.zone.x, museum.zone.z, 'gem', '#ffd23a');
+  museum.cash = new CashPile(museum.at.x + 3.8, museum.zone.z);
+  museum.done.forEach((id, i) => addBanner(i));
+  if (!instant) { popIn(g); toast('The Museum is open! Donate rare finds on the gold square. Finished exhibits add 2% income each, and visitors pay to come in.'); }
+}
+function addBanner(i) { const b = mesh(new THREE.BoxGeometry(0.5, 0.9, 0.04), [0xe8433a, 0x3f8fd8, 0xffcc33, 0x4f9a5a, 0x7a4fc8][i % 5], -1.7 + i * 0.85, 1.7, 1.25, museum.g); museum.banners.push(b); }
+function museumDonate(c) {
+  for (const ex of EXHIBITS) {
+    if (museum.done.includes(ex.id)) continue;
+    const h = museum.have[ex.id] = museum.have[ex.id] || {};
+    for (const [t, n] of Object.entries(ex.need)) {
+      if ((h[t] || 0) >= n) continue;
+      const it = c.take(t); if (!it) continue;
+      h[t] = (h[t] || 0) + 1; sfx('drop'); fly(it.m, it.pos, () => museum.at.clone().setY(1.6), 0.3, () => scene.remove(it.m));
+      if (Object.entries(ex.need).every(([t2, n2]) => (h[t2] || 0) >= n2)) {
+        museum.done.push(ex.id); addBanner(museum.done.length - 1); bump('exhibits'); sfx('buy');
+        for (let k = 0; k < 3; k++) setTimeout(() => firework(museum.at.clone()), k * 250);
+        toast(`${ex.name} is complete! +2% on all income, and more visitors.`);
+      } else toast(`${ex.name}: ${capFirst(itemName(t, 2))} ${h[t]}/${n}`);
+      save(); return true;
+    }
+  }
+  return false;
+}
+function updateMuseum(dt) {
+  if (!museum.built) return;
+  museum.t += dt; if (museum.t < 6) return; museum.t = 0;
+  museum.cash.addValue(10 + 14 * museum.done.length, museum.at.clone().setY(2));
+}
+function renderMuseum() {
+  let h = '<h4>Museum</h4>' + (museum.built ? '<p>Carry rare finds to the gold square in front of the Museum. Each finished exhibit adds 2% to all income.</p>' : '<p>Build the Museum east of the river, near Market Town.</p>');
+  h += EXHIBITS.map(ex => { const hv = museum.have[ex.id] || {}, done = museum.done.includes(ex.id);
+    return `<div class="wh"><b>${ex.name}</b><span class="chip ${done ? 'ok' : 'warn'}">${done ? 'Complete' : 'Open'}</span><small>${Object.entries(ex.need).map(([t, n]) => `${capFirst(itemName(t, 2))} ${Math.min(n, hv[t] || 0)}/${n}`).join(' · ')}</small></div>`; }).join('');
+  h += '<h4>Ice Castle</h4>' + (castle.built ? CASTLE.map((st, i) => `<div class="wh"><b>${st.name}</b><span class="chip ${i < castle.stage ? 'ok' : i === castle.stage ? 'warn' : ''}">${i < castle.stage ? 'Built' : i === castle.stage ? 'Building' : 'Later'}</span><small>${Object.entries(st.need).map(([t, n]) => `${capFirst(itemName(t, 2))} ${i < castle.stage ? n : i === castle.stage ? Math.min(n, castle.have[t] || 0) : 0}/${n}`).join(' · ')}</small></div>`).join('') : '<p>Start the Ice Castle east of the river. It takes four big deliveries, and the finished castle adds 10% to all income.</p>');
+  menuBody.innerHTML = h;
+}
+document.getElementById('museumbtn').onclick = renderMuseum;
+
+// ================= Ice Castle =================
+const CASTLE = [
+  { name: 'Foundation', need: { ice: 30, log: 20 } },
+  { name: 'Walls', need: { ice: 40, bar: 10 } },
+  { name: 'Towers', need: { ice: 40, gem: 12, gold: 6 } },
+  { name: 'Throne Room', need: { lantern: 15, ring: 3, quilt: 3 } },
+];
+const castle = { built: false, stage: 0, have: {}, at: new V3(45, 0, 27), zone: new V3(45, 0, 21.8), g: null, label: null };
+const castleIce = new THREE.MeshLambertMaterial({ color: 0xbfe8ff, emissive: 0x1a3a4a, transparent: true, opacity: 0.88 });
+function castlePart(stage) {
+  const g = castle.g, add = (geo, x, y, z, m2 = castleIce) => { const m = new THREE.Mesh(geo, m2); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  if (stage === 0) { add(new THREE.BoxGeometry(9, 0.6, 7), 0, 0.3, 0); add(new THREE.BoxGeometry(8, 0.3, 6), 0, 0.75, 0); }
+  if (stage === 1) { for (const [w, d, x, z] of [[8, 0.6, 0, -2.9], [8, 0.6, 0, 2.9], [0.6, 6.4, -3.7, 0], [0.6, 6.4, 3.7, 0]]) add(new THREE.BoxGeometry(w, 2.2, d), x, 2.0, z);
+    for (let i = 0; i < 7; i++) add(new THREE.BoxGeometry(0.5, 0.5, 0.6), -3 + i, 3.3, 2.9); }
+  if (stage === 2) for (const [x, z] of [[-3.7, -2.9], [3.7, -2.9], [-3.7, 2.9], [3.7, 2.9]]) { add(new THREE.CylinderGeometry(0.9, 1.0, 4.4, 10), x, 3.0, z); add(new THREE.ConeGeometry(1.15, 1.6, 10), x, 6.0, z, mat(0x3f8fd8)); }
+  if (stage === 3) { add(new THREE.BoxGeometry(3.2, 3.6, 2.6), 0, 2.6, 0); add(new THREE.ConeGeometry(2.0, 2.4, 4), 0, 5.6, 0, mat(0x7a4fc8)).rotation.y = PI / 4; const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), new THREE.MeshBasicMaterial({ color: 0xffe08a })); st.position.set(0, 7.3, 0); g.add(st); castle.star = st;
+    const L = new THREE.PointLight(0x9fe8ff, 1.4, 22, 1.5); L.position.set(0, 4, 3); g.add(L); }
+}
+function drawCastleLabel(c) {
+  const st = CASTLE[castle.stage];
+  c.fillStyle = 'rgba(20,40,70,0.78)'; roundRect(c, 10, 10, 236, 236, 30); c.fill(); c.lineWidth = 8; c.strokeStyle = '#9fe8ff'; c.setLineDash([22, 12]); roundRect(c, 10, 10, 236, 236, 30); c.stroke(); c.setLineDash([]);
+  c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  if (!st) { c.font = '34px "Lilita One", sans-serif'; c.fillText('Ice Castle', 128, 110); c.font = 'bold 22px "Nunito", sans-serif'; c.fillText('Complete!', 128, 150); return; }
+  c.font = 'bold 26px "Nunito", sans-serif'; c.fillText(st.name, 128, 50);
+  Object.entries(st.need).forEach(([t, n], i) => { c.font = 'bold 20px "Nunito", sans-serif'; c.fillText(`${capFirst(itemName(t, 2))} ${Math.min(n, castle.have[t] || 0)}/${n}`, 128, 100 + i * 34); });
+}
+function buildCastle(instant) {
+  if (castle.built) return; castle.built = true;
+  castle.g = stationGroup(castle.at.x, castle.at.z);
+  colliders.push({ x0: castle.at.x - 4.6, x1: castle.at.x + 4.6, z0: castle.at.z - 3.6, z1: castle.at.z + 3.6 });
+  for (let i = 0; i < castle.stage; i++) castlePart(i);
+  if (!castle.stage) { const flag = mesh(new THREE.BoxGeometry(0.1, 1.6, 0.1), 0x6b4428, 0, 0.8, 0, castle.g); castle.stake = flag; }
+  castle.label = groundLabel(2.1, drawCastleLabel); castle.label.mesh.position.set(castle.zone.x, 0.035, castle.zone.z); scene.add(castle.label.mesh);
+  if (!instant) toast('The Ice Castle site is ready! Deliver each stage on the blue square: first 30 ice blocks and 20 logs.');
+}
+function castleDeliver(c) {
+  const st = CASTLE[castle.stage];
+  for (const [t, n] of Object.entries(st.need)) {
+    if ((castle.have[t] || 0) >= n) continue;
+    const it = c.take(t); if (!it) continue;
+    castle.have[t] = (castle.have[t] || 0) + 1; sfx('drop'); fly(it.m, it.pos, () => castle.at.clone().setY(1.5), 0.35, () => scene.remove(it.m));
+    if (Object.entries(st.need).every(([t2, n2]) => (castle.have[t2] || 0) >= n2)) {
+      if (castle.stake) { castle.g.remove(castle.stake); castle.stake = null; }
+      castlePart(castle.stage); castle.stage++; castle.have = {}; bump('castlestages'); camShake = 0.3; sfx('buy');
+      for (let k = 0; k < 4; k++) setTimeout(() => firework(castle.at.clone()), k * 250);
+      toast(castle.stage >= CASTLE.length ? 'The Ice Castle is complete! It glows over the valley, and everything you earn is 10% higher.' : `${st.name} built! Next: the ${CASTLE[castle.stage].name}.`);
+    }
+    castle.label.redraw(); save(); return true;
+  }
+  return false;
+}
+function updateCastle(dt) { if (castle.star) castle.star.rotation.y += dt * 1.5; }
+
+// ================= Observatory =================
+const CONSTS = [
+  { name: 'The Great Bear', pts: [[0.15, 0.3], [0.3, 0.32], [0.45, 0.4], [0.58, 0.45], [0.62, 0.65], [0.85, 0.66], [0.82, 0.45]] },
+  { name: 'The Hunter', pts: [[0.3, 0.15], [0.7, 0.2], [0.45, 0.5], [0.5, 0.52], [0.55, 0.54], [0.3, 0.85], [0.72, 0.82]] },
+  { name: 'The Swan', pts: [[0.5, 0.1], [0.5, 0.35], [0.5, 0.6], [0.5, 0.9], [0.15, 0.4], [0.85, 0.3]] },
+  { name: 'The Crown', pts: [[0.15, 0.5], [0.3, 0.68], [0.5, 0.75], [0.7, 0.68], [0.85, 0.5]] },
+  { name: 'The Fox', pts: [[0.2, 0.3], [0.35, 0.45], [0.55, 0.5], [0.75, 0.45], [0.9, 0.2], [0.65, 0.75]] },
+  { name: 'The Snowflake', pts: [[0.5, 0.15], [0.5, 0.5], [0.5, 0.85], [0.2, 0.32], [0.8, 0.68], [0.2, 0.68], [0.8, 0.32]] },
+  { name: 'The Owl', pts: [[0.3, 0.25], [0.7, 0.25], [0.5, 0.45], [0.35, 0.7], [0.65, 0.7], [0.5, 0.88]] },
+  { name: 'The Sled', pts: [[0.1, 0.6], [0.35, 0.62], [0.65, 0.62], [0.9, 0.5], [0.35, 0.4], [0.65, 0.4]] },
+  { name: 'The Lantern', pts: [[0.5, 0.12], [0.35, 0.3], [0.65, 0.3], [0.32, 0.7], [0.68, 0.7], [0.5, 0.85]] },
+  { name: 'The Whale', pts: [[0.1, 0.5], [0.3, 0.4], [0.55, 0.38], [0.8, 0.45], [0.9, 0.3], [0.92, 0.6], [0.4, 0.62]] },
+  { name: 'The Twin Peaks', pts: [[0.1, 0.8], [0.3, 0.3], [0.5, 0.65], [0.7, 0.2], [0.9, 0.8]] },
+  { name: 'The Aurora Dragon', pts: [[0.1, 0.7], [0.25, 0.5], [0.4, 0.6], [0.55, 0.4], [0.7, 0.5], [0.85, 0.3], [0.92, 0.15]] },
+];
+legacy.consts = legacy.consts || {};
+const obs = { built: false, at: new V3(54, 0, 28.4), zone: new V3(54, 0, 25.2), wasIn: false, open: false, c: null, stars: [], next: 0, wrong: 0, night: -1, done: false };
+const obsEl = document.createElement('div'); obsEl.id = 'obsgame'; obsEl.hidden = true;
+obsEl.innerHTML = '<div class="fgbox"><h3 id="obsname">Observatory</h3><p id="obsmsg"></p><canvas id="obscv" width="600" height="600"></canvas><button type="button" id="obsquit" class="shopx2">Close telescope</button></div>';
+document.body.appendChild(obsEl);
+function buildObs(instant) {
+  if (obs.built) return; obs.built = true;
+  const g = stationGroup(obs.at.x, obs.at.z);
+  mesh(new THREE.CylinderGeometry(1.6, 1.7, 2.0, 16), 0xe6dcc8, 0, 1.0, 0, g);
+  const dome = mesh(new THREE.SphereGeometry(1.6, 16, 10, 0, 2 * PI, 0, PI / 2), 0x8d97a6, 0, 2.0, 0, g);
+  const tube = mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.8, 10), 0x2b3442, 0.6, 3.0, 0.4, g); tube.rotation.z = -0.8; tube.rotation.x = 0.4;
+  mesh(new THREE.BoxGeometry(0.8, 1.3, 0.05), 0x5a3a1e, 0, 0.65, 1.62, g);
+  colliders.push({ x0: obs.at.x - 1.7, x1: obs.at.x + 1.7, z0: obs.at.z - 1.7, z1: obs.at.z + 1.7 });
+  zoneMarker(obs.zone.x, obs.zone.z, 'owl', '#d9b3ff');
+  if (!instant) { popIn(g); toast('The Observatory is built! Come back at night and step on its square to stargaze.'); }
+}
+function openObs() {
+  const night = Math.floor(dayT / CYCLE);
+  const todo = CONSTS.filter(c => !legacy.consts[c.name]), pick = todo.length ? todo[0] : CONSTS[night % CONSTS.length];
+  if (obs.night === night && obs.done) { toast('You already charted the sky tonight. Come back tomorrow night!'); return; }
+  obs.night = night; obs.c = pick; obs.next = 0; obs.wrong = 0; obs.done = false; obs.open = true; obsEl.hidden = false;
+  const rng = (() => { let x = (night * 9301 + 49297) % 233280; return () => (x = (x * 9301 + 49297) % 233280) / 233280; })();
+  obs.decoys = Array.from({ length: 45 }, () => [rng(), rng(), 0.6 + rng() * 1.4]);
+  obs.stars = pick.pts.map(([x, y]) => [0.08 + x * 0.84, 0.08 + y * 0.84]);
+  document.getElementById('obsname').textContent = pick.name;
+  document.getElementById('obsmsg').textContent = 'Tap the bright stars in order to draw it. The next star twinkles a little.';
+  drawObs();
+}
+function drawObs() {
+  const cvs = document.getElementById('obscv'), c = cvs.getContext('2d'), W2 = 600;
+  c.fillStyle = '#0b1530'; c.fillRect(0, 0, W2, W2);
+  for (const [x, y, r] of obs.decoys) { c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.arc(x * W2, y * W2, r, 0, 2 * PI); c.fill(); }
+  c.strokeStyle = '#9fe8ff'; c.lineWidth = 4; c.beginPath();
+  for (let i = 0; i < obs.next; i++) { const [x, y] = obs.stars[i]; i ? c.lineTo(x * W2, y * W2) : c.moveTo(x * W2, y * W2); } c.stroke();
+  const tw = 1 + Math.sin(performance.now() / 180) * 0.35;
+  obs.stars.forEach(([x, y], i) => { c.fillStyle = i < obs.next ? '#9fe8ff' : '#ffffff'; c.beginPath(); c.arc(x * W2, y * W2, i === obs.next ? 6 * tw : 5, 0, 2 * PI); c.fill(); });
+}
+document.getElementById('obscv').addEventListener('pointerdown', e => {
+  if (!obs.open) return;
+  const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height, [sx, sy] = obs.stars[obs.next];
+  if (Math.hypot(x - sx, y - sy) < 0.06) { obs.next++; sfx('coin');
+    if (obs.next >= obs.stars.length) { obs.open = false; obs.done = true; drawObs(); const isNew = !legacy.consts[obs.c.name]; legacy.consts[obs.c.name] = 1; saveLegacy(); bump('stargaze');
+      const prize = Math.round(Math.max(isNew ? 1500 : 400, incomeRate * (isNew ? 30 : 8)) / 50) * 50; W.cash += prize; setCash(); if (isNew) research.kp += 3; sfx('bell');
+      document.getElementById('obsmsg').textContent = `${isNew ? 'New constellation! ' : ''}${obs.c.name} charted: +$${fmt(prize)}${isNew ? ' and 3 research points' : ''}. (${Object.keys(legacy.consts).length}/${CONSTS.length} found)`; save(); }
+  } else if (obs.stars.some(([a, b]) => Math.hypot(x - a, y - b) < 0.06)) { document.getElementById('obsmsg').textContent = 'That star comes later. Look for the one that twinkles.'; }
+});
+document.getElementById('obsquit').onclick = () => { obs.open = false; obsEl.hidden = true; };
+function updateObs(dt) {
+  if (!obs.built) return;
+  if (!obsEl.hidden && obs.open) drawObs();
+  const on = inZone(player.g.position, obs.zone.x, obs.zone.z, 1.0);
+  if (on && !obs.wasIn) { if (!isNight()) toast('The stars only come out at night. Come back after dark!'); else openObs(); }
+  obs.wasIn = on;
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -7922,7 +8256,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f4: { buffs }, h: { petx: { costume: petx.costume, owned: petx.owned, tricks: petx.tricks }, hist: incomeHist }, g3: { jobs: villagers.filter(v => v.job).map(v => v.def.name), council, beacon: [beacon.have, beacon.done] }, g2: { dens: dens.map(d => [d.week, d.hp, d.alive]), aval: aval.list.map(a => a.st.id), tour: [tour.day, tour.start, tour.rivals] }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, f4: { buffs }, i: { museum: [museum.have, museum.done], castle: [castle.stage, castle.have], obs: [obs.night, obs.done] }, h: { petx: { costume: petx.costume, owned: petx.owned, tricks: petx.tricks }, hist: incomeHist }, g3: { jobs: villagers.filter(v => v.job).map(v => v.def.name), council, beacon: [beacon.have, beacon.done] }, g2: { dens: dens.map(d => [d.week, d.hp, d.alive]), aval: aval.list.map(a => a.st.id), tour: [tour.day, tour.start, tour.rivals] }, f3: { favors, compass: shipPerk.compass, mail: mail.list, req: mail.req, ship: [ship.day, ship.offers.map(o => [SHIP_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), ship.paid], sc: [fest.sculptStart, fest.sculptDay] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -7931,6 +8265,7 @@ if (saved && saved.pads) {
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
   if (saved.f4 && saved.f4.buffs) Object.assign(buffs, saved.f4.buffs);
+  if (saved.i) { if (saved.i.museum) { museum.have = saved.i.museum[0] || {}; museum.done = saved.i.museum[1] || []; } if (saved.i.castle) { castle.stage = saved.i.castle[0] || 0; castle.have = saved.i.castle[1] || {}; } if (saved.i.obs) [obs.night, obs.done] = saved.i.obs; }
   if (saved.h) { if (saved.h.petx) { Object.assign(petx.costume, saved.h.petx.costume || {}); Object.assign(petx.owned, saved.h.petx.owned || {}); Object.assign(petx.tricks, saved.h.petx.tricks || {}); setTimeout(() => { for (const pid in petx.costume) applyCostume(pid); }, 50); } if (Array.isArray(saved.h.hist)) incomeHist.push(...saved.h.hist.slice(-90)); }
   if (saved.g3) { if (saved.g3.council) Object.assign(council, saved.g3.council); if (saved.g3.beacon) { Object.assign(beacon.have, saved.g3.beacon[0]); beacon.done = !!saved.g3.beacon[1]; }
     setTimeout(() => { for (const n of saved.g3.jobs || []) toggleJob(n, true); }, 0); }
@@ -7999,7 +8334,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateDens(dt); updateAvalanche(dt); updateDeep(dt); updateTour(dt); updateDaily(dt); updateTourists(dt); updateBeacon(dt); updateCouncil(dt); updateSummer(dt); updatePetTricks(dt); updateStatsHist(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateShip(dt); updateLanterns(dt); updateMail(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateDens(dt); updateAvalanche(dt); updateDeep(dt); updateTour(dt); updateDaily(dt); updateTourists(dt); updateBeacon(dt); updateCouncil(dt); updateSummer(dt); updatePetTricks(dt); updateStatsHist(dt); updateSki(dt); updateArena(dt); updateMuseum(dt); updateCastle(dt); updateObs(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -8040,7 +8375,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { camZoom, balloonRide, drawCampSign, petx, applyCostume, doTrick, renderPets, renderStats, icecream, summer, isSummer, incomeHist, toggleJob, giftshop, tourists, spawnTourists, beacon, council, showCouncil, STORY, dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { ski, startSki, arena, startFight, museum, museumDonate, castle, castleDeliver, obs, openObs, renderMuseum, camZoom, balloonRide, drawCampSign, petx, applyCostume, doTrick, renderPets, renderStats, icecream, summer, isSummer, incomeHist, toggleJob, giftshop, tourists, spawnTourists, beacon, council, showCouncil, STORY, dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
