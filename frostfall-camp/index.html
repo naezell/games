@@ -146,13 +146,13 @@
     position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
     border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 3px 8px rgba(0,0,0,.25);
   }
-  #shop, #trophies, #menu { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
+  #shop, #trophies, #menu, #armory { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
   .sheet { pointer-events: auto; width: min(560px, 100%); max-height: 58vh; overflow: auto; box-sizing: border-box;
     background: #f7fafc; color: var(--ink); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25);
     padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px)); }
   .sheet header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .sheet h2 { font: 26px var(--font-display); margin: 0; }
-  #menux, #trophyx, #trophybtn { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  .armx, #menux, #trophyx, #trophybtn { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
   #trophybtn { pointer-events: auto; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 8px 12px; }
   #trophybtn:focus-visible, #trophyx:focus-visible { outline: 3px solid var(--white); }
   .tick { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #e3e9f0; color: #8a96a6; font: 18px var(--font-display); }
@@ -1044,7 +1044,23 @@ function dropGround(type, pos) {
 }
 // src 'knocked' = an enemy hit it off your back (the husky fetches it back);
 // src 'player' = you dropped it on purpose (the husky leaves it alone).
+const WEAPONS = [
+  { name: 'Camp Axe', dmg: 1, color: 0xc9d3dc },
+  { name: 'Iron Axe', dmg: 2, cost: 2000, mats: { bar: 3 }, color: 0x8d97a6, desc: 'Hits twice as hard.' },
+  { name: 'Obsidian Blade', dmg: 3, cost: 8000, mats: { blade: 2 }, color: 0x2a1a3a, desc: 'Three times the damage.' },
+  { name: 'Aurora Spear', dmg: 4, cost: 15000, mats: { shard: 4, potion: 2 }, color: 0x7ff0d0, reach: 0.6, desc: 'Four times the damage and longer reach.' },
+];
+const ARMORS = [
+  { name: 'Parka', kb: 1, save: 0 },
+  { name: 'Fur Coat', kb: 0.6, save: 1, cost: 1500, mats: { wool: 4 }, color: 0xd8c8a8, desc: 'Get knocked back less and drop one less item when hit.' },
+  { name: 'Iron Mail', kb: 0.4, save: 2, cost: 5000, mats: { bar: 4 }, color: 0xb8c2cc, desc: 'Much less knockback, drop two fewer items.' },
+  { name: 'Obsidian Plate', kb: 0.2, save: 9, cost: 12000, mats: { obsidian: 4, bar: 2 }, color: 0x2a1a3a, desc: 'Barely budge, and never drop anything.' },
+];
+const gearDmg = () => WEAPONS[U('weapon')].dmg;
+const gearReach = () => WEAPONS[U('weapon')].reach || 0;
+const armorKB = () => ARMORS[U('armor')].kb;
 function dropFromCarrier(carrier, n, src = 'knocked') {
+  if (src === 'knocked' && carrier === player.c) n = Math.max(0, n - ARMORS[U('armor')].save);
   for (let i = 0; i < n; i++) {
     const it = carrier.take(); if (!it) break;
     const to = it.pos.clone().add(new V3(rand(-1.6, 1.6), 0, rand(-1.6, 1.6))); to.y = 0.1;
@@ -1491,7 +1507,8 @@ class Bear {
     this.legs = [[-0.5, 0.75], [0.5, 0.75], [-0.5, -0.75], [0.5, -0.75]].map(([lx, lz]) => {
       const p = new THREE.Group(); p.position.set(lx, 0.9, lz); this.g.add(p); mesh(BRG.leg, this.mat, 0, -0.45, 0, p); return p;
     });
-    this.max = kind === 'yeti' ? 60 : 30; this.hp = this.max; this.flash = 0; this.spawn = 0; this.phase = 0; this.cd = 0; this.target = null; this.reach = 2.7; this.alive = true;
+    this.lvl = bossLevel(kind); this.slamT = 4;
+    this.max = Math.round((kind === 'yeti' ? 60 : 30) * (1 + 0.5 * (this.lvl - 1))); this.hp = this.max; this.flash = 0; this.spawn = 0; this.phase = 0; this.cd = 0; this.target = null; this.reach = 2.7; this.alive = true;
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
     this.sprite.scale.set(2.4, 0.38, 1); this.sprite.position.set(0, 3.1, 0); this.sprite.renderOrder = 6; this.g.add(this.sprite);
@@ -1503,6 +1520,7 @@ class Bear {
     const x = this.bar.getContext('2d'); x.clearRect(0, 0, 256, 40);
     x.fillStyle = 'rgba(20,28,48,.85)'; roundRect(x, 0, 0, 256, 40, 12); x.fill();
     x.fillStyle = '#e8433a'; roundRect(x, 5, 5, 246 * Math.max(0, this.hp / this.max), 30, 9); x.fill();
+    barLabel(x, `${this.kind === 'yeti' ? 'Yeti' : 'Ice Bear'} · Lv ${this.lvl}`);
     this.sprite.material.map.needsUpdate = true;
   }
   hit(dmg) {
@@ -1513,7 +1531,8 @@ class Bear {
       for (let i = 0; i < 8; i++) dropGround('meat', this.pos.clone());
       for (let i = 0; i < (this.kind === 'yeti' ? 15 : 6); i++) dropGround('cash', this.pos.clone());
       sfx('buy');
-      if (this.kind === 'yeti') { bump('yeti'); toast('You beat the Yeti! Grab the loot.'); } else { bump('bear'); toast('You beat the Ice Bear! Grab the loot.'); }
+      const bonus = 150 * this.lvl * (this.kind === 'yeti' ? 2 : 1); W.cash += bonus; setCash();
+      if (this.kind === 'yeti') { bump('yeti'); toast(`You beat the Lv ${this.lvl} Yeti! +$${fmt(bonus)} and loot. It will return stronger.`); } else { bump('bear'); toast(`You beat the Lv ${this.lvl} Ice Bear! +$${fmt(bonus)} and loot. It will return stronger.`); }
     }
   }
   update(dt) {
@@ -1522,6 +1541,8 @@ class Bear {
     this.cd -= dt;
     const pp = player.g.position, dp = d2(pp, this.pos);
     this.reach = 2.7 * this.size;
+    this.slamT -= dt;
+    if (this.lvl >= 3 && this.slamT <= 0 && dp < 9 && !inside(pp)) { this.slamT = 6; shockwave(this.pos, 5, 13); }
     let moving = true;
     if (dp < 8 && !inside(pp)) {
       this.target = null;
@@ -1529,8 +1550,8 @@ class Bear {
       if (dp < 2.4 && this.cd <= 0) {
         this.cd = 1.6; this.phase = 0;
         const dir = new V3(pp.x - this.pos.x, 0, pp.z - this.pos.z).normalize();
-        player.kb.set(dir.x * 13, 0, dir.z * 13);
-        dropFromCarrier(player.c, 3); camShake = 0.35; sfx('roar');
+        player.kb.set(dir.x * 13 * armorKB(), 0, dir.z * 13 * armorKB());
+        dropFromCarrier(player.c, 2 + Math.min(3, this.lvl)); camShake = 0.35; sfx('roar');
       }
     } else {
       if (!this.target) this.target = new V3(rand(FIELD.x0, FIELD.x1), 0, rand(FIELD.z0, FIELD.z1));
@@ -1919,6 +1940,18 @@ const mx = x => (x - MAP.x0) / (MAP.x1 - MAP.x0) * mapCv.width, mz = z => (z - M
 let mapT = 0;
 function drawMap(dt) {
   mapT -= dt; if (mapT > 0) return; mapT = 0.2;
+  if (inDungeon(player.g.position)) {
+    Object.assign(MAP, { x0: DUNG.x0 - 1, x1: DUNG.x1 + 1, z0: DUNG.z0 - 1, z1: DUNG.z1 + 1 });
+    const c = mapX; c.fillStyle = '#0e1a24'; c.fillRect(0, 0, mapCv.width, mapCv.height);
+    const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
+    for (const pl of dung.pillars) dot(pl.c.x, pl.c.z, 4, '#9fd2e8');
+    for (const ch of dung.chests) if (!ch.open) dot(ch.g.position.x, ch.g.position.z, 3.5, '#ffcc33');
+    if (dung.big && !dung.big.open) dot(130, 90, 5, '#c08cff');
+    for (const gm of mine.golems) if (gm.variant) dot(gm.pos.x, gm.pos.z, gm.variant === 'wraith' ? 6 : 3, '#e8433a');
+    dot(dung.exitZone.x, dung.exitZone.z, 4, '#8fe8f8');
+    const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    return;
+  }
   if (inVolcano(player.g.position)) {
     Object.assign(MAP, { x0: VOLC.x0 - 1, x1: VOLC.x1 + 1, z0: VOLC.z0 - 1, z1: VOLC.z1 + 1 });
     const c = mapX; c.fillStyle = '#2a1410'; c.fillRect(0, 0, mapCv.width, mapCv.height);
@@ -2221,6 +2254,7 @@ function applyUpgrade(id, instant) {
   if (id === 'wcap') for (const w of workers) w.c.cap = (w.kind === 'server' ? 8 : 6) + 2 * U('wcap');
   if (id === 'gatehp') for (const g of GATES) if (!g.broken) g.hp = 8 + 6 * U('gatehp');
   if (id === 'sled') depot.input.max = 20 + 10 * U('sled');
+  if (id === 'weapon' || id === 'armor') { applyGear(); return; }
   if (id.startsWith('tier_')) { const st = STATIONS.find(x => 'tier_' + x.id === id); if (st) applyTier(st, instant); return; }
   if (id.startsWith('belt_')) { const b = BELTS.find(x => 'belt_' + x.id === id); if (b && b.ok()) buildBelt(b, instant); return; }
   if (id === 'penguinpet') adoptPenguin(instant);
@@ -2341,7 +2375,9 @@ const inMine = p => p.x > 90 && p.z > -25 && p.z <= 30;
 const VOLC = { x0: 100, x1: 132, z0: -62, z1: -34 };
 const inVolcano = p => p.x > 90 && p.z <= -25;
 const ISLE = { x0: 100, x1: 132, z0: 40, z1: 68 };
-const inIsle = p => p.x > 90 && p.z > 30;
+const inIsle = p => p.x > 90 && p.z > 30 && p.z <= 72;
+const DUNG = { x0: 100, x1: 132, z0: 76, z1: 104 };
+const inDungeon = p => p.x > 90 && p.z > 72;
 const golds = [];
 const mine = { built: false, entrance: new V3(45, 0, -10.6), exitZone: new V3(102.2, 0, 0), start: new V3(104.6, 0, 0), back: new V3(45, 0, -8.2), wasIn: false, golems: [], king: null, kingT: 3, golemT: 2 };
 function teleport(p) {
@@ -2422,14 +2458,184 @@ function updateSmith(dt) {
     fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); burst(top, 0xffcc33, 4); sfx('anvil'); smith.cash.addValue(GOLD_PRICE + 10 * U('goldp'), top); });
   }
 }
+// ---- boss levels: each boss returns stronger after you beat it (up to Lv 5) ----
+const bossLevel = kind => 1 + Math.min(4, stat(kind));
+function barLabel(x, text) {
+  x.font = 'bold 20px "Nunito", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 4; x.strokeStyle = 'rgba(20,28,48,.9)'; x.strokeText(text, 128, 21); x.fillStyle = '#ffffff'; x.fillText(text, 128, 21);
+}
+const waves = [];
+const WAVE_GEO = new THREE.RingGeometry(0.85, 1, 32);
+function shockwave(at, radius, force) {
+  const m = new THREE.Mesh(WAVE_GEO, new THREE.MeshBasicMaterial({ color: 0xbff8ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  m.rotation.x = -PI / 2; m.position.set(at.x, 0.08, at.z); scene.add(m);
+  waves.push({ m, t: 0, radius, force, at: at.clone(), hit: false }); camShake = 0.3; sfx('roar');
+}
+function updateWaves(dt) {
+  for (let i = waves.length - 1; i >= 0; i--) {
+    const w = waves[i]; w.t += dt; const r = w.radius * Math.min(1, w.t / 0.5);
+    w.m.scale.setScalar(Math.max(0.1, r)); w.m.material.opacity = 0.85 * (1 - w.t / 0.7);
+    const pp = player.g.position, d = d2(pp, w.at);
+    if (!w.hit && Math.abs(d - r) < 0.8 && d < w.radius + 0.5) {
+      w.hit = true; const dir = new V3(pp.x - w.at.x, 0, pp.z - w.at.z).normalize();
+      player.kb.set(dir.x * w.force * armorKB(), 0, dir.z * w.force * armorKB()); dropFromCarrier(player.c, 1);
+    }
+    if (w.t > 0.7) { scene.remove(w.m); waves.splice(i, 1); }
+  }
+}
+
+// ---- Armory: forge gear from your goods ----
+const armory = { built: false, zone: new V3(-8.8, 0, 10.0), wasIn: false };
+function unlockArmory(instant) {
+  if (armory.built) return;
+  armory.built = true;
+  const g = stationGroup(-8.8, 12.4);
+  hut(g, 0x6b7488, 0xd84a3a, 2.0, 1.4);
+  const sh = mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.08, 6), 0xc9d3dc, 0, 1.2, 0.72, g); sh.rotation.x = PI / 2;
+  for (const s of [-1, 1]) { const sw = mesh(new THREE.BoxGeometry(0.08, 0.9, 0.04), 0xc9d3dc, s * 0.3, 1.2, 0.74, g); sw.rotation.z = s * 0.7; }
+  colliders.push({ x0: -9.8, x1: -7.8, z0: 11.7, z1: 13.1 });
+  zoneMarker(armory.zone.x, armory.zone.z, 'blade', '#c9d3dc');
+  if (!instant) { popIn(g); burst(new V3(-8.8, 0, 12.4), 0xc9d3dc, 14); toast('Stand on the Armory square to forge weapons and armor.'); }
+}
+function applyGear() {
+  const w = WEAPONS[U('weapon')], a = ARMORS[U('armor')];
+  player.p.armR.traverse(o => { if (o.isMesh && o.geometry === PG.axe) { o.material = new THREE.MeshLambertMaterial({ color: w.color, emissive: U('weapon') === 3 ? 0x1d5a55 : 0 }); o.scale.setScalar(1 + 0.15 * U('weapon')); } });
+  if (player.plate) { player.g.remove(player.plate); player.plate = null; }
+  if (U('armor')) {
+    player.plate = mesh(new THREE.CylinderGeometry(0.37, 0.45, 0.5, 10), a.color, 0, 0.92, 0, player.g);
+    player.plate.material = new THREE.MeshLambertMaterial({ color: a.color, emissive: U('armor') === 3 ? 0x2a0a3a : 0 });
+  }
+}
+const armoryEl = document.createElement('div'); armoryEl.id = 'armory'; armoryEl.hidden = true;
+armoryEl.innerHTML = '<div class="sheet" role="dialog" aria-label="Armory"><header><h2>Armory</h2><button type="button" class="armx">Close</button></header><div class="armlist"></div></div>';
+document.body.appendChild(armoryEl);
+armoryEl.querySelector('.armx').onclick = () => { armoryEl.hidden = true; };
+const haveCount = t => player.c.count(t);
+function gearRow(kind, list, lvl) {
+  const cur = list[lvl], nx = list[lvl + 1];
+  let h = `<div class="wh"><b>${kind}: ${cur.name}</b><span class="chip ok">Equipped</span></div>`;
+  if (!nx) return h + `<p class="tabnote">You have the best ${kind.toLowerCase()}.</p>`;
+  const mats = Object.entries(nx.mats), ok = mats.every(([t, n]) => haveCount(t) >= n) && W.cash >= nx.cost;
+  h += `<div class="urow"><div><b>${nx.name}</b><small>${nx.desc}<br>Needs ${mats.map(([t, n]) => `${n} ${itemName(t, n)} (you carry ${haveCount(t)})`).join(', ')} and $${fmt(nx.cost)}</small></div>` +
+    `<button class="buy" type="button" data-gear="${kind === 'Weapon' ? 'weapon' : 'armor'}" ${ok ? '' : 'disabled'}>Forge</button></div>`;
+  return h;
+}
+function renderArmory() {
+  if (armoryEl.hidden) return;
+  armoryEl.querySelector('.armlist').innerHTML = '<p class="tabnote">Bring the goods in your pack, then forge. Better weapons hit harder; better armor keeps you on your feet and your pack full.</p>' +
+    gearRow('Weapon', WEAPONS, U('weapon')) + gearRow('Armor', ARMORS, U('armor'));
+  armoryEl.querySelectorAll('button[data-gear]').forEach(b => b.onclick = () => forgeGear(b.dataset.gear));
+}
+function forgeGear(slot) {
+  const list = slot === 'weapon' ? WEAPONS : ARMORS, nx = list[U(slot) + 1];
+  if (!nx || W.cash < nx.cost || !Object.entries(nx.mats).every(([t, n]) => haveCount(t) >= n)) return;
+  for (const [t, n] of Object.entries(nx.mats)) for (let i = 0; i < n; i++) { const it = player.c.take(t); if (it) scene.remove(it.m); }
+  W.cash -= nx.cost; UP[slot] = U(slot) + 1; setCash(); applyGear(); bump('gear');
+  burst(player.g.position, nx.color, 18); firework(player.g.position.clone()); sfx('anvil'); sfx('buy');
+  toast(`You forged the ${nx.name}!`); save(); renderArmory();
+}
+
+// ---- Ice Cave dungeon: a fresh layout every visit, loot once a day ----
+const dung = { built: false, entrance: new V3(-4, 0, -27.4), exitZone: new V3(102.2, 0, 90), start: new V3(104.6, 0, 90), wasIn: false, lastDay: 0, objs: [], chests: [], spikes: [], pillars: [] };
+function unlockDungeon(instant) {
+  if (dung.built) return;
+  dung.built = true;
+  const a = stationGroup(-4, -29.6);
+  mesh(new THREE.DodecahedronGeometry(1.6, 0), 0xbfe8ff, -2.0, 1.2, 0, a); mesh(new THREE.DodecahedronGeometry(1.6, 0), 0xbfe8ff, 2.0, 1.2, 0, a);
+  mesh(new THREE.DodecahedronGeometry(1.8, 0), 0xdff4ff, 0, 2.8, -0.2, a);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16), new THREE.MeshBasicMaterial({ color: 0x0e1a24 })); hole.position.set(0, 1.1, 0.9); a.add(hole);
+  zoneMarker(dung.entrance.x, dung.entrance.z, 'exit', '#9fe8ff');
+  const cx = (DUNG.x0 + DUNG.x1) / 2, cz = (DUNG.z0 + DUNG.z1) / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(DUNG.x1 - DUNG.x0 + 8, DUNG.z1 - DUNG.z0 + 8), mat(0x2c4250)); floor.rotation.x = -PI / 2; floor.position.set(cx, 0.012, cz); floor.receiveShadow = true; scene.add(floor);
+  const spots = [];
+  for (let x = DUNG.x0; x <= DUNG.x1; x += 2.2) { spots.push([x, DUNG.z0 - 1]); spots.push([x, DUNG.z1 + 1]); }
+  for (let z = DUNG.z0; z <= DUNG.z1; z += 2.2) { spots.push([DUNG.x0 - 1, z]); spots.push([DUNG.x1 + 1, z]); }
+  const walls = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.8, 0), mat(0x7fb8d0), spots.length), o = new THREE.Object3D();
+  spots.forEach(([x, z], i) => { o.position.set(x + rand(-0.4, 0.4), rand(0.6, 1.4), z + rand(-0.4, 0.4)); o.rotation.set(rand(0, 3), rand(0, 3), 0); o.scale.setScalar(rand(0.9, 1.5)); o.updateMatrix(); walls.setMatrixAt(i, o.matrix); });
+  scene.add(walls);
+  for (const [x, z] of [[110, 82], [122, 98], [128, 80]]) { const L = new THREE.PointLight(0x9fe8ff, 1.2, 16, 1.5); L.position.set(x, 3, z); scene.add(L); }
+  zoneMarker(dung.exitZone.x, dung.exitZone.z, 'exit', '#9fe8ff');
+  for (let i = 0; i < 7; i++) { const x = 110 + i * 2.6, z = 84 + (i % 2) * 10; const c = { x, z, r: 1.0, on: () => dung.built }; circles.push(c); dung.pillars.push({ c, m: mesh(new THREE.CylinderGeometry(0.8, 1.1, 3.5, 7), 0x9fd2e8, x, 1.75, z) }); }
+  if (!instant) { popIn(a); burst(new V3(-4, 0, -28), 0x9fe8ff, 18); toast('An ice cave opens north of the hunting field!'); }
+}
+function freshDungeon() {
+  for (const o of dung.objs) scene.remove(o); dung.objs = []; dung.chests = []; dung.spikes = [];
+  for (const gm of mine.golems.slice()) if (gm.variant) { scene.remove(gm.g); mine.golems.splice(mine.golems.indexOf(gm), 1); }
+  const taken = [];
+  const spot = (minD = 3) => { for (let t = 0; t < 40; t++) { const x = rand(108, 130), z = rand(78, 102); if (!taken.some(p => Math.hypot(p[0] - x, p[1] - z) < minD) && !(x > 122 && Math.abs(z - 90) < 4)) { taken.push([x, z]); return [x, z]; } } return [rand(108, 130), rand(78, 102)]; };
+  for (const pl of dung.pillars) { const [x, z] = spot(4); pl.c.x = x; pl.c.z = z; pl.m.position.set(x, 1.75, z); }
+  const day = Math.floor(dayT / CYCLE) + 1, fresh = dung.lastDay !== day;
+  for (let i = 0; i < 5; i++) {
+    const [x, z] = spot(3); const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); dung.objs.push(g);
+    mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), 0x8a5328, 0, 0.25, 0, g); mesh(new THREE.BoxGeometry(0.95, 0.08, 0.65), 0xffcc33, 0, 0.3, 0, g);
+    const lid = new THREE.Group(); lid.position.set(0, 0.5, -0.3); g.add(lid); mesh(new THREE.BoxGeometry(0.9, 0.22, 0.6), 0x9a6234, 0, 0.11, 0.3, lid);
+    if (!fresh) lid.rotation.x = -1.9;
+    dung.chests.push({ g, lid, open: !fresh, big: false });
+  }
+  for (let i = 0; i < 6; i++) {
+    const [x, z] = spot(2.5); const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); dung.objs.push(g);
+    mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.04, 16), 0x3a5a6a, 0, 0.03, 0, g);
+    const sp = new THREE.Group(); g.add(sp);
+    for (let k = 0; k < 7; k++) mesh(new THREE.ConeGeometry(0.1, 0.45, 5), 0xdff8ff, Math.cos(k) * 0.5, 0.2, Math.sin(k) * 0.5, sp);
+    dung.spikes.push({ g, sp, t: rand(0, 2), up: false, cd: 0 });
+  }
+  for (let i = 0; i < 5; i++) { const [x, z] = spot(3); mine.golems.push(new Golem(x, z, false, false, 'imp')); }
+  if (fresh) {
+    mine.golems.push(new Golem(127, 90, true, false, 'wraith'));
+    const g = new THREE.Group(); g.position.set(130, 0, 90); scene.add(g); dung.objs.push(g);
+    mesh(new THREE.BoxGeometry(1.4, 0.8, 0.9), 0x6a3ab0, 0, 0.4, 0, g); mesh(new THREE.BoxGeometry(1.45, 0.1, 0.95), 0xffcc33, 0, 0.5, 0, g);
+    const lid = new THREE.Group(); lid.position.set(0, 0.8, -0.45); g.add(lid); mesh(new THREE.BoxGeometry(1.4, 0.3, 0.9), 0x7a4ac0, 0, 0.15, 0.45, lid);
+    dung.big = { g, lid, open: false, locked: true };
+  } else dung.big = null;
+}
+function dungeonCleared(w) {
+  bump('wraith'); camShake = 0.5;
+  const day = Math.floor(dayT / CYCLE) + 1, reward = Math.round((2000 + day * 80) * w.lvl / 10) * 10;
+  W.cash += reward; setCash(); dung.lastDay = day; save();
+  if (dung.big) dung.big.locked = false;
+  toast(`The Frost Wraith is beaten! +$${fmt(reward)}. Open the big chest!`); sfx('buy');
+  for (let k = 0; k < 5; k++) setTimeout(() => firework(w.pos.clone()), k * 250);
+}
+function openChest(ch, big) {
+  ch.open = true; sfx('coin'); burst(ch.g.position.clone().add(new V3(0, 0.8, 0)), 0xffd23a, big ? 24 : 12);
+  const day = Math.floor(dayT / CYCLE) + 1, at = ch.g.position.clone();
+  const cash = Math.round(((big ? 600 : 120) + day * (big ? 40 : 8)) / 10) * 10; W.cash += cash; setCash();
+  for (let i = 0; i < (big ? 6 : 2); i++) dropGround('cash', at.clone());
+  const loot = ['gem', 'gold', 'shard', 'potion', 'ring', 'blade'].filter(t => t !== 'blade' || big);
+  for (let i = 0; i < (big ? 4 : 1); i++) dropGround(loot[randi(0, loot.length - 1)], at.clone());
+  bump('chests'); toast(big ? `Treasure! +$${fmt(cash)} and rare loot.` : `Chest: +$${fmt(cash)}`);
+}
+function updateDungeon(dt) {
+  if (!dung.built || !inDungeon(player.g.position)) return;
+  const pp = player.g.position;
+  for (const ch of dung.chests) {
+    if (ch.open) { ch.lid.rotation.x += (-1.9 - ch.lid.rotation.x) * Math.min(1, dt * 6); continue; }
+    if (d2(ch.g.position, pp) < 1.3) openChest(ch, false);
+  }
+  if (dung.big) {
+    const b = dung.big;
+    if (b.open) b.lid.rotation.x += (-1.9 - b.lid.rotation.x) * Math.min(1, dt * 6);
+    else if (d2(b.g.position, pp) < 1.6) { if (b.locked) { if (!b.warned) { b.warned = true; toast('Beat the Frost Wraith to unlock this chest.'); } } else openChest(b, true); }
+  }
+  for (const s of dung.spikes) {
+    s.t -= dt; s.cd -= dt;
+    if (s.t <= 0) { s.up = !s.up; s.t = s.up ? 1.2 : 2.2; }
+    s.sp.position.y += ((s.up ? 0 : -0.45) - s.sp.position.y) * Math.min(1, dt * 12);
+    if (s.up && s.cd <= 0 && d2(s.g.position, pp) < 1.0) {
+      s.cd = 1.2; const dir = new V3(pp.x - s.g.position.x, 0, pp.z - s.g.position.z).normalize();
+      player.kb.set(dir.x * 9 * armorKB(), 0, dir.z * 9 * armorKB()); dropFromCarrier(player.c, 1); sfx('hit'); camShake = 0.2;
+    }
+  }
+}
+
 // Ice golems and the Crystal King
 class Golem {
-  constructor(x, z, king = false, fire = false) {
-    this.fire = fire;
+  constructor(x, z, king = false, fire = false, variant = null) {
+    this.fire = fire; this.variant = variant;
     this.king = king; const s = king ? 2.2 : 1;
     this.g = new THREE.Group(); this.g.position.set(x, 0, z); scene.add(this.g);
-    this.mat = new THREE.MeshLambertMaterial({ color: fire ? 0x4a2a24 : king ? 0x8a7ad8 : 0x7c98b8, emissive: 0x000000 });
-    const spike = new THREE.MeshBasicMaterial({ color: fire ? 0xff7a2a : king ? 0xd9b3ff : 0x9ff0ff });
+    this.mat = new THREE.MeshLambertMaterial({ color: variant === 'wraith' ? 0x2a3a6a : variant === 'imp' ? 0x5fb0c0 : fire ? 0x4a2a24 : king ? 0x8a7ad8 : 0x7c98b8, emissive: 0x000000 });
+    const spike = new THREE.MeshBasicMaterial({ color: variant ? 0xbff8ff : fire ? 0xff7a2a : king ? 0xd9b3ff : 0x9ff0ff });
     mesh(new THREE.BoxGeometry(1.1 * s, 1.1 * s, 0.8 * s), this.mat, 0, 1.25 * s, 0, this.g);
     mesh(new THREE.BoxGeometry(0.6 * s, 0.5 * s, 0.55 * s), this.mat, 0, 2.05 * s, 0.05 * s, this.g);
     for (const ex of [-0.13, 0.13]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.07 * s, 0.04), spike); e.position.set(ex * s, 2.1 * s, 0.33 * s); this.g.add(e); }
@@ -2437,7 +2643,9 @@ class Golem {
     this.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * 0.3 * s, 0.7 * s, 0); this.g.add(l); mesh(new THREE.BoxGeometry(0.38 * s, 0.7 * s, 0.4 * s), this.mat, 0, -0.35 * s, 0, l); return l; });
     for (let i = 0; i < (king ? 7 : 3); i++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.18 * s, 0), spike); c.position.set(rand(-0.4, 0.4) * s, (1.7 + rand(0, 0.3)) * s, -0.45 * s); c.scale.y = 2; this.g.add(c); }
     if (king) for (let k = 0; k < 5; k++) { const a = k / 5 * 2 * PI, c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.35 * s, 4), new THREE.MeshBasicMaterial({ color: 0xffd23a })); c.position.set(Math.cos(a) * 0.22 * s, 2.45 * s, Math.sin(a) * 0.22 * s + 0.05 * s); this.g.add(c); }
-    this.max = king ? 120 : fire ? 14 : 8; this.hp = this.max; this.reach = king ? 3.6 : 2.0; this.speed = king ? 2.4 : 2.1;
+    this.lvl = variant === 'wraith' ? bossLevel('wraith') : king ? bossLevel('king') : 1;
+    this.max = variant === 'wraith' ? Math.round(60 * (1 + 0.5 * (this.lvl - 1))) : variant === 'imp' ? 5 : king ? Math.round(120 * (1 + 0.5 * (this.lvl - 1))) : fire ? 14 : 8; this.hp = this.max;
+    this.summoned = false; this.slamT = 5; this.reach = king ? 3.6 : 2.0; this.speed = king ? 2.4 : 2.1;
     this.flash = 0; this.spawn = 0; this.cd = 1; this.phase = 0; this.target = null; this.alive = true;
     if (king) {
       const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; this.bar = cv;
@@ -2452,6 +2660,7 @@ class Golem {
     const x = this.bar.getContext('2d'); x.clearRect(0, 0, 256, 40);
     x.fillStyle = 'rgba(20,28,48,.85)'; roundRect(x, 0, 0, 256, 40, 12); x.fill();
     x.fillStyle = '#c08cff'; roundRect(x, 5, 5, 246 * Math.max(0, this.hp / this.max), 30, 9); x.fill();
+    barLabel(x, `${this.variant === 'wraith' ? 'Frost Wraith' : 'Crystal King'} · Lv ${this.lvl}`);
     this.sprite.material.map.needsUpdate = true;
   }
   hit(dmg) {
@@ -2460,7 +2669,10 @@ class Golem {
     if (this.hp > 0) return;
     this.alive = false; scene.remove(this.g); mine.golems.splice(mine.golems.indexOf(this), 1);
     burst(this.pos, this.king ? 0xc08cff : 0x9ff0ff, this.king ? 30 : 12);
+    if (this.variant === 'wraith') { dungeonCleared(this); return; }
+    if (this.variant === 'imp') { bump('imp'); dropGround('cash', this.pos.clone()); if (Math.random() < 0.4) dropGround('gem', this.pos.clone()); return; }
     if (this.king) {
+      const kb = 300 * this.lvl; W.cash += kb; setCash();
       mine.king = null; mine.kingT = 180; bump('king'); camShake = 0.5;
       for (let i = 0; i < 20; i++) dropGround('cash', this.pos.clone());
       for (let i = 0; i < 8; i++) dropGround('gold', this.pos.clone());
@@ -2473,19 +2685,28 @@ class Golem {
     this.spawn = Math.min(1, this.spawn + dt * 1.5); this.g.scale.setScalar(Math.max(0.01, easeOutBack(this.spawn)));
     if (this.flash > 0) { this.flash -= dt; this.mat.emissive.setHex(0xff3030); } else this.mat.emissive.setHex(0);
     this.cd -= dt;
-    const pp = player.g.position, dp = d2(pp, this.pos), home = this.king ? new V3(126, 0, 0) : null;
+    const pp = player.g.position, dp = d2(pp, this.pos), home = this.variant === 'wraith' ? new V3(127, 0, 90) : this.king ? new V3(126, 0, 0) : null;
     let moving = true;
-    if ((this.fire ? inVolcano(pp) && pp.x > 104.5 : inMine(pp) && pp.x > 104.5) && dp < (this.king ? 11 : 6.5)) {
+    const here = this.variant ? inDungeon(pp) : this.fire ? inVolcano(pp) : inMine(pp);
+    if (this.king && this.lvl >= 2) {
+      this.slamT -= dt;
+      if (this.slamT <= 0 && here && dp < 10) { this.slamT = 5.5; shockwave(this.pos, 5.5, 15); }
+      if (!this.summoned && this.hp < this.max / 2) {
+        this.summoned = true; toast(`${this.variant === 'wraith' ? 'The Frost Wraith' : 'The Crystal King'} calls for help!`);
+        for (let k = 0; k < 2; k++) mine.golems.push(new Golem(this.pos.x + rand(-3, 3), this.pos.z + rand(-3, 3), false, false, this.variant ? 'imp' : null));
+      }
+    }
+    if (here && pp.x > 104.5 && dp < (this.king ? 11 : 6.5)) {
       moving = !stepToward(this.g, pp, this.speed, dt, this.reach - 0.4);
       if (dp < this.reach + 0.2 && this.cd <= 0) {
         this.cd = this.king ? 1.3 : 1.8;
         this.arms.forEach(a => { a.rotation.x = -2.2; });
         const dir = new V3(pp.x - this.pos.x, 0, pp.z - this.pos.z).normalize();
-        player.kb.set(dir.x * (this.king ? 16 : 10), 0, dir.z * (this.king ? 16 : 10));
+        player.kb.set(dir.x * (this.king ? 16 : 10) * armorKB(), 0, dir.z * (this.king ? 16 : 10) * armorKB());
         dropFromCarrier(player.c, this.king ? 4 : 2); camShake = this.king ? 0.45 : 0.25; sfx('roar');
       }
     } else {
-      if (!this.target) this.target = home ? home.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))) : this.fire ? new V3(rand(112, 130), 0, rand(-58, -38)) : new V3(rand(108, 121), 0, rand(-12, 12));
+      if (!this.target) this.target = home ? home.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))) : this.variant ? new V3(rand(106, 130), 0, rand(78, 102)) : this.fire ? new V3(rand(112, 130), 0, rand(-58, -38)) : new V3(rand(108, 121), 0, rand(-12, 12));
       if (stepToward(this.g, this.target, this.speed * 0.5, dt, 0.2)) this.target = null;
     }
     this.arms.forEach(a => { a.rotation.x += (0 - a.rotation.x) * Math.min(1, dt * 5); });
@@ -2497,13 +2718,17 @@ function updateMine(dt) {
   if (!mine.built) return;
   for (const gn of golds) gn.update(dt);
   for (const gm of mine.golems.slice()) gm.update(dt);
-  const normal = mine.golems.filter(g => !g.king && !g.fire).length;
+  const normal = mine.golems.filter(g => !g.king && !g.fire && !g.variant).length;
   mine.golemT -= dt;
   if (mine.golemT <= 0 && normal < 4) { mine.golemT = 12; mine.golems.push(new Golem(rand(110, 120), rand(-11, 11))); }
   if (!mine.king) { mine.kingT -= dt; if (mine.kingT <= 0) { mine.king = new Golem(126, 0, true); mine.golems.push(mine.king); if (inMine(player.g.position)) toast('The Crystal King has risen!'); } }
 }
 function applyMineEnv() {
-  const m = inMine(player.g.position), v = inVolcano(player.g.position); snow.visible = !m && !v && springK < 0.5;
+  const m = inMine(player.g.position), v = inVolcano(player.g.position), dg = inDungeon(player.g.position); snow.visible = !m && !v && !dg && springK < 0.5;
+  if (dg) {
+    scene.background.setHex(0x0e1a24); scene.fog.color.setHex(0x0e1a24); scene.fog.near = 12; scene.fog.far = 38;
+    hemi.intensity = 0.55; hemi.color.setHex(0x9fe8ff); sun.intensity = 0.2; return;
+  }
   if (v) {
     scene.background.setHex(0x1e0d0a); scene.fog.color.setHex(0x1e0d0a); scene.fog.near = 16; scene.fog.far = 46;
     hemi.intensity = 0.6; hemi.color.setHex(0xffb08a); sun.intensity = 0.25; return;
@@ -3428,6 +3653,11 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['gearmax', 'Fully Armed', 'Forge the Aurora Spear and Obsidian Plate', () => U('weapon') >= 3 && U('armor') >= 3],
+  ['dungeon5', 'Cave Crawler', 'Explore the Ice Cave 5 times', () => stat('dungeon') >= 5],
+  ['wraith', 'Wraith Slayer', 'Defeat the Frost Wraith', () => stat('wraith') >= 1],
+  ['chests25', 'Treasure Hunter', 'Open 25 chests', () => stat('chests') >= 25],
+  ['bosslv5', 'Boss Tamer', 'Beat any boss at level 5', () => ['bear', 'yeti', 'alpha', 'king', 'wraith'].some(k => stat(k) >= 5)],
   ['golden10', 'Midas Touch', 'Make 10 golden pieces', () => stat('golden') >= 10],
   ['belts5', 'Conveyor King', 'Build 5 conveyor belts', () => stat('belts') >= 5],
   ['tierGold', 'Gold Standard', 'Upgrade a building to Gold', () => STATIONS.some(st => U('tier_' + st.id) >= 2)],
@@ -3626,6 +3856,8 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'armory', label: 'Armory', icon: 'blade', costs: [4000], x: -8.8, z: 10.0, req: () => town.built, apply: unlockArmory },
+  { id: 'dungeon', label: 'Ice Cave', icon: 'exit', costs: [10000], x: -4, z: -27.4, req: () => mine.built, apply: unlockDungeon },
   { id: 'tinker', label: 'Tinker Bench', icon: 'gift', costs: [5000], x: -6.4, z: 24.6, req: () => town.built, apply: unlockBench },
   { id: 'farm', label: 'Farm Field', icon: 'wheat', costs: [2500], x: 16.1, z: 19.2, req: () => town.built, apply: unlockFarm },
   { id: 'oven', label: 'Bread Oven', icon: 'bread', costs: [3000], x: 24.8, z: 17.6, req: () => farm.built, apply: (l, i) => oven.unlock(i) },
@@ -3908,7 +4140,7 @@ function collide(pos, r) {
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
     if (d < rr && d > 1e-4) { pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; }
   }
-  const B = inIsle(pos) ? ISLE : inVolcano(pos) ? VOLC : pos.x > 90 ? MINE : null;
+  const B = inDungeon(pos) ? DUNG : inIsle(pos) ? ISLE : inVolcano(pos) ? VOLC : pos.x > 90 ? MINE : null;
   if (!B) { clampToLand(pos, 0.6); return; }
   pos.x = clamp(pos.x, B.x0 + 0.6, B.x1 - 0.6); pos.z = clamp(pos.z, B.z0 + 0.6, B.z1 - 0.6);
 }
@@ -3958,6 +4190,23 @@ function playerInteract() {
   if (boat.owned && inZone(pos, boat.pile.x, boat.pile.z) && boat.pile.n > 0 && !c.full()) { c.receive('fish', boat.pile.take(), boat.pile.slot(boat.pile.n)); return; }
   for (const [pile, type, ok] of [[hotel.input, 'lantern', hotel.built], [exch.input, 'shard', exch.built]]) {
     if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
+  }
+  // ice cave dungeon
+  if (dung.built) {
+    const atE = inZone(pos, dung.entrance.x, dung.entrance.z, 1.0), atX = inZone(pos, dung.exitZone.x, dung.exitZone.z, 1.0);
+    if (atE && !dung.wasIn) {
+      freshDungeon(); teleport(dung.start); bump('dungeon');
+      toast(dung.lastDay === Math.floor(dayT / CYCLE) + 1 ? 'The Ice Cave. Loot is gone for today, but the imps are back!' : 'The Ice Cave! Grab the chests, dodge the spikes, beat the Frost Wraith.');
+      return;
+    }
+    if (atX && !dung.wasIn) { teleport(dung.entrance.clone().add(new V3(0, 0, 2.2))); return; }
+    dung.wasIn = atE || atX;
+  }
+  if (armory.built) {
+    const on = inZone(pos, armory.zone.x, armory.zone.z, 1.05);
+    if (on && !armory.wasIn) { armoryEl.hidden = false; renderArmory(); }
+    if (!on && armory.wasIn) armoryEl.hidden = true;
+    armory.wasIn = on;
   }
   // lava tunnel between the mine and the volcano
   if (volc.built) {
@@ -4055,8 +4304,8 @@ function updatePlayer(dt) {
   player.atk -= dt;
   if (player.atk <= 0) {
     const b = nearest(boars.concat(wolves, bear ? [bear] : [], mine.golems), pos, b => b.pos);
-    if (b && d2(b.pos, pos) < (b.reach || 1.9)) {
-      player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(1); sfx('hit');
+    if (b && d2(b.pos, pos) < (b.reach || 1.9) + gearReach()) {
+      player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(gearDmg()); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
       const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms, crops, obsidians).filter(t => !t.down), pos);
@@ -4188,7 +4437,8 @@ class Wolf {
     this.legs = [[-0.16, 0.36], [0.16, 0.36], [-0.16, -0.36], [0.16, -0.36]].map(([lx, lz]) => {
       const p = new THREE.Group(); p.position.set(lx, 0.42, lz); this.g.add(p); mesh(WG.leg, 0x555c68, 0, -0.21, 0, p); return p;
     });
-    this.hp = this.alpha ? 22 : 2; this.bite = 0; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
+    this.lvl = this.alpha ? bossLevel('alpha') : 1;
+    this.hp = this.alpha ? Math.round(22 * (1 + 0.5 * (this.lvl - 1))) : 2; this.bite = 0; this.flash = 0; this.state = 'raid'; this.carry = null; this.carryType = null; this.spawn = 0; this.phase = 0; this.alive = true;
     this.g.scale.setScalar(0.01); scene.add(this.g); wolves.push(this);
   }
   get pos() { return this.g.position; }
@@ -4199,7 +4449,7 @@ class Wolf {
     if (d2(this.pos, player.g.position) < 12) sfx('hit');
     if (this.hp <= 0) {
       this.remove(); burst(this.pos, 0x6d7684, 10); questProgress('wolf');
-      if (this.alpha) { bump('alpha'); for (let i = 0; i < 8; i++) dropGround('cash', this.pos.clone()); toast('The Wolf Alpha is down! Grab the loot.'); sfx('buy'); }
+      if (this.alpha) { const ab = 200 * this.lvl; W.cash += ab; setCash(); bump('alpha'); for (let i = 0; i < 8; i++) dropGround('cash', this.pos.clone()); toast(`The Lv ${this.lvl} Wolf Alpha is down! +$${fmt(ab)} and loot.`); sfx('buy'); }
       if (this.carry) dropGround(this.carryType, this.pos.clone());
       dropGround('meat', this.pos.clone());
     }
@@ -4383,7 +4633,7 @@ function iconImg(icon) {
   }
   return `<img class="ico" alt="" src="${iconImgCache[icon]}">`;
 }
-const regionOf = p => (inIsle(p) ? 'isle' : inVolcano(p) ? 'volcano' : p.x > 90 ? 'mine' : 'main');
+const regionOf = p => (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle' : inVolcano(p) ? 'volcano' : p.x > 90 ? 'mine' : 'main');
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
@@ -4568,6 +4818,7 @@ function findDelivery() {
   if (!elsewhere) return null;
   // the place that takes it is in another area: point to the way there
   if (here === 'volcano') return { p: volc.exitZone, label: 'Back to the mine' };
+  if (here === 'dungeon') return { p: dung.exitZone, label: 'Leave the Ice Cave' };
   if (here === 'mine' && elsewhere === 'volcano') return { p: volc.entrance, label: 'To the Ember Volcano' };
   if (here === 'main') return elsewhere === 'mine' || elsewhere === 'volcano' ? { p: mine.entrance, label: 'To the Frost Mine' } : { p: isle.ferry, label: 'To the Aurora Ferry' };
   return here === 'mine' ? { p: mine.exitZone, label: 'To the mine exit' } : { p: isle.exitZone, label: 'Ferry back to camp' };
@@ -4637,6 +4888,7 @@ const PLACES = [
   { name: 'Frost Mine', sub: 'Gold, coal, iron and golems', at: () => mine.start, ok: () => mine.built },
   { name: 'Farm', sub: 'Wheat, carrots, oven and soup', at: () => new V3(16.1, 0, 23.0), ok: () => farm.built },
   { name: 'Aurora Isle', sub: 'Shards, hotel and Apothecary', at: () => isle.start, ok: () => isle.built },
+  { name: 'Ice Cave entrance', sub: 'Chests, spike traps and the Frost Wraith', at: () => dung.entrance.clone().add(new V3(0, 0, 2.2)), ok: () => dung.built },
   { name: 'Ember Volcano', sub: 'Obsidian, Lava Forge and fire golems', at: () => volc.start, ok: () => volc.built },
 ];
 function renderTravel() {
@@ -4649,7 +4901,7 @@ function renderTravel() {
 }
 
 // warehouse: every building, its stock and whether it's stuck
-const AREA_NAME = { main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano' };
+const AREA_NAME = { main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave' };
 function vendorStatus(v) {
   const st = v.station;
   const missing = v.needs.filter(n => n.pile.n < (n.n || 1)).map(n => n.types ? 'goods' : itemName(n.type, 2));
@@ -4769,12 +5021,13 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
 if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
   if (saved.ride === false) W.ride = false;
+  dung.lastDay = saved.dungDay || 0;
   if (Array.isArray(saved.orders)) { orders.list = saved.orders; orders.next = saved.ordersNext || 10; }
   if (Array.isArray(saved.quests)) { quests = saved.quests; questDay = saved.questDay || 0; }
   W.cash = saved.cash || 0; served = saved.served || 0; dayT = saved.dayT || 6; wasNight = isNight(); nightK = wasNight ? 1 : 0;
@@ -4817,7 +5070,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
