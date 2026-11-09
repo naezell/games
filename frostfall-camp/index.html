@@ -3888,7 +3888,7 @@ function vendorHtml(v) {
 }
 function padHtml(p) {
   const st = padState[p.id], cost = p.costs[st.level], left = cost - st.paid, lv = p.costs.length > 1 ? ` <small>level ${st.level + 1} of ${p.costs.length}</small>` : '';
-  return `<h3>${iconImg(p.icon)}${p.label}${lv}</h3><p>${PAD_INFO[p.id] || ''}</p>` +
+  return `<h3>${iconImg(p.icon)}${p.label}${lv}</h3><p>${PAD_INFO[p.id] || (p.plot ? 'Buys this land so you can walk, chop and build there.' : '')}</p>` +
     `<h4>Needs</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(left)}</b>${st.paid ? ` more (of $${fmt(cost)})` : ''}</span>` +
     `<em>${W.cash >= left ? 'you have enough' : `you have $${fmt(W.cash)}`}</em></div><p class="hint">Walk onto the pad to pay.</p>`;
 }
