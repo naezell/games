@@ -44,6 +44,12 @@ a Jeweler (crystal + gold = rings); south of camp, a Pie Bakery (meat + berries)
 milk), a Creamery (milk into cheese) and a Toy Workshop (wool + log = toy bear). By the
 river, a Glassblower turns ice and coal into ornaments.
 
+**Land plots:** misty land rings the map. Once the sawmill is built, pads at the map's edge
+sell 14 named plots (east-side plots need the bridge; corner plots open from the plot beside
+them). Buying one lifts the mist, grows a forest and brings three boars into its clearing.
+Each plot costs more than the last ($2,000, then about 35% more each time). Plots are part of
+the camp, so Restart and a Golden Restart clear them.
+
 - **Play:** open `frostfall-camp/index.html` in any browser (needs internet once to load three.js).
 - **Controls:** drag anywhere on the screen (phone) or WASD / arrow keys (computer).
 - Chopping and attacking happen automatically when you walk next to a tree or boar.
