@@ -55,11 +55,37 @@
     font: 22px/1.2 var(--font-display); letter-spacing: .3px; pointer-events: none; animation: pop .35s ease-out; }
   @keyframes pop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #toast { animation: none; } }
-  #mute, #reset {
+  #menubtn {
     pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px;
     background: var(--panel); color: var(--white); font: 15px var(--font-body); font-weight: 800; cursor: pointer;
   }
-  #mute:focus-visible, #reset:focus-visible { outline: 3px solid var(--white); }
+  #menubtn:focus-visible { outline: 3px solid var(--white); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #map { pointer-events: auto; cursor: pointer; }
+  .mgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
+  .mgrid button { border: 0; border-radius: 12px; padding: 11px 8px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  .mgrid button.on { background: var(--ink); color: var(--white); }
+  .mgrid button:focus-visible, #menubody button:focus-visible, #menubody textarea:focus-visible { outline: 3px solid #3f7fc8; outline-offset: 2px; }
+  #menubody h4 { font: 18px var(--font-display); margin: 14px 0 6px; }
+  #menubody p { margin: 6px 0; font: 700 13px/1.45 var(--font-body); color: #5a6878; }
+  #menubody textarea { width: 100%; box-sizing: border-box; min-height: 70px; border-radius: 10px; border: 2px solid #d5dde6; padding: 8px; font: 12px/1.3 ui-monospace, Menlo, monospace; resize: vertical; }
+  .rowbtns { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .rowbtns button, .travel button { border: 0; border-radius: 10px; padding: 10px 14px; font: 800 14px var(--font-body); background: var(--ink); color: var(--white); cursor: pointer; }
+  .rowbtns button.warn { background: #d84a3a; }
+  .travel { display: grid; gap: 8px; }
+  .travel button { text-align: left; display: flex; justify-content: space-between; gap: 10px; background: #e3e9f0; color: var(--ink); }
+  .travel button small { font: 700 12px var(--font-body); color: #5a6878; }
+  .wh-area { font: 15px var(--font-display); margin: 12px 0 2px; color: #3f6f9f; letter-spacing: .3px; }
+  .wh { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-top: 1px solid #e3e9f0; }
+  .wh b { font: 800 14px var(--font-body); }
+  .wh small { grid-column: 1 / -1; color: #5a6878; font: 700 12px/1.4 var(--font-body); font-variant-numeric: tabular-nums; }
+  .chip { border-radius: 999px; padding: 3px 9px; font: 800 11px var(--font-body); white-space: nowrap; }
+  .chip.ok { background: #d9f5df; color: #1f6b2c; }
+  .chip.warn { background: #fff0c8; color: #7a5600; }
+  .chip.bad { background: #ffdcd6; color: #9a2516; }
+  #photoexit { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 14px); border: 0; border-radius: 999px;
+    padding: 9px 18px; background: var(--panel); color: var(--white); font: 800 14px var(--font-body); cursor: pointer; z-index: 5; }
+  body.photo #hud, body.photo #goal, body.photo #deliver, body.photo #droppack, body.photo #info, body.photo #toast { display: none !important; }
   /* Thumb-sized, bottom right, above the goal bar; only shown while the pack has something in it. */
   #droppack {
     position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
@@ -111,13 +137,13 @@
     position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
     border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 3px 8px rgba(0,0,0,.25);
   }
-  #shop, #trophies { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
+  #shop, #trophies, #menu { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: none; }
   .sheet { pointer-events: auto; width: min(560px, 100%); max-height: 58vh; overflow: auto; box-sizing: border-box;
     background: #f7fafc; color: var(--ink); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25);
     padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px)); }
   .sheet header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .sheet h2 { font: 26px var(--font-display); margin: 0; }
-  #trophyx, #trophybtn { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
+  #menux, #trophyx, #trophybtn { border: 0; border-radius: 10px; padding: 8px 14px; font: 800 14px var(--font-body); background: #e3e9f0; color: var(--ink); cursor: pointer; }
   #trophybtn { pointer-events: auto; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 8px 12px; }
   #trophybtn:focus-visible, #trophyx:focus-visible { outline: 3px solid var(--white); }
   .tick { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #e3e9f0; color: #8a96a6; font: 18px var(--font-display); }
@@ -179,7 +205,7 @@
 <body>
 <div id="hud">
   <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="bosscal"></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div></div>
-  <div class="right"><button id="mute" type="button">Sound on</button><button id="reset" type="button">Restart</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area"></canvas></div>
+  <div class="right"><button id="menubtn" type="button">Menu</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area, tap to travel"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
@@ -188,6 +214,13 @@
 <div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decorations</button><button type="button" data-tab="legacy">Legacy</button></div><div id="shoplist"></div></div></div>
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="trophies" hidden><div class="sheet" role="dialog" aria-label="Trophies"><header><h2 id="trophytitle">Trophies</h2><button id="trophyx" type="button">Close</button></header><div id="trophylist"></div></div></div>
+<div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
+<div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
+<button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
+<button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
+<button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<div id="menubody"></div></div></div>
+<button id="photoexit" type="button" hidden>Exit photo mode</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
 <div id="info" hidden role="dialog" aria-label="What this is"></div>
 <div id="deliver" hidden aria-hidden="true"><span></span><svg class="tip" viewBox="0 0 44 44"><path d="M22 3 L40 25 H29 V41 H15 V25 H4 Z" fill="#ffd23a" stroke="#1d2a3a" stroke-width="3" stroke-linejoin="round"/></svg></div>
@@ -4020,6 +4053,159 @@ function updateHelp(dt, t) {
 }
 window.__help = { onTap, closeInfo, findDelivery, getInfo: () => info, VENDORS, toScreen };
 
+// ---------------- menu: travel, warehouse, backup, update, photo, music ----------------
+const menuEl = document.getElementById('menu'), menuBody = document.getElementById('menubody');
+let menuView = '', menuT = 0;
+function openMenu(view = '') { menuEl.hidden = false; showMenuView(view); }
+function closeMenu() { menuEl.hidden = true; menuView = ''; }
+document.getElementById('menubtn').onclick = () => { audioInit(); menuEl.hidden ? openMenu() : closeMenu(); };
+document.getElementById('menux').onclick = closeMenu;
+document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
+function showMenuView(v) {
+  menuView = v;
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup']]) document.getElementById(id).classList.toggle('on', v === key);
+  if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+}
+document.getElementById('travelbtn').onclick = () => showMenuView(menuView === 'travel' ? '' : 'travel');
+document.getElementById('whbtn').onclick = () => showMenuView(menuView === 'wh' ? '' : 'wh');
+document.getElementById('backupbtn').onclick = () => showMenuView(menuView === 'backup' ? '' : 'backup');
+
+// fast travel
+const PLACES = [
+  { name: 'Main Camp', sub: 'Grill, counter and Town Hall', at: () => new V3(0, 0, 2), ok: () => true },
+  { name: 'Market Town', sub: 'General Store and workshops', at: () => new V3(0, 0, 24.6), ok: () => town.built },
+  { name: 'Riverbank', sub: 'Dock, boat and Ice Saw', at: () => new V3(21, 0, 0.5), ok: () => bridge.unlocked || dock.built },
+  { name: 'Ridge Camp', sub: 'Lanterns, yaks and the Tailor', at: () => new V3(45, 0, 1.5), ok: () => ridge.unlocked },
+  { name: 'Frost Mine', sub: 'Gold, coal, iron and golems', at: () => mine.start, ok: () => mine.built },
+  { name: 'Aurora Isle', sub: 'Shards, hotel and Apothecary', at: () => isle.start, ok: () => isle.built },
+];
+function renderTravel() {
+  const list = PLACES.filter(pl => pl.ok());
+  menuBody.innerHTML = `<h4>Fast travel</h4><p>Jump straight to any place you have unlocked. Whatever you're carrying comes along.</p><div class="travel">` +
+    list.map((pl, i) => `<button type="button" data-i="${i}"><span>${pl.name}</span><small>${pl.sub}</small></button>`).join('') + `</div>`;
+  menuBody.querySelectorAll('.travel button').forEach(b => b.onclick = () => {
+    const pl = list[+b.dataset.i]; closeMenu(); teleport(pl.at().clone()); toast(pl.name);
+  });
+}
+
+// warehouse: every building, its stock and whether it's stuck
+const AREA_NAME = { main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano' };
+function vendorStatus(v) {
+  const st = v.station;
+  const missing = v.needs.filter(n => n.pile.n < (n.n || 1)).map(n => n.types ? 'goods' : itemName(n.type, 2));
+  if (st) {
+    if (st.ins.length && missing.length) return ['bad', 'Needs ' + missing.join(' + ')];
+    if (st.outPile && st.outPile.free() <= 0) return ['warn', 'Output full'];
+    return ['ok', 'Working'];
+  }
+  if (v.makes && v.makes.pile.free() <= 0) return ['warn', 'Full, pick it up'];
+  if (v.needs.some(n => n.pile.free() <= 0)) return ['warn', 'Input full'];
+  if (v.needs.length && v.needs.every(n => n.pile.n === 0)) return ['bad', 'Empty'];
+  return ['ok', 'Working'];
+}
+function renderWarehouse() {
+  const groups = {};
+  for (const v of VENDORS) { if (!v.ok()) continue; (groups[regionOf(v.pos)] = groups[regionOf(v.pos)] || []).push(v); }
+  let h = '<h4>Warehouse</h4><p>Every building, what it holds, and anything that is stuck. Updates live.</p>';
+  for (const area of Object.keys(AREA_NAME)) {
+    const list = groups[area]; if (!list) continue;
+    h += `<div class="wh-area">${AREA_NAME[area]}</div>`;
+    for (const v of list) {
+      const [cls, label] = vendorStatus(v);
+      const bits = v.needs.map(n => `${n.types ? 'Goods' : capFirst(itemName(n.type, 2))} ${n.pile.n}/${n.pile.max}`);
+      if (v.makes) bits.push(`Made: ${capFirst(itemName(v.makes.type, 2))} ${v.makes.pile.n}/${v.makes.pile.max}`);
+      const cp = v.cash && v.cash(); if (cp && cp.value > 0) bits.push(`$${fmt(cp.value)} waiting`);
+      h += `<div class="wh"><b>${v.name}</b><span class="chip ${cls}">${label}</span><small>${bits.join(' · ') || '&nbsp;'}</small></div>`;
+    }
+  }
+  menuBody.innerHTML = h;
+}
+function menuTick(dt) {
+  if (menuEl.hidden || menuView !== 'wh') return;
+  menuT -= dt; if (menuT > 0) return; menuT = 1;
+  const y = menuEl.querySelector('.sheet').scrollTop; renderWarehouse(); menuEl.querySelector('.sheet').scrollTop = y;
+}
+
+// backup code: the save plus trophies, stars and land in one copyable string
+const toB64 = str => btoa(unescape(encodeURIComponent(str)));
+const fromB64 = str => decodeURIComponent(escape(atob(str)));
+function backupCode() {
+  save();
+  let sv = null; try { sv = localStorage.getItem(SAVE_KEY); } catch (e) {}
+  return 'FFC1:' + toB64(JSON.stringify({ save: sv, legacy: JSON.stringify(legacy) }));
+}
+function renderBackup() {
+  menuBody.innerHTML = `<h4>Backup your save</h4>
+    <p>Copy this code and keep it somewhere safe, like your Notes app. It holds your camp, cash, trophies, stars and land.</p>
+    <label for="bkcode" class="sr">Your backup code</label><textarea id="bkcode" readonly></textarea>
+    <div class="rowbtns"><button id="bkcopy" type="button">Copy code</button></div>
+    <h4>Restore from a code</h4>
+    <p>Paste a backup code here to load it. This replaces the game on this device.</p>
+    <label for="bkin" class="sr">Paste a backup code</label><textarea id="bkin" placeholder="Paste a code that starts with FFC1:"></textarea>
+    <div class="rowbtns"><button id="bkrestore" type="button" class="warn">Restore this code</button></div><p id="bkmsg" role="status"></p>`;
+  const code = menuBody.querySelector('#bkcode'), msg = menuBody.querySelector('#bkmsg');
+  code.value = backupCode();
+  menuBody.querySelector('#bkcopy').onclick = () => {
+    const done = () => { msg.textContent = 'Copied! Paste it somewhere safe.'; };
+    try { navigator.clipboard.writeText(code.value).then(done, () => { code.select(); msg.textContent = 'Select the code above and copy it.'; }); }
+    catch (e) { code.select(); msg.textContent = 'Select the code above and copy it.'; }
+  };
+  let armed = false;
+  menuBody.querySelector('#bkrestore').onclick = e => {
+    const raw = menuBody.querySelector('#bkin').value.trim();
+    let data;
+    try { if (!raw.startsWith('FFC1:')) throw 0; data = JSON.parse(fromB64(raw.slice(5))); JSON.parse(data.legacy); if (data.save) JSON.parse(data.save); }
+    catch (err) { msg.textContent = 'That code did not work. Check that you copied all of it, starting with FFC1:'; return; }
+    if (!armed) { armed = true; e.target.textContent = 'Tap again to replace this game'; msg.textContent = 'This will replace the camp on this device.'; return; }
+    try {
+      if (data.save) localStorage.setItem(SAVE_KEY, data.save); else localStorage.removeItem(SAVE_KEY);
+      localStorage.setItem(LEGACY_KEY, data.legacy);
+    } catch (err) { msg.textContent = 'This browser would not let the game save. Try again outside private browsing.'; return; }
+    resetting = true; location.reload();
+  };
+}
+
+// update: save, then load the page fresh past any cached copy
+document.getElementById('updbtn').onclick = () => {
+  save(); resetting = true;
+  const u = new URL(location.href); u.searchParams.set('u', Date.now().toString(36)); location.replace(u.toString());
+};
+
+// photo mode hides the interface
+const photoExit = document.getElementById('photoexit');
+document.getElementById('photobtn').onclick = () => { closeMenu(); document.body.classList.add('photo'); photoExit.hidden = false; };
+photoExit.onclick = () => { document.body.classList.remove('photo'); photoExit.hidden = true; };
+
+// music: a soft generated tune that changes with time of day and place
+const music = { on: false, t: 0, step: 3, bar: 0, gain: null };
+try { music.on = localStorage.getItem(SAVE_KEY + '-music') === '1'; } catch (e) {}
+const musicBtn = document.getElementById('musicbtn');
+const showMusic = () => { musicBtn.textContent = music.on ? 'Music on' : 'Music off'; musicBtn.classList.toggle('on', music.on); };
+showMusic();
+musicBtn.onclick = () => { music.on = !music.on; showMusic(); audioInit(); try { localStorage.setItem(SAVE_KEY + '-music', music.on ? '1' : '0'); } catch (e) {} };
+const SCALES = {
+  day: [261.6, [0, 2, 4, 7, 9, 12, 14, 16], 0.5], night: [196, [0, 3, 5, 7, 10, 12, 15], 0.8], mine: [146.8, [0, 1, 5, 7, 8, 12, 13], 0.75],
+  isle: [293.7, [0, 2, 4, 6, 9, 11, 14], 0.55], volcano: [130.8, [0, 1, 4, 5, 7, 8, 11, 12], 0.6], spring: [329.6, [0, 2, 4, 7, 9, 12], 0.45],
+};
+function playNote(f, dur, vol) {
+  const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime;
+  o.type = 'triangle'; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(music.gain); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function musicTick(dt) {
+  if (!music.on || muted || !actx || actx.state !== 'running') return;
+  if (!music.gain) { music.gain = actx.createGain(); music.gain.gain.value = 0.06; music.gain.connect(actx.destination); }
+  music.t -= dt; if (music.t > 0) return;
+  const area = regionOf(player.g.position);
+  const key = area !== 'main' ? area : isNight() ? 'night' : (typeof isSpring === 'function' && isSpring()) ? 'spring' : 'day';
+  const [base, sc, beat] = SCALES[key] || SCALES.day;
+  music.step = clamp(music.step + randi(-2, 2), 0, sc.length - 1);
+  if (Math.random() < 0.85) playNote(base * Math.pow(2, sc[music.step] / 12), beat * 2.2, 0.5);
+  if (music.bar % 4 === 0) playNote(base / 2 * Math.pow(2, sc[(music.bar / 4) % 3 * 2] / 12), beat * 4, 0.35);
+  music.bar++; music.t = beat;
+}
+
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
@@ -4069,7 +4255,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); trackIncome(dt); updateBossCal();
+  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
   updateCustomers(dt);
