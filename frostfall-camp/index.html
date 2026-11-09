@@ -83,6 +83,12 @@
   .chip.ok { background: #d9f5df; color: #1f6b2c; }
   .chip.warn { background: #fff0c8; color: #7a5600; }
   .chip.bad { background: #ffdcd6; color: #9a2516; }
+  #photosnap { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); border: 0; border-radius: 999px;
+    padding: 11px 22px; background: var(--white); color: var(--ink); font: 18px var(--font-display); cursor: pointer; z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  .album { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .album button { border: 0; padding: 0; background: none; cursor: pointer; text-align: left; }
+  .album img { width: 100%; border-radius: 8px; display: block; aspect-ratio: 9 / 16; object-fit: cover; }
+  .album span { display: block; font: 700 11px/1.3 var(--font-body); color: #5a6878; margin-top: 3px; }
   #photoexit { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 14px); border: 0; border-radius: 999px;
     padding: 9px 18px; background: var(--panel); color: var(--white); font: 800 14px var(--font-body); cursor: pointer; z-index: 5; }
   body.photo #hud, body.photo #goal, body.photo #deliver, body.photo #droppack, body.photo #info, body.photo #toast { display: none !important; }
@@ -253,9 +259,9 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
-<button id="photoexit" type="button" hidden>Exit photo mode</button>
+<button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
 <div id="info" hidden role="dialog" aria-label="What this is"></div>
 <div id="deliver" hidden aria-hidden="true"><span></span><svg class="tip" viewBox="0 0 44 44"><path d="M22 3 L40 25 H29 V41 H15 V25 H4 Z" fill="#ffd23a" stroke="#1d2a3a" stroke-width="3" stroke-linejoin="round"/></svg></div>
@@ -812,6 +818,7 @@ class CashPile extends Pile {
     if (longNight()) v = Math.round(v * 1.3);
     if (typeof companionSkill === 'function' && companionSkill() === 'story') v = Math.round(v * 1.1);
     if (typeof homeBonus === 'function') v = Math.round(v * homeBonus());
+    if (typeof outfitBonus === 'function' && outfitBonus() === 'cash') v = Math.round(v * 1.05);
     if (typeof RS === 'function' && RS('nightowl') && isNight()) v = Math.round(v * 1.15);
     if (typeof placed !== 'undefined') { const fn = Math.min(3, placed.filter(q => q.k === 'fountain').length); if (fn) v = Math.round(v * (1 + 0.03 * fn)); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
@@ -1122,7 +1129,7 @@ const ARMORS = [
 ];
 const gearDmg = () => WEAPONS[U('weapon')].dmg;
 const gearReach = () => WEAPONS[U('weapon')].reach || 0;
-const armorKB = () => ARMORS[U('armor')].kb;
+const armorKB = () => ARMORS[U('armor')].kb * (outfitBonus() === 'guard' ? 0.5 : 1);
 function dropFromCarrier(carrier, n, src = 'knocked') {
   if (src === 'knocked' && carrier === player.c) n = companionSkill() === 'heal' ? 0 : Math.max(0, n - ARMORS[U('armor')].save);
   for (let i = 0; i < n; i++) {
@@ -1309,7 +1316,7 @@ function updateCustomers(dt) {
           scene.remove(m); c.incoming--; c.got++; c.bag.visible = true;
           c.bubble.redraw(c.want - c.got);
           if (c.got >= c.want) {
-            counter.cash.addValue(c.want * (STEAK_PRICE + U('steak')) * (storm.t > 0 ? 2 : 1), g.position.clone().add(new V3(0, 1, 0)));
+            counter.cash.addValue(c.want * (STEAK_PRICE + U('steak') + (outfitBonus() === 'steak' ? 2 : 0)) * (storm.t > 0 ? 2 : 1), g.position.clone().add(new V3(0, 1, 0)));
             served++; questProgress('steak', c.want); c.state = 'leave'; c.bubble.mesh.visible = false;
             for (const o of customers) if (o.state === 'queue' && o.slot > 0) o.slot--;
           }
@@ -1501,7 +1508,7 @@ function unlockDock(instant) {
 function tryFish(carrier, who, dt) {
   dock.active = 0.3;
   who.fishT = (who.fishT || 0) + dt;
-  if (who.fishT > (who === player && companionSkill() === 'fish' ? 0.7 : 1.4) && !carrier.full()) {
+  if (who.fishT > (who === player && companionSkill() === 'fish' ? 0.7 : 1.4) * (who === player && outfitBonus() === 'fish' ? 0.75 : 1) && !carrier.full()) {
     who.fishT = 0;
     const frozen = typeof wx !== 'undefined' && wx.kind === 'blizzard', ty = frozen ? 'ice' : 'fish';
     carrier.receive(ty, makeItem(ty), dock.bobPos.clone().add(new V3(0, 0.2, 0)));
@@ -3211,7 +3218,7 @@ const ITEM_NAME_EXTRA = {};
 const ICON_OF = { feather: 'feather', mushroom: 'mushroom', pearl: 'pearl', quilt: 'quilt', glowfish: 'fish', obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 // ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
 const TIER_SPEED = [1, 0.75, 0.55], TIER_NAME = ['Basic', 'Silver', 'Gold'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33];
-const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0);
+const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0);
 const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
 function makeGolden(m, type) {
   m.material = goldenMat; m.userData.golden = true; m.scale.multiplyScalar(1.15);
@@ -3878,7 +3885,7 @@ function updateLakeFishing(dt, moving) {
   player.rod.visible = player.rod.visible || !!h;
   if (!h) { lake.fishT = 0; return; }
   lake.fishT += dt;
-  if (lake.fishT > (companionSkill() === 'fish' ? 0.65 : 1.3) && !player.c.full()) {
+  if (lake.fishT > (companionSkill() === 'fish' ? 0.65 : 1.3) * (outfitBonus() === 'fish' ? 0.75 : 1) && !player.c.full()) {
     lake.fishT = 0; const glow = Math.random() < 0.15, type = glow ? 'glowfish' : 'fish';
     player.c.receive(type, makeItem(type), h.clone().add(new V3(0, 0.3, 0)));
     burst(h.clone().add(new V3(0, -0.4, 0)), glow ? 0x5ff0ff : 0xa9d8f7, 6); sfx('splash'); questProgress('fish');
@@ -4379,6 +4386,10 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['outfits10', 'Dressed for Anything', 'Unlock 10 outfits', () => OUTFITS.filter((o, i) => outfitOwned(i)).length >= 10],
+  ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
+  ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
+  ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
   ['trip', 'Road Trip', 'Take a villager on a day trip', () => stat('trips') >= 1],
   ['tame3', 'Wild Whisperer', 'Tame 3 wild animals', () => stat('tamed') >= 3],
   ['nm5', 'Night Owl Shopper', 'Buy 5 things at the Night Market', () => stat('nightmarket') >= 5],
@@ -4441,7 +4452,7 @@ function checkTrophies(dt) {
   achT -= dt; if (achT > 0) return; achT = 1.2;
   for (const [id, name, , ok] of ACH) {
     if (legacy.ach[id] || !ok()) continue;
-    legacy.ach[id] = Date.now(); W.cash += 100; setCash(); saveLegacy();
+    legacy.ach[id] = Date.now(); W.cash += 100; setCash(); saveLegacy(); postcard(name);
     toast(`Trophy: ${name}! +$100`); sfx('buy');
     firework(player.g.position.clone()); renderTrophies();
     return;
@@ -4866,7 +4877,21 @@ const OUTFITS = [
   { name: 'Forest Ranger', color: 0x3f8f4a, hat: 'ranger' },
   { name: 'Snow Royal', color: 0x7a4fc8, hat: 'crown' },
   { name: 'Golden Explorer', color: 0xe0b030, hat: 'crown' },
+  { name: 'Lumberjack Plaid', color: 0xb03a3a, hat: 'beanie', bonus: 'chop', perk: 'Chop 25% faster', req: 'log100' },
+  { name: 'Angler', color: 0x2aa0b8, hat: 'ranger', bonus: 'fish', perk: 'Fish 25% faster', req: 'fish50' },
+  { name: 'Prospector', color: 0x6b7488, hat: 'ranger', bonus: 'mine', perk: 'Mine 25% faster', req: 'gold50' },
+  { name: 'Hunter Green', color: 0x2f6a3a, hat: 'ranger', bonus: 'hunt', perk: 'Hit 1 harder', req: 'boar25' },
+  { name: 'Merchant Velvet', color: 0x7a2f6a, hat: 'crown', bonus: 'cash', perk: '+5% income', req: 'earn100k' },
+  { name: 'Trailblazer', color: 0xe0a43a, hat: 'ranger', bonus: 'speed', perk: 'Walk 10% faster', req: 'exp10' },
+  { name: 'Head Chef', color: 0xf6f6f6, hat: 'beanie', bonus: 'steak', perk: '+$2 per steak sold', req: 'steak1000' },
+  { name: 'Frost Knight', color: 0x8d97a6, hat: 'crown', bonus: 'guard', perk: 'Half the knockback', req: 'wraith' },
+  { name: 'Aurora Robe', color: 0x5fd0c0, hat: 'crown', bonus: 'gold', perk: '+3% golden pieces', req: 'theend' },
+  { name: 'Ice Racer', color: 0x5fd0ff, hat: 'beanie', bonus: 'speed', perk: 'Walk 10% faster', req: 'race' },
+  { name: 'Village Elder', color: 0x9a6a46, hat: 'ranger', bonus: 'cash', perk: '+5% income', req: 'village6' },
+  { name: 'Legend of the North', color: 0xffcc33, hat: 'crown', bonus: 'cash', perk: '+5% income', req: 'legend' },
 ];
+const outfitOwned = i => (i < 5 ? i <= padLevel('wardrobe') : !!legacy.ach[OUTFITS[i].req]);
+const outfitBonus = () => (OUTFITS[W.outfit] || {}).bonus || null;
 W.outfit = 0;
 function wearOutfit(i) {
   W.outfit = i; const o = OUTFITS[i];
@@ -5036,8 +5061,8 @@ function playerInteract() {
   if (wardrobe.built) {
     const on = inZone(pos, wardrobe.zone.x, wardrobe.zone.z, 1.0);
     if (on && !wardrobe.wasIn) {
-      const owned = padLevel('wardrobe') + 1, next = (W.outfit + 1) % owned;
-      wearOutfit(next); burst(pos, OUTFITS[next].color, 10); toast('Outfit: ' + OUTFITS[next].name); sfx('buy'); save();
+      let next = W.outfit; for (let k = 1; k <= OUTFITS.length; k++) { const j = (W.outfit + k) % OUTFITS.length; if (outfitOwned(j)) { next = j; break; } }
+      wearOutfit(next); burst(pos, OUTFITS[next].color, 10); toast('Outfit: ' + OUTFITS[next].name + (OUTFITS[next].perk ? ' (' + OUTFITS[next].perk + ')' : '')); sfx('buy'); save();
     }
     wardrobe.wasIn = on;
   }
@@ -5068,7 +5093,7 @@ function updatePlayer(dt) {
   const pos = player.g.position;
   if (moving) {
     dir.normalize();
-    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK) * (riding() ? 1.6 : 1));
+    pos.addScaledVector(dir, W.speed * mag * dt * (1 - 0.2 * stormK) * (riding() ? 1.6 : 1) * (outfitBonus() === 'speed' ? 1.1 : 1));
     player.g.rotation.y = lerpAng(player.g.rotation.y, Math.atan2(dir.x, dir.z), 0.3);
     collide(pos, 0.38);
   }
@@ -5083,12 +5108,14 @@ function updatePlayer(dt) {
   if (player.atk <= 0) {
     const b = nearest(boars.concat(wolves, bear ? [bear] : [], mine.golems), pos, b => b.pos);
     if (b && d2(b.pos, pos) < (b.reach || 1.9) + gearReach()) {
-      player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(gearDmg()); sfx('hit');
+      player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(gearDmg() + (outfitBonus() === 'hunt' ? 1 : 0)); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
     } else if (!player.c.full()) {
       const t = nearest(trees.concat(rocks, golds, isle.shards, berries, coals, irons, blooms, crops, obsidians, feathers, mushrooms, pearls).filter(t => !t.down), pos);
       if (t && d2(t.pos, pos) < t.k.r + 1.1) {
-        player.atk = 0.38 * (1 - 0.2 * U('axe')); player.p.swing = 1; t.hit(player.c);
+        const ob = outfitBonus(), mining = t.k.sound === 'mine';
+        player.atk = 0.38 * (1 - 0.2 * U('axe')) * ((ob === 'chop' && !mining) || (ob === 'mine' && mining) ? 0.75 : 1); player.p.swing = 1; t.hit(player.c);
+        if (mining && Math.random() < 0.06) findGem();
         if (!moving) player.g.rotation.y = Math.atan2(t.pos.x - pos.x, t.pos.z - pos.z);
       }
     }
@@ -6051,6 +6078,103 @@ function updateCabin(dt) {
   }
 }
 
+// ================= Bug and gem collections =================
+const BUGS = [
+  { id: 'snowmoth', name: 'Snow Moth', area: 'main', color: 0xffffff, tip: 'Around camp in the daytime.' },
+  { id: 'frostbeetle', name: 'Frost Beetle', area: 'main', color: 0x5fb0c0, tip: 'Around camp in the daytime.' },
+  { id: 'firefly', name: 'Winter Firefly', area: 'main', night: true, color: 0xffd23a, tip: 'Around camp at night.' },
+  { id: 'glowworm', name: 'Glow Worm', area: 'main', night: true, color: 0x7be38a, tip: 'Around camp at night.' },
+  { id: 'ridgecricket', name: 'Ridge Cricket', area: 'main', minX: 33, color: 0xa86a3a, tip: 'Across the river, near Ridge Camp.' },
+  { id: 'crystalfly', name: 'Crystal Fly', area: 'isle', color: 0xd08cff, tip: 'On Aurora Isle.' },
+  { id: 'cavemoth', name: 'Cave Moth', area: 'mine', color: 0x9ff0ff, tip: 'In the Frost Mine.' },
+  { id: 'emberbug', name: 'Ember Bug', area: 'volcano', color: 0xff7a2a, tip: 'In the Ember Volcano.' },
+  { id: 'cloudbee', name: 'Cloud Bee', area: 'peak', color: 0xf0d070, tip: 'On Sky Peak.' },
+  { id: 'iceskater', name: 'Ice Skater Bug', area: 'lake', color: 0xbfe8ff, tip: 'At the Frozen Lake.' },
+  { id: 'steamfly', name: 'Steam Fly', area: 'steam', color: 0xa8ffd8, tip: 'In the Steam Caves.' },
+  { id: 'seaglow', name: 'Sea Glow', area: 'cove', color: 0x5ff0ff, tip: 'In Shipwreck Cove.' },
+];
+const GEMS = [
+  { id: 'quartz', name: 'Snow Quartz', areas: ['main'], tip: 'From crystal rocks across the river.' },
+  { id: 'amethyst', name: 'Amethyst', areas: ['main'], tip: 'From crystal rocks across the river.' },
+  { id: 'topaz', name: 'Topaz', areas: ['mine'], tip: 'Deep in the Frost Mine.' },
+  { id: 'garnet', name: 'Garnet', areas: ['mine'], tip: 'Deep in the Frost Mine.' },
+  { id: 'opal', name: 'Fire Opal', areas: ['volcano'], tip: 'Among the volcano obsidian.' },
+  { id: 'onyx', name: 'Onyx', areas: ['volcano'], tip: 'Among the volcano obsidian.' },
+  { id: 'aurorite', name: 'Aurorite', areas: ['isle'], tip: 'Inside aurora shards.' },
+  { id: 'moonstone', name: 'Moonstone', areas: ['isle'], tip: 'Inside aurora shards.' },
+  { id: 'aquamarine', name: 'Aquamarine', areas: ['cove'], tip: 'Inside pearl clams.' },
+  { id: 'sapphire', name: 'Sky Sapphire', areas: ['peak', 'mine'], tip: 'Rare, high on Sky Peak or deep in the mine.' },
+  { id: 'emerald', name: 'Emerald', areas: ['steam'], tip: 'From the Steam Caves.' },
+  { id: 'diamond', name: 'Frost Diamond', areas: ['main', 'mine', 'volcano', 'isle', 'cove'], rare: true, tip: 'The rarest of all. Anywhere you mine.' },
+];
+legacy.bugs = legacy.bugs || {}; legacy.gems = legacy.gems || {}; legacy.collDone = legacy.collDone || {};
+const bugs = { list: [], t: 5 };
+const BUG_GEO = new THREE.SphereGeometry(0.1, 8, 6);
+function collCheck() {
+  if (!legacy.collDone.bugs && BUGS.every(b => legacy.bugs[b.id])) { legacy.collDone.bugs = 1; W.cash += 8000; setCash(); setTimeout(() => toast('Bug collection complete! +$8,000'), 2000); }
+  if (!legacy.collDone.gems && GEMS.every(g => legacy.gems[g.id])) { legacy.collDone.gems = 1; W.cash += 10000; setCash(); setTimeout(() => toast('Gem collection complete! +$10,000'), 2000); }
+  saveLegacy();
+}
+function findGem() {
+  const area = regionOf(player.g.position);
+  let pool = GEMS.filter(g => g.areas.includes(area) && !g.rare);
+  if (Math.random() < 0.08) pool = GEMS.filter(g => g.rare);
+  if (!pool.length) return;
+  const g = pool[randi(0, pool.length - 1)], first = !legacy.gems[g.id];
+  legacy.gems[g.id] = (legacy.gems[g.id] || 0) + 1; bump('gemsfound');
+  burst(player.g.position.clone().add(new V3(0, 1.2, 0)), 0xd08cff, 10); sfx('bell');
+  toast(first ? `Rare gem found: ${g.name}! (${GEMS.filter(x => legacy.gems[x.id]).length}/${GEMS.length})` : `Another ${g.name}! Sold for $300.`);
+  if (!first) { W.cash += 300; setCash(); }
+  collCheck();
+}
+function updateBugs(dt) {
+  const pp = player.g.position, area = regionOf(pp);
+  bugs.t -= dt;
+  if (bugs.t <= 0) {
+    bugs.t = rand(12, 22);
+    const pool = BUGS.filter(b => b.area === area && (!b.night || isNight()) && (b.night || !isNight() || b.area !== 'main') && (!b.minX || pp.x > b.minX) && (b.minX || area !== 'main' || pp.x < 33));
+    if (pool.length && bugs.list.length < 3) {
+      const b = pool[randi(0, pool.length - 1)], a = rand(0, 6.28), r = rand(4, 9);
+      const m = new THREE.Mesh(BUG_GEO, new THREE.MeshBasicMaterial({ color: b.color })); m.position.set(pp.x + Math.cos(a) * r, 1, pp.z + Math.sin(a) * r); scene.add(m);
+      bugs.list.push({ b, m, t: 40, ph: rand(0, 6), home: m.position.clone() });
+    }
+  }
+  for (let i = bugs.list.length - 1; i >= 0; i--) {
+    const bg = bugs.list[i]; bg.t -= dt; bg.ph += dt;
+    bg.m.position.set(bg.home.x + Math.sin(bg.ph * 1.3) * 1.2, 0.8 + Math.sin(bg.ph * 4) * 0.3, bg.home.z + Math.cos(bg.ph * 0.9) * 1.2);
+    if (d2(bg.m.position, pp) < 1.0) {
+      const first = !legacy.bugs[bg.b.id]; legacy.bugs[bg.b.id] = (legacy.bugs[bg.b.id] || 0) + 1; bump('bugs');
+      burst(bg.m.position, bg.b.color, 8); sfx('coin');
+      toast(first ? `Caught a ${bg.b.name}! (${BUGS.filter(x => legacy.bugs[x.id]).length}/${BUGS.length})` : `Caught another ${bg.b.name}. +$100`);
+      if (!first) { W.cash += 100; setCash(); }
+      scene.remove(bg.m); bugs.list.splice(i, 1); collCheck(); continue;
+    }
+    if (bg.t <= 0 || regionOf(bg.m.position) !== area) { scene.remove(bg.m); bugs.list.splice(i, 1); }
+  }
+}
+
+// ================= Postcards: snapshots of special moments =================
+const ALBUM_KEY = 'frostfall-camp-album';
+let album = []; try { album = JSON.parse(localStorage.getItem(ALBUM_KEY) || '[]'); } catch (e) { album = []; }
+const cardQ = [];
+function postcard(caption) { if (cardQ.length < 3) cardQ.push(caption); }
+function capturePostcard() {
+  if (!cardQ.length) return;
+  const caption = cardQ.shift();
+  try {
+    const src = renderer.domElement, w = 180, h = Math.round(180 * src.height / src.width);
+    const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, 0, 0, w, h);
+    album.unshift({ img: c.toDataURL('image/jpeg', 0.6), caption, day: Math.floor(dayT / CYCLE) + 1 });
+    if (album.length > 36) album.length = 36;
+    localStorage.setItem(ALBUM_KEY, JSON.stringify(album));
+  } catch (e) { /* storage full or blocked: skip this postcard */ }
+}
+function renderAlbum() {
+  menuBody.innerHTML = `<h4>Postcards (${album.length})</h4><p>A postcard is snapped every time you earn a trophy. In photo mode you can take your own. Tap one to see it bigger.</p>` +
+    (album.length ? `<div class="album">${album.map((a, i) => `<button type="button" data-pc="${i}"><img src="${a.img}" alt="${a.caption}"><span>${a.caption} · Day ${a.day}</span></button>`).join('')}</div>` : '<p>No postcards yet.</p>');
+  menuBody.querySelectorAll('[data-pc]').forEach(b => b.onclick = () => { const a = album[+b.dataset.pc]; showCard(a.caption, `<img src="${a.img}" alt="" style="width:100%;border-radius:12px;display:block">Day ${a.day}`, '', 'Close'); });
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -6078,7 +6202,10 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people'], ['fishbtn', 'fish'], ['calbtn', 'cal'], ['logbtn', 'log'], ['mapbtn', 'tmap']]) document.getElementById(id).classList.toggle('on', v === key);
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people'], ['fishbtn', 'fish'], ['calbtn', 'cal'], ['logbtn', 'log'], ['mapbtn', 'tmap'], ['outfitbtn', 'outfits'], ['collbtn', 'coll'], ['albumbtn', 'album']]) document.getElementById(id).classList.toggle('on', v === key);
+  if (v === 'outfits') { renderOutfits(); return; }
+  if (v === 'coll') { renderCollections(); return; }
+  if (v === 'album') { renderAlbum(); return; }
   if (v === 'tmap') { renderTreasure(); return; }
   if (v === 'log') { menuBody.innerHTML = '<h4>Activity</h4><p>Everything that popped up recently, newest first.</p>' + (activity.map(a => `<div class="wh"><b>${a.msg}</b><span class="chip ok">Day ${a.day}</span></div>`).join('') || '<p>Nothing yet.</p>'); return; }
   if (v === 'fish') { renderFishBook(); return; }
@@ -6087,6 +6214,24 @@ function showMenuView(v) {
   if (v === 'story') { renderStory(); return; }
   if (v === 'people') { renderPeople(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+}
+document.getElementById('outfitbtn').onclick = () => showMenuView(menuView === 'outfits' ? '' : 'outfits');
+document.getElementById('collbtn').onclick = () => showMenuView(menuView === 'coll' ? '' : 'coll');
+document.getElementById('albumbtn').onclick = () => showMenuView(menuView === 'album' ? '' : 'album');
+function renderOutfits() {
+  menuBody.innerHTML = '<h4>Outfits</h4><p>The first five come from the Wardrobe. The rest are earned from trophies, and each gives a small bonus while you wear it.</p>' +
+    OUTFITS.map((o, i) => {
+      const own = outfitOwned(i), lock = i < 5 ? `Wardrobe level ${i}` : 'Trophy: ' + ((ACH.find(a => a[0] === o.req) || [0, '?'])[1]);
+      return `<div class="wh"><b><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#${o.color.toString(16).padStart(6, '0')};margin-right:6px;vertical-align:middle"></span>${o.name}</b>${W.outfit === i ? '<span class="chip ok">Wearing</span>' : own ? `<button class="buy" type="button" data-wear="${i}" style="min-width:0;padding:6px 12px;font-size:14px">Wear</button>` : '<span class="chip bad">Locked</span>'}<small>${o.perk || 'Looks great'}${own ? '' : ' · Unlock: ' + lock}</small></div>`;
+    }).join('');
+  menuBody.querySelectorAll('[data-wear]').forEach(b => b.onclick = () => { wearOutfit(+b.dataset.wear); save(); renderOutfits(); toast('Outfit: ' + OUTFITS[W.outfit].name); });
+}
+function renderCollections() {
+  const bugs = BUGS.filter(b => legacy.bugs[b.id]).length, gems = GEMS.filter(g => legacy.gems[g.id]).length;
+  menuBody.innerHTML = `<h4>Bugs (${bugs}/${BUGS.length})</h4><p>Little glowing critters flutter about now and then. Walk into one to catch it. Some only come out at night or in certain places. Fill the page for $8,000.</p>` +
+    BUGS.map(b => legacy.bugs[b.id] ? `<div class="wh"><b>${b.name}</b><span class="chip ok">x${legacy.bugs[b.id]}</span><small>${b.tip}</small></div>` : `<div class="wh"><b>???</b><span class="chip warn">Not found</span><small>${b.tip}</small></div>`).join('') +
+    `<h4>Gems (${gems}/${GEMS.length})</h4><p>Mining rocks, gold, shards, coal or obsidian sometimes turns up a rare gem. Fill the page for $10,000.</p>` +
+    GEMS.map(g => legacy.gems[g.id] ? `<div class="wh"><b>${g.name}</b><span class="chip ok">x${legacy.gems[g.id]}</span><small>${g.tip}</small></div>` : `<div class="wh"><b>???</b><span class="chip warn">Not found</span><small>${g.tip}</small></div>`).join('');
 }
 document.getElementById('mapbtn').onclick = () => showMenuView(menuView === 'tmap' ? '' : 'tmap');
 document.getElementById('logbtn').onclick = () => showMenuView(menuView === 'log' ? '' : 'log');
@@ -6295,7 +6440,9 @@ document.getElementById('updbtn').onclick = () => {
 // photo mode hides the interface
 const photoExit = document.getElementById('photoexit');
 document.getElementById('photobtn').onclick = () => { closeMenu(); document.body.classList.add('photo'); photoExit.hidden = false; };
-photoExit.onclick = () => { document.body.classList.remove('photo'); photoExit.hidden = true; };
+photoExit.onclick = () => { document.body.classList.remove('photo'); photoExit.hidden = true; document.getElementById('photosnap').hidden = true; };
+document.getElementById('photosnap').onclick = () => { postcard('My photo'); bump('photos'); setTimeout(() => { const b = document.getElementById('photosnap'); b.textContent = 'Saved!'; setTimeout(() => { b.textContent = 'Save postcard'; }, 1200); }, 50); };
+document.getElementById('photobtn').addEventListener('click', () => { document.getElementById('photosnap').hidden = false; });
 
 // music: a soft generated tune that changes with time of day and place
 const music = { on: false, t: 0, step: 3, bar: 0, gain: null };
@@ -6335,7 +6482,7 @@ function save() {
   saveLegacy();
 }
 if (saved && saved.pads) {
-  if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
+  if (saved.outfit) setTimeout(() => wearOutfit(outfitOwned(saved.outfit) ? saved.outfit : 0), 0);
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
   if (saved.home) home.filled = saved.home;
@@ -6395,7 +6542,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -6429,9 +6576,10 @@ function frame() {
 
   updateHelp(dt, t);
   renderer.render(scene, camera);
+  if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
