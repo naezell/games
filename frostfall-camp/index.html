@@ -132,6 +132,15 @@
   #rank { display: flex; align-items: center; gap: 8px; background: var(--panel); color: #ffe27a; border-radius: 12px; padding: 5px 10px; font: 15px var(--font-display); letter-spacing: .4px; }
   #rankbar { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
   #rankfill { display: block; height: 100%; width: 0; background: #ffd23a; transition: width .3s; }
+  #infobox { pointer-events: auto; display: grid; gap: 4px; max-width: 240px; }
+  #infobox .itabs { display: flex; gap: 4px; }
+  #infobox .itabs button { border: 0; border-radius: 9px; padding: 4px 9px; font: 800 12px var(--font-body); background: var(--panel); color: rgba(255,255,255,.75); cursor: pointer; }
+  #infobox .itabs button.on { background: var(--white); color: var(--ink); }
+  #infobox .itabs button:focus-visible, #hudbtn:focus-visible { outline: 3px solid var(--white); }
+  #infobox .ipanel { display: grid; gap: 4px; }
+  #infobox.closed .ipanel { display: none; }
+  #hudbtn { pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px; background: var(--panel); color: var(--white); font: 800 14px var(--font-body); cursor: pointer; }
+  body.hudmin #rank, body.hudmin #infobox, body.hudmin #boosts, body.hudmin #trophybtn, body.hudmin #map { display: none !important; }
   #quests { pointer-events: auto; background: var(--panel); color: var(--white); border-radius: 12px; padding: 7px 10px;
     font: 800 12px/1.35 var(--font-body); max-width: 210px; cursor: pointer; display: grid; gap: 3px; }
   #quests h3 { margin: 0; font: 14px var(--font-display); letter-spacing: .4px; display: flex; justify-content: space-between; gap: 10px; }
@@ -228,8 +237,8 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="bosscal"></div><div id="contest"></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div><div id="orders" role="button" tabindex="0" aria-label="Villager orders, tap to show or hide" hidden></div></div>
-  <div class="right"><button id="menubtn" type="button">Menu</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area, tap to travel"></canvas></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="boosts"></div><div id="infobox"><div class="itabs" role="tablist"><button type="button" data-it="goals" class="on">Goals</button><button type="button" data-it="orders" id="itorders" hidden>Orders</button><button type="button" data-it="events">Events</button><button type="button" data-it="hide" aria-label="Hide this box">&ndash;</button></div><div class="ipanel" data-p="goals"><div id="quests" role="button" tabindex="0" aria-label="Daily goals"></div></div><div class="ipanel" data-p="orders" hidden><div id="orders" role="button" tabindex="0" aria-label="Villager orders" hidden></div></div><div class="ipanel" data-p="events" hidden><div id="bosscal"></div><div id="contest"></div></div></div></div>
+  <div class="right"><button id="menubtn" type="button">Menu</button><button id="hudbtn" type="button" aria-pressed="false">Hide</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area, tap to travel"></canvas></div>
 </div>
 <div id="toast" hidden></div>
 <div id="goal">Drag anywhere to move</div>
@@ -242,7 +251,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -1072,6 +1081,7 @@ function firework(pos) {
 }
 // falling snow
 const SNOW_N = 700;
+let snowCount = SNOW_N;
 const snowGeo = new THREE.BufferGeometry();
 const snowPos = new Float32Array(SNOW_N * 3);
 for (let i = 0; i < SNOW_N; i++) { snowPos[i * 3] = rand(-25, 25); snowPos[i * 3 + 1] = rand(0, 24); snowPos[i * 3 + 2] = rand(-25, 25); }
@@ -1748,7 +1758,7 @@ function newQuests(announce) {
   questDay = day;
   const pool = QUEST_DEFS.filter(q => q.ok()).sort(() => Math.random() - 0.5).slice(0, 3);
   const tier = Math.min(2, Math.floor((day - 1) / 2));
-  quests = pool.map(q => ({ id: q.id, need: q.n[tier], have: 0, reward: Math.round((40 + day * 15) * (1 + tier * 0.3) / 5) * 5, done: false }));
+  quests = pool.map(q => ({ id: q.id, need: q.n[tier], have: 0, reward: Math.max(Math.round((40 + day * 15) * (1 + tier * 0.3) / 5) * 5, Math.round(incomeRate * 40 / 5) * 5), done: false }));
   renderQuests();
   if (announce) setTimeout(() => toast('New daily goals!'), 4200);
 }
@@ -2668,7 +2678,7 @@ function dungeonCleared(w) {
 function openChest(ch, big) {
   ch.open = true; sfx('coin'); burst(ch.g.position.clone().add(new V3(0, 0.8, 0)), 0xffd23a, big ? 24 : 12);
   const day = Math.floor(dayT / CYCLE) + 1, at = ch.g.position.clone();
-  const cash = Math.round(((big ? 600 : 120) + day * (big ? 40 : 8)) / 10) * 10; W.cash += cash; setCash();
+  const cash = Math.round(Math.max((big ? 600 : 120) + day * (big ? 40 : 8), incomeRate * (big ? 60 : 12)) / 10) * 10; W.cash += cash; setCash();
   for (let i = 0; i < (big ? 6 : 2); i++) dropGround('cash', at.clone());
   const loot = ['gem', 'gold', 'shard', 'potion', 'ring', 'blade'].filter(t => t !== 'blade' || big);
   for (let i = 0; i < (big ? 4 : 1); i++) dropGround(loot[randi(0, loot.length - 1)], at.clone());
@@ -2845,7 +2855,7 @@ function updateStory(dt) {
     p.needsUpdate = true;
   }
   story.t -= dt; if (story.t > 0) return; story.t = 1;
-  if (story.seen < story.ch && story.ch < STORY.length && cardEl.hidden && shopEl.hidden) { showChapter(); return; }
+  if (story.seen < story.ch && story.ch < STORY.length && cardEl.hidden && shopEl.hidden && tut.step >= 4) { showChapter(); return; }
   const c = STORY[story.ch];
   if (c && c.done()) {
     W.cash += c.reward; setCash(); bump('chapters'); story.ch++; save();
@@ -3464,7 +3474,7 @@ function newOrder() {
   const kinds = pool.slice(0, Math.min(pool.length, randi(1, 3)));
   const items = kinds.map(([type, , v]) => ({ type, need: clamp(Math.round(rand(160, 360) / v), 1, 10), have: 0, v }));
   const worth = items.reduce((a, it) => a + it.need * it.v, 0);
-  return { who: ORDER_NAMES[randi(0, ORDER_NAMES.length - 1)], items: items.map(({ type, need, have }) => ({ type, need, have })), reward: Math.max(50, Math.round(worth * 1.9 / 10) * 10), t: 240 };
+  return { who: ORDER_NAMES[randi(0, ORDER_NAMES.length - 1)], items: items.map(({ type, need, have }) => ({ type, need, have })), reward: Math.max(50, Math.round(worth * 2.2 / 10) * 10), t: 240 };
 }
 function unlockBoard(instant) {
   if (board.built) return;
@@ -3476,7 +3486,7 @@ function unlockBoard(instant) {
   mesh(new THREE.BoxGeometry(2.3, 0.12, 0.4), 0x3f6f9f, 0, 2.15, 0, g);
   colliders.push({ x0: -13.3, x1: -11.1, z0: 24.3, z1: 24.9 });
   zoneMarker(board.zone.x, board.zone.z, 'board', '#d9b3ff');
-  ordersEl.hidden = false;
+  ordersEl.hidden = false; document.getElementById('itorders').hidden = false;
   if (!orders.list.length) orders.next = 1;
   if (!instant) { popIn(g); burst(new V3(-12.2, 0, 24.6), 0xb8733d, 14); toast('Villagers post orders here. Fill them for big bonuses!'); }
   renderOrders();
@@ -4568,7 +4578,7 @@ const PADS = [
   { id: 'milkmaid', label: 'Hire Milker', icon: 'person', costs: [2500], x: 45, z: 15.6, req: () => creamery.built, apply: () => new Worker('milkmaid', 45, 15.6) },
   { id: 'toyshop', label: 'Toy Workshop', icon: 'toy', costs: [4000], x: 44.2, z: 13.6, req: () => ridge.unlocked && pen.level > 0, apply: (l, i) => toyshop.unlock(i) },
   { id: 'glass', label: 'Glassblower', icon: 'ornament', costs: [4500], x: 17, z: 12.6, req: () => icesaw.built, apply: (l, i) => glass.unlock(i) },
-  { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
+  { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
   { id: 'sanctuary', label: 'Animal Sanctuary', icon: 'house', costs: [6000], x: 12.2, z: 9.2, req: () => town.built, apply: unlockSanct },
@@ -4577,10 +4587,10 @@ const PADS = [
   { id: 'downshop', label: 'Down Workshop', icon: 'quilt', costs: [10000], x: 176, z: -6, req: () => FAR.peak.built, apply: (l, i) => downshop.unlock(i) },
   { id: 'laketrail', label: 'Lake Trail', icon: 'fish', costs: [8000], x: -23.6, z: 5.4, req: () => town.built, apply: (l, i) => buildFar('lake', i) },
   { id: 'rink', label: 'Skating Rink', icon: 'ice', costs: [8000], x: 180, z: 56, req: () => FAR.lake.built, apply: (l, i) => buildRink(i) },
-  { id: 'steamtunnel', label: 'Steam Tunnel', icon: 'mushroom', costs: [30000], x: 130.6, z: -36.6, req: () => volc.built, apply: (l, i) => buildFar('steam', i) },
+  { id: 'steamtunnel', label: 'Steam Tunnel', icon: 'mushroom', costs: [24000], x: 130.6, z: -36.6, req: () => volc.built, apply: (l, i) => buildFar('steam', i) },
   { id: 'greenhouse', label: 'Greenhouse', icon: 'carrot', costs: [15000], x: 176, z: -44, req: () => FAR.steam.built, apply: (l, i) => greenhouse.unlock(i) },
-  { id: 'divebell', label: 'Diving Bell', icon: 'pearl', costs: [20000], x: 130.4, z: 54.4, req: () => isle.built, apply: (l, i) => buildFar('cove', i) },
-  { id: 'cottage', label: 'Cottage', icon: 'house', costs: [3000, 5000, 8000, 12000, 18000, 25000], x: -2.4, z: -11.6, req: () => town.built, apply: (l, i) => moveIn(l, i) },
+  { id: 'divebell', label: 'Diving Bell', icon: 'pearl', costs: [16000], x: 130.4, z: 54.4, req: () => isle.built, apply: (l, i) => buildFar('cove', i) },
+  { id: 'cottage', label: 'Cottage', icon: 'house', costs: [2500, 4000, 6500, 9500, 13000, 17000], x: -2.4, z: -11.6, req: () => town.built, apply: (l, i) => moveIn(l, i) },
   { id: 'armory', label: 'Armory', icon: 'blade', costs: [4000], x: -8.8, z: 10.0, req: () => town.built, apply: unlockArmory },
   { id: 'dungeon', label: 'Ice Cave', icon: 'exit', costs: [10000], x: -4, z: -27.4, req: () => mine.built, apply: unlockDungeon },
   { id: 'tinker', label: 'Tinker Bench', icon: 'gift', costs: [5000], x: -6.4, z: 24.6, req: () => town.built, apply: unlockBench },
@@ -5136,7 +5146,14 @@ showMute();
 muteBtn.onclick = () => { muted = !muted; showMute(); audioInit(); try { localStorage.setItem(SAVE_KEY + '-mute', muted ? '1' : '0'); } catch (e) {} };
 const toastEl = document.getElementById('toast');
 let toastT = 0;
-function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = ''; clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; }, 3800); }
+const activity = [];
+let toastQ = [], toastAt = 0;
+function showToastNow(msg) { toastAt = performance.now(); toastEl.textContent = msg; toastEl.hidden = false; toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = ''; clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; if (toastQ.length) showToastNow(toastQ.shift()); }, 3200); }
+function toast(msg) {
+  activity.unshift({ day: Math.floor(dayT / CYCLE) + 1, msg }); if (activity.length > 80) activity.pop();
+  if (!toastEl.hidden && performance.now() - toastAt < 1500) { if (toastQ.length < 3) toastQ.push(msg); else toastQ[2] = msg; return; }
+  showToastNow(msg);
+}
 
 // ---------------- day / night & wolves ----------------
 const DAY = 100, NIGHT = 40, CYCLE = DAY + NIGHT;
@@ -5595,6 +5612,23 @@ function updateHelp(dt, t) {
 }
 window.__help = { onTap, closeInfo, findDelivery, getInfo: () => info, VENDORS, toScreen };
 
+// ---------------- starter tutorial (new camps only) ----------------
+const tut = { step: 99, t: 0 };
+const TUT = [
+  { when: () => true, title: 'Welcome to Frostfall Camp!', text: 'Drag anywhere on the screen to walk. Your first job: hunt a frost boar in the snowy field north of camp. Walk into it and you attack on your own.' },
+  { when: () => player.c.count('meat') > 0, title: 'Raw meat!', text: 'It stacks on your back. Carry it to the grill: walk onto the square with the meat picture. The yellow arrow shows the way.' },
+  { when: () => player.c.count('steak') > 0, title: 'Hot steaks', text: 'Villagers wait at the counter. Drop the steaks on the counter square and they pay you.' },
+  { when: () => counter.cash.value > 0 || W.cash > 0, title: 'Cash!', text: 'Walk over the green cash pile to collect it. Then stand on a dashed build square to buy it: start with the Sawmill.' },
+  { when: () => Object.values(padState).some(s => s.level > 0), title: 'Your camp grows', text: 'Every building earns more money. Tap anything to learn what it does, and open Menu for travel, the warehouse and more.' },
+  { when: () => isNight(), title: 'Night falls', text: 'Wolves try to steal your food at night. Walk into them to fight back, or build Camp Gates to keep them out.' },
+];
+function updateTutorial(dt) {
+  if (tut.step >= TUT.length) return;
+  tut.t -= dt; if (tut.t > 0 || !cardEl.hidden) return; tut.t = 1;
+  const s = TUT[tut.step];
+  if (s.when()) { showCard(s.title, s.text, '', 'Got it'); tut.step++; tut.t = 6; save(); }
+}
+
 // ---------------- menu: travel, warehouse, backup, update, photo, music ----------------
 const menuEl = document.getElementById('menu'), menuBody = document.getElementById('menubody');
 let menuView = '', menuT = 0;
@@ -5605,7 +5639,8 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people'], ['fishbtn', 'fish'], ['calbtn', 'cal']]) document.getElementById(id).classList.toggle('on', v === key);
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people'], ['fishbtn', 'fish'], ['calbtn', 'cal'], ['logbtn', 'log']]) document.getElementById(id).classList.toggle('on', v === key);
+  if (v === 'log') { menuBody.innerHTML = '<h4>Activity</h4><p>Everything that popped up recently, newest first.</p>' + (activity.map(a => `<div class="wh"><b>${a.msg}</b><span class="chip ok">Day ${a.day}</span></div>`).join('') || '<p>Nothing yet.</p>'); return; }
   if (v === 'fish') { renderFishBook(); return; }
   if (v === 'cal') { renderCalendar(); return; }
   if (v === 'recipes') { renderRecipes(); return; }
@@ -5613,6 +5648,33 @@ function showMenuView(v) {
   if (v === 'people') { renderPeople(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
 }
+document.getElementById('logbtn').onclick = () => showMenuView(menuView === 'log' ? '' : 'log');
+const gfxBtn = document.getElementById('gfxbtn');
+let gfxLow = false; try { gfxLow = localStorage.getItem(SAVE_KEY + '-gfx') === 'low'; } catch (e) {}
+function applyGfx() {
+  renderer.setPixelRatio(gfxLow ? 1 : Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(innerWidth, innerHeight);
+  sun.castShadow = !gfxLow; snowCount = gfxLow ? 220 : SNOW_N; snowGeo.setDrawRange(0, snowCount);
+  gfxBtn.textContent = gfxLow ? 'Graphics: Low' : 'Graphics: High';
+}
+gfxBtn.onclick = () => { gfxLow = !gfxLow; applyGfx(); try { localStorage.setItem(SAVE_KEY + '-gfx', gfxLow ? 'low' : 'high'); } catch (e) {} toast(gfxLow ? 'Low graphics: smoother and easier on the battery.' : 'High graphics: shadows and full snow.'); };
+applyGfx();
+
+// info box tabs and the hide button
+const infoBox = document.getElementById('infobox');
+let infoTab = 'goals';
+try { infoTab = localStorage.getItem(SAVE_KEY + '-itab') || 'goals'; } catch (e) {}
+function setInfoTab(t) {
+  if (t === 'hide') { infoBox.classList.toggle('closed'); return; }
+  if (t === infoTab && !infoBox.classList.contains('closed')) { infoBox.classList.add('closed'); return; }
+  infoBox.classList.remove('closed'); infoTab = t;
+  infoBox.querySelectorAll('.itabs button').forEach(b => b.classList.toggle('on', b.dataset.it === t));
+  infoBox.querySelectorAll('.ipanel').forEach(pn => { pn.hidden = pn.dataset.p !== t; });
+  try { localStorage.setItem(SAVE_KEY + '-itab', t); } catch (e) {}
+}
+infoBox.querySelector('.itabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setInfoTab(b.dataset.it); });
+{ const start = infoTab === 'orders' ? 'goals' : infoTab; infoTab = ''; setInfoTab(start); }
+const hudBtn = document.getElementById('hudbtn');
+hudBtn.onclick = () => { const on = document.body.classList.toggle('hudmin'); hudBtn.textContent = on ? 'Show' : 'Hide'; hudBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); };
 document.getElementById('fishbtn').onclick = () => showMenuView(menuView === 'fish' ? '' : 'fish');
 document.getElementById('calbtn').onclick = () => showMenuView(menuView === 'cal' ? '' : 'cal');
 document.getElementById('movebtn').onclick = () => { closeMenu(); startEdit(); };
@@ -5815,7 +5877,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -5840,6 +5902,7 @@ if (saved && saved.pads) {
   if (saved.up) { Object.assign(UP, saved.up); for (const id in UP) applyUpgrade(id, true); }
   setTimeout(() => offlineReport(saved), 600);
 } else if (legacy.stars) { W.cash = 100 * legacy.stars; }
+if (!saved || !saved.pads) tut.step = 0; else tut.step = saved.tut ?? 99;
 keepLegacyPlots();
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash(); newQuests(false); renderQuests(); updateRank(false); renderTrophies();
 document.getElementById('rankname').title = legacy.stars ? legacy.stars + ' Golden Stars' : '';
@@ -5873,7 +5936,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -5894,7 +5957,7 @@ function frame() {
   camera.lookAt(camTarget.x, camTarget.y + 0.5, camTarget.z);
   sun.position.set(camTarget.x - 9, 24, camTarget.z + 6); sun.target.position.copy(camTarget);
   // snow
-  for (let i = 0; i < SNOW_N; i++) {
+  for (let i = 0; i < snowCount; i++) {
     let y = snowPos[i * 3 + 1] - dt * (1.6 + (i % 5) * 0.25) * (1 + 2 * stormK);
     snowPos[i * 3] += Math.sin(t + i) * dt * 0.3 + dt * 9 * stormK;
     if (snowPos[i * 3] > 25) snowPos[i * 3] -= 50;
