@@ -109,6 +109,15 @@
   #map { width: 120px; height: 75px; border-radius: 12px; border: 2px solid rgba(255,255,255,.75); background: var(--panel); }
   #bosscal { background: rgba(140, 40, 50, .82); color: var(--white); border-radius: 12px; padding: 4px 10px; font: 800 12px var(--font-body); }
   #bosscal:empty { display: none; }
+  #contest { background: rgba(40, 90, 150, .85); color: var(--white); border-radius: 12px; padding: 4px 10px; font: 800 12px var(--font-body); max-width: 240px; font-variant-numeric: tabular-nums; }
+  #contest:empty { display: none; }
+  #storycard { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.55); z-index: 6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #storycard > div { background: #fbf6ea; color: var(--ink); border-radius: 18px; padding: 22px; max-width: 360px; font: 700 15px/1.5 var(--font-body); border: 3px solid #c8a050; }
+  #storycard h2 { font: 26px var(--font-display); margin: 0 0 8px; color: #6b3f1f; }
+  #storycard .goal { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #efe2c4; font: 800 13px var(--font-body); }
+  #storycard button { margin-top: 14px; border: 0; border-radius: 12px; padding: 11px 20px; font: 18px var(--font-display); background: #6b3f1f; color: var(--white); cursor: pointer; }
+  #storycard button:focus-visible { outline: 3px solid #3f7fc8; outline-offset: 2px; }
   #welcome { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,20,35,.5);
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   #welcome > div { background: #f7fafc; color: var(--ink); border-radius: 18px; padding: 22px; max-width: 330px; text-align: center; font: 700 15px/1.45 var(--font-body); }
@@ -215,7 +224,7 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="bosscal"></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div><div id="orders" role="button" tabindex="0" aria-label="Villager orders, tap to show or hide" hidden></div></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="rank"><span id="rankname">Tent Camp</span><span id="rankbar"><i id="rankfill"></i></span></div><div id="bosscal"></div><div id="contest"></div><div id="boosts"></div><div id="quests" role="button" tabindex="0" aria-label="Daily goals, tap to show or hide"></div><div id="orders" role="button" tabindex="0" aria-label="Villager orders, tap to show or hide" hidden></div></div>
   <div class="right"><button id="menubtn" type="button">Menu</button><button id="trophybtn" type="button">Trophies</button><canvas id="map" width="240" height="150" aria-label="Map of the area, tap to travel"></canvas></div>
 </div>
 <div id="toast" hidden></div>
@@ -229,7 +238,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -760,6 +769,7 @@ class CashPile extends Pile {
   addValue(v, from) {
     if (boost.cash > 0) v *= 2;
     if (UP.statue) v = Math.round(v * 1.1);
+    if (typeof friendBonus === 'function') v = Math.round(v * friendBonus());
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
     if (legacy.stars) v = Math.round(v * (1 + 0.1 * legacy.stars));
     this.value += v;
@@ -2628,6 +2638,200 @@ function updateDungeon(dt) {
   }
 }
 
+// ================= Villagers who move in =================
+const VILLAGERS = [
+  { name: 'Elsa', fav: 'pie', color: 0xd65a8f, about: 'a baker who misses home cooking' },
+  { name: 'Bjorn', fav: 'tool', color: 0x8a5a36, about: 'a woodsman always breaking his tools' },
+  { name: 'Mira', fav: 'candle', color: 0x7a4fc8, about: 'a poet who writes by candlelight' },
+  { name: 'Otto', fav: 'cheese', color: 0xe0a43a, about: 'a fisherman with a love of cheese' },
+  { name: 'Saga', fav: 'potion', color: 0x4fb0a8, about: 'a healer who studies potions' },
+  { name: 'Nils', fav: 'stew', color: 0x6c7fd8, about: 'a storyteller who needs a warm meal' },
+];
+const LOTS = [[-8.8, -8.6], [-6.3, -8.6], [-3.8, -8.6], [3.8, -8.6], [6.3, -8.6], [8.8, -8.6]];
+const villagers = [];
+let villSaved = {};
+const friendBonus = () => (1 + 0.05 * villagers.filter(v => v.hearts >= 10).length) * (altar.done ? 1.1 : 1);
+function drawTag(v) {
+  const c = v.tagCv.getContext('2d'); c.clearRect(0, 0, 256, 64);
+  c.fillStyle = 'rgba(20,28,48,.8)'; roundRect(c, 4, 6, 248, 52, 18); c.fill();
+  c.font = 'bold 26px "Nunito", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = '#ffffff'; c.fillText(v.def.name, 92, 33);
+  c.fillStyle = '#ff8ab0'; c.fillText(`\u2665 ${v.hearts}/10`, 190, 33);
+  v.tag.material.map.needsUpdate = true;
+}
+function moveIn(i, instant) {
+  const def = VILLAGERS[i], [lx, lz] = LOTS[i];
+  const g = stationGroup(lx, lz);
+  hut(g, [0xf2e6c8, 0xdfeaf2, 0xf6dcc0, 0xe8f0d8, 0xf0dcec, 0xe0e8f6][i], [0xd84a3a, 0x3f7fc8, 0x2f8a5a, 0xe0a43a, 0x7a4fc8, 0x6b3f1f][i], 1.8, 1.4);
+  mesh(new THREE.BoxGeometry(0.45, 0.8, 0.05), 0x6b3f1f, 0, 0.4, 0.71, g);
+  colliders.push({ x0: lx - 0.9, x1: lx + 0.9, z0: lz - 0.7, z1: lz + 0.7 });
+  const p = makePerson(def.color, null, 0.95); p.group.position.set(lx, 0, lz + 1.4);
+  const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false })); tag.scale.set(2.8, 0.7, 1); tag.position.y = 2.4; tag.renderOrder = 4; p.group.add(tag);
+  const v = { def, p, home: new V3(lx, 0, lz + 1.4), hearts: villSaved[def.name] || 0, tagCv, tag, target: null, idle: rand(1, 4), cd: 0 };
+  villagers.push(v); drawTag(v);
+  if (!instant) { popIn(g); burst(new V3(lx, 0, lz), def.color, 16); toast(`${def.name}, ${def.about}, moved in! Bring ${itemName(def.fav, 2)} to make friends.`); }
+}
+function updateVillagers(dt) {
+  const pp = player.g.position;
+  for (const v of villagers) {
+    const g = v.p.group; v.cd -= dt;
+    let moving = false;
+    if (v.idle > 0) v.idle -= dt;
+    else {
+      if (!v.target) { const r2 = Math.random(); v.target = r2 < 0.35 ? v.home.clone() : r2 < 0.7 ? new V3(rand(-8, 8), 0, rand(-4, 6)) : town.built ? new V3(rand(-9, 9), 0, rand(24, 26)) : v.home.clone(); }
+      moving = !navStep(g, v.target, 1.7, dt, 0.3);
+      if (!moving) { v.target = null; v.idle = rand(3, 8); }
+    }
+    animPerson(v.p, moving, dt);
+    if (v.cd <= 0 && d2(g.position, pp) < 1.5 && player.c.count(v.def.fav) > 0) {
+      v.cd = 2.5; const it = player.c.take(v.def.fav);
+      fly(it.m, it.pos, () => g.position.clone().add(new V3(0, 1.2, 0)), 0.3, () => scene.remove(it.m));
+      if (v.hearts < 10) {
+        v.hearts++; drawTag(v); bump('gifts'); sfx('buy'); burst(g.position.clone().add(new V3(0, 1.4, 0)), 0xff8ab0, 12);
+        if (v.hearts === 3 || v.hearts === 6) { const gift = 400 * v.hearts; W.cash += gift; setCash(); toast(`${v.def.name} gives you $${fmt(gift)} as thanks!`); }
+        else if (v.hearts === 10) { W.cash += 5000; setCash(); toast(`${v.def.name} is your best friend! +$5000, and +5% on all income.`); for (let k = 0; k < 3; k++) setTimeout(() => firework(g.position.clone()), k * 250); }
+        else toast(`${v.def.name} loves it! Friendship ${v.hearts}/10`);
+        save();
+      } else { W.cash += 150; setCash(); sfx('coin'); toast(`${v.def.name} pays you $150 for it.`); }
+    }
+  }
+}
+
+// ================= Story =================
+const light = { shown: false, built: false, done: false, need: { lantern: 10, bar: 5 }, have: { lantern: 0, bar: 0 }, zone: new V3(31.8, 0, 21.2) };
+const altar = { shown: false, done: false, need: { potion: 5, shard: 5, blade: 1 }, have: { potion: 0, shard: 0, blade: 0 }, zone: new V3(106, 0, 47.2) };
+const STORY = [
+  { title: 'Chapter 1: The Old Map', text: 'An old trapper left you a map of the valley. It marks a sawmill site, and a river crossing to the east.', goal: 'Build the Sawmill and the Bridge', done: () => sawmill.unlocked && bridge.unlocked, reward: 500 },
+  { title: 'Chapter 2: Across the River', text: 'Beyond the river the map shows a sheltered ridge where the trapper once camped.', goal: 'Found Ridge Camp', done: () => ridge.unlocked, reward: 1500 },
+  { title: 'Chapter 3: Under the Ridge', text: 'Miners talk of a frozen mine under the ridge, and of an explorer who went in and never came back.', goal: 'Open the Frost Mine and go inside', done: () => stat('mine') >= 1, reward: 2500 },
+  { title: 'Chapter 4: The Lost Explorer', text: "The explorer's tracks lead to the ice cave north of the hunting field. Something cold guards its deepest chamber.", goal: 'Defeat the Frost Wraith in the Ice Cave', done: () => stat('wraith') >= 1, reward: 5000 },
+  { title: 'Chapter 5: The Old Lighthouse', text: "In the wraith's chest you find the explorer's journal. It tells of a lighthouse by the river, across the bridge, that once kept the wolves away.", goal: 'Bring 10 lanterns and 5 iron bars to the old Lighthouse', done: () => light.done, reward: 8000 },
+  { title: 'Chapter 6: Wake the Aurora', text: 'The last page tells of an altar on Aurora Isle. Feed it, and the northern lights will bless the valley.', goal: 'Bring 5 potions, 5 aurora shards and 1 obsidian blade to the Aurora Altar', done: () => altar.done, reward: 20000 },
+];
+const story = { ch: 0, seen: -1, t: 0 };
+const cardEl = document.createElement('div'); cardEl.id = 'storycard'; cardEl.hidden = true; document.body.appendChild(cardEl);
+function showCard(title, text, goal, btn = 'Continue') {
+  cardEl.innerHTML = `<div role="dialog" aria-label="${title}"><h2>${title}</h2><div>${text}</div>${goal ? `<div class="goal">Goal: ${goal}</div>` : ''}<button type="button">${btn}</button></div>`;
+  cardEl.hidden = false; cardEl.querySelector('button').onclick = () => { cardEl.hidden = true; };
+}
+function showChapter() {
+  if (story.ch >= STORY.length) return;
+  const c = STORY[story.ch]; story.seen = story.ch; showCard(c.title, c.text, c.goal);
+}
+function showLighthouse() {
+  light.shown = true;
+  const g = stationGroup(31.8, 24); light.g = g;
+  mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.8, 12), 0x8d97a6, 0, 0.4, 0, g);
+  light.ruin = mesh(new THREE.CylinderGeometry(0.9, 1.1, 1.6, 12), 0xc8ccd2, 0, 1.6, 0, g);
+  colliders.push({ x0: 30.6, x1: 33.0, z0: 22.8, z1: 25.2 });
+  zoneMarker(light.zone.x, light.zone.z, 'lantern', '#ffd23a');
+  if (light.done) finishLighthouse(true);
+}
+function finishLighthouse(instant) {
+  light.done = true;
+  const g = light.g; if (light.ruin) { g.remove(light.ruin); light.ruin = null; }
+  for (let i = 0; i < 4; i++) mesh(new THREE.CylinderGeometry(0.9 - i * 0.12, 1.0 - i * 0.12, 1.4, 14), i % 2 ? 0xd84a3a : 0xffffff, 0, 1.5 + i * 1.4, 0, g);
+  mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.9, 10), 0x2b3442, 0, 7.3, 0, g);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff2a0 })); lamp.position.y = 7.3; g.add(lamp);
+  mesh(new THREE.ConeGeometry(0.8, 0.8, 12), 0xd84a3a, 0, 8.15, 0, g);
+  light.beam = new THREE.Mesh(new THREE.ConeGeometry(2.2, 14, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+  light.beam.rotation.z = PI / 2; light.beam.position.set(7, 0, 0); light.pivot = new THREE.Group(); light.pivot.position.y = 7.3; light.pivot.add(light.beam); g.add(light.pivot);
+  if (!instant) { burst(g.position, 0xfff2a0, 20); for (let k = 0; k < 4; k++) setTimeout(() => firework(g.position.clone()), k * 250); toast('The Lighthouse shines again! Fewer wolves will dare to raid.'); }
+}
+function showAltar() {
+  altar.shown = true;
+  const g = stationGroup(106, 44.6); altar.g = g;
+  mesh(new THREE.CylinderGeometry(1.3, 1.5, 0.5, 8), 0xdff1ff, 0, 0.25, 0, g);
+  for (let k = 0; k < 4; k++) { const a = k * PI / 2 + PI / 4; mesh(new THREE.BoxGeometry(0.3, 1.6, 0.3), 0xbfe4ff, Math.cos(a) * 1.0, 1.1, Math.sin(a) * 1.0, g); }
+  altar.orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), new THREE.MeshBasicMaterial({ color: 0x7ff0d0 })); altar.orb.position.y = 1.4; g.add(altar.orb);
+  colliders.push({ x0: 104.6, x1: 107.4, z0: 43.2, z1: 46.0 });
+  zoneMarker(altar.zone.x, altar.zone.z, 'potion', '#7ff0d0');
+  if (altar.done) finishAltar(true);
+}
+const auroraBands = [];
+function finishAltar(instant) {
+  altar.done = true;
+  if (!auroraBands.length) {
+    const cols = [0x5fffb0, 0x7ff0d0, 0xb08cff, 0x5fd0ff];
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(26, 5, 12, 1), new THREE.MeshBasicMaterial({ color: cols[i % 4], transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+      m.position.set(-24 + i * 14, 8, -34 + (i % 2) * 6); m.rotation.y = rand(-0.3, 0.3); scene.add(m); auroraBands.push(m);
+    }
+  }
+  if (!instant) { for (let k = 0; k < 8; k++) setTimeout(() => firework(player.g.position.clone()), k * 220); }
+}
+function deliverSite(site, c) {
+  for (const [t, n] of Object.entries(site.need)) {
+    if (site.have[t] >= n) continue;
+    const it = c.take(t); if (!it) continue;
+    site.have[t]++; sfx('drop'); fly(it.m, it.pos, () => site.zone.clone().add(new V3(0, 1, 2.4)), 0.3, () => scene.remove(it.m));
+    toast(`${capFirst(itemName(t, 2))}: ${site.have[t]}/${n}`);
+    return true;
+  }
+  return false;
+}
+function updateStory(dt) {
+  if (story.ch >= 4 && !light.shown) showLighthouse();
+  if (story.ch >= 5 && !altar.shown) showAltar();
+  if (light.g && light.pivot) { light.pivot.rotation.y += dt * 0.8; light.beam.material.opacity = 0.05 + 0.25 * nightK; }
+  if (!light.done && light.shown && Object.entries(light.need).every(([t, n]) => light.have[t] >= n)) { finishLighthouse(false); save(); }
+  if (!altar.done && altar.shown && Object.entries(altar.need).every(([t, n]) => altar.have[t] >= n)) { finishAltar(false); save(); }
+  if (altar.orb) { altar.orb.rotation.y += dt * 1.5; altar.orb.position.y = 1.4 + Math.sin(performance.now() / 500) * 0.15; }
+  for (let i = 0; i < auroraBands.length; i++) {
+    const m = auroraBands[i], p = m.geometry.attributes.position;
+    m.material.opacity = 0.12 + 0.4 * nightK;
+    for (let k = 0; k < p.count; k++) p.setZ(k, Math.sin(performance.now() / 900 + p.getX(k) * 0.3 + i) * 1.2);
+    p.needsUpdate = true;
+  }
+  story.t -= dt; if (story.t > 0) return; story.t = 1;
+  if (story.seen < story.ch && story.ch < STORY.length && cardEl.hidden && shopEl.hidden) { showChapter(); return; }
+  const c = STORY[story.ch];
+  if (c && c.done()) {
+    W.cash += c.reward; setCash(); bump('chapters'); story.ch++; save();
+    sfx('buy'); for (let k = 0; k < 3; k++) setTimeout(() => firework(player.g.position.clone()), k * 250);
+    if (story.ch >= STORY.length) showCard('The End', `The aurora dances over the valley, brighter than anyone remembers. The trapper's map is complete. Everything you earn is now 10% higher, forever in this camp.<br><br>Reward: $${fmt(c.reward)}. Thank you for playing!`, '', 'Keep playing');
+    else { toast(`${c.title.split(':')[0]} complete! +$${fmt(c.reward)}`); story.t = 4; }
+  }
+}
+
+// ================= Rival camp =================
+const CONTESTS = [
+  { id: 'steak', name: 'Steaks sold', goal: r => 40 + r * 30 },
+  { id: 'wolf', name: 'Wolves defeated', goal: r => 4 + r * 2 },
+  { id: 'golden', name: 'Golden pieces made', goal: r => 2 + r },
+  { id: 'orders', name: 'Orders filled', goal: r => 3 + r * 2, ok: () => board.built },
+  { id: 'crops', name: 'Crops harvested', val: () => stat('wheat') + stat('carrot'), goal: r => 20 + r * 12, ok: () => farm.built },
+  { id: 'gold', name: 'Gold nuggets mined', goal: r => 10 + r * 6, ok: () => mine.built },
+  { id: 'boar', name: 'Boars hunted', goal: r => 10 + r * 6 },
+];
+const rival = { week: -1, id: null, start: 0, goal: 0, wins: 0, losses: 0 };
+const contestEl = document.getElementById('contest');
+const contestVal = c => (c.val ? c.val() : stat(c.id));
+let rivalT = 0, contestText = '';
+function updateRival(dt) {
+  rivalT -= dt; if (rivalT > 0) return; rivalT = 1;
+  if (!sawmill.unlocked) return;
+  const day = Math.floor(dayT / CYCLE) + 1, week = Math.floor((day - 1) / 7);
+  if (rival.week !== week) {
+    const prev = CONTESTS.find(c => c.id === rival.id);
+    if (prev && rival.week >= 0) {
+      const mine2 = contestVal(prev) - rival.start;
+      if (mine2 >= rival.goal) { const rw = 3000 + day * 100; rival.wins++; W.cash += rw; setCash(); bump('rivalwin'); toast(`You beat Captain Brisk at "${prev.name}"! +$${fmt(rw)}`); for (let k = 0; k < 4; k++) setTimeout(() => firework(player.g.position.clone()), k * 250); }
+      else { rival.losses++; W.cash += 500; setCash(); toast(`Captain Brisk won "${prev.name}" this week. You get $500 for taking part.`); }
+    }
+    const pool = CONTESTS.filter(c => !c.ok || c.ok()), c = pool[randi(0, pool.length - 1)];
+    Object.assign(rival, { week, id: c.id, start: contestVal(c), goal: Math.round(c.goal(Math.max(0, lastRank))) });
+    if (rival.week > 0 || rival.wins + rival.losses > 0) setTimeout(() => toast(`New weekly contest vs Pinecrest Camp: ${c.name}!`), 2000);
+    save();
+  }
+  const c = CONTESTS.find(x => x.id === rival.id); if (!c) return;
+  const frac = ((dayT / CYCLE) - week * 7) / 7, theirs = Math.min(rival.goal, Math.round(rival.goal * frac)), yours = contestVal(c) - rival.start;
+  const daysLeft = Math.max(0, Math.ceil(7 - ((dayT / CYCLE) - week * 7)));
+  const t = `Contest: ${c.name} · You ${yours} vs Brisk ${theirs} · ${daysLeft}d left`;
+  if (t !== contestText) { contestText = t; contestEl.textContent = t; contestEl.style.background = yours >= theirs ? 'rgba(40, 130, 80, .85)' : ''; }
+}
+
 // Ice golems and the Crystal King
 class Golem {
   constructor(x, z, king = false, fire = false, variant = null) {
@@ -3653,6 +3857,11 @@ const ACH = [
   ['cheese25', 'Say Cheese!', 'Make 25 cheeses', () => stat('cheese') >= 25],
   ['toy25', 'Toy Box', 'Make 25 toys', () => stat('toy') >= 25],
   ['glass25', 'Glass Act', 'Blow 25 ornaments', () => stat('ornament') >= 25],
+  ['friend', 'Best Friends', 'Reach 10 hearts with a villager', () => villagers.some(v => v.hearts >= 10)],
+  ['village6', 'Full House', 'Welcome all 6 villagers', () => villagers.length >= 6],
+  ['lighthouse', 'Keeper of the Light', 'Rebuild the Lighthouse', () => light.done],
+  ['theend', 'The End', 'Finish the story', () => story.ch >= STORY.length],
+  ['rival3', 'Rival Rout', 'Win 3 weekly contests', () => rival.wins >= 3],
   ['gearmax', 'Fully Armed', 'Forge the Aurora Spear and Obsidian Plate', () => U('weapon') >= 3 && U('armor') >= 3],
   ['dungeon5', 'Cave Crawler', 'Explore the Ice Cave 5 times', () => stat('dungeon') >= 5],
   ['wraith', 'Wraith Slayer', 'Defeat the Frost Wraith', () => stat('wraith') >= 1],
@@ -3856,6 +4065,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [25000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'cottage', label: 'Cottage', icon: 'house', costs: [3000, 5000, 8000, 12000, 18000, 25000], x: -2.4, z: -11.6, req: () => town.built, apply: (l, i) => moveIn(l, i) },
   { id: 'armory', label: 'Armory', icon: 'blade', costs: [4000], x: -8.8, z: 10.0, req: () => town.built, apply: unlockArmory },
   { id: 'dungeon', label: 'Ice Cave', icon: 'exit', costs: [10000], x: -4, z: -27.4, req: () => mine.built, apply: unlockDungeon },
   { id: 'tinker', label: 'Tinker Bench', icon: 'gift', costs: [5000], x: -6.4, z: 24.6, req: () => town.built, apply: unlockBench },
@@ -4191,6 +4401,9 @@ function playerInteract() {
   for (const [pile, type, ok] of [[hotel.input, 'lantern', hotel.built], [exch.input, 'shard', exch.built]]) {
     if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
+  // story sites
+  if (light.shown && !light.done && inZone(pos, light.zone.x, light.zone.z, 1.05) && deliverSite(light, c)) return;
+  if (altar.shown && !altar.done && inZone(pos, altar.zone.x, altar.zone.z, 1.05) && deliverSite(altar, c)) return;
   // ice cave dungeon
   if (dung.built) {
     const atE = inZone(pos, dung.entrance.x, dung.entrance.z, 1.0), atX = inZone(pos, dung.exitZone.x, dung.exitZone.z, 1.0);
@@ -4507,7 +4720,7 @@ function spawnWolf(alpha = false) {
   const p = side === 0 ? [-24, rand(-20, 18)] : side === 1 ? [rand(-20, 12), -28] : [rand(-20, -3), 21];
   new Wolf(p[0], p[1], alpha);
 }
-const maxWolves = () => (2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1);
+const maxWolves = () => Math.ceil((2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1) * (light.done ? 0.75 : 1));
 function eventFor(day) { return day % 10 === 0 ? 'siege' : day % 8 === 0 ? 'festival' : null; }
 const siege = { active: false, stolen: 0 };
 let festT = 0;
@@ -4863,9 +5076,33 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes']]) document.getElementById(id).classList.toggle('on', v === key);
+  for (const [id, key] of [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'], ['storybtn', 'story'], ['peoplebtn', 'people']]) document.getElementById(id).classList.toggle('on', v === key);
   if (v === 'recipes') { renderRecipes(); return; }
+  if (v === 'story') { renderStory(); return; }
+  if (v === 'people') { renderPeople(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+}
+document.getElementById('storybtn').onclick = () => showMenuView(menuView === 'story' ? '' : 'story');
+document.getElementById('peoplebtn').onclick = () => showMenuView(menuView === 'people' ? '' : 'people');
+function renderStory() {
+  const prog = site => Object.entries(site.need).map(([t, n]) => `${site.have[t]}/${n} ${itemName(t, n)}`).join(', ');
+  menuBody.innerHTML = `<h4>The trapper's map</h4>` + STORY.map((c, i) => {
+    const state = i < story.ch ? ['ok', 'Done'] : i === story.ch ? ['warn', 'Now'] : ['bad', 'Locked'];
+    let extra = i === story.ch ? c.goal : i < story.ch ? c.text : '???';
+    if (i === story.ch && i === 4 && light.shown) extra += ` (${prog(light)})`;
+    if (i === story.ch && i === 5 && altar.shown) extra += ` (${prog(altar)})`;
+    return `<div class="wh"><b>${i <= story.ch ? c.title : 'Chapter ' + (i + 1)}</b><span class="chip ${state[0]}">${state[1]}</span><small>${extra}${i <= story.ch ? ' · Reward $' + fmt(c.reward) : ''}</small></div>`;
+  }).join('') + (story.ch >= STORY.length ? '<p>The story is complete. The aurora blesses your camp with +10% income.</p>' : '');
+}
+function renderPeople() {
+  const c = CONTESTS.find(x => x.id === rival.id);
+  let h = `<h4>Rival: Captain Brisk of Pinecrest Camp</h4><p>Each week brings a new contest. Beat Brisk's score by the end of the week for a big prize. Record: ${rival.wins} won, ${rival.losses} lost.</p>`;
+  if (c) h += `<div class="wh"><b>${c.name}</b><span class="chip warn">Target ${rival.goal}</span><small>You so far: ${contestVal(c) - rival.start}</small></div>`;
+  h += `<h4>Villagers</h4><p>Build cottages north of camp so villagers move in. Walk up to one while carrying their favorite to make friends. Best friends add 5% to all income.</p>`;
+  h += VILLAGERS.map((d, i) => { const v = villagers.find(x => x.def === d); return v
+    ? `<div class="wh"><b>${d.name}</b><span class="chip ${v.hearts >= 10 ? 'ok' : 'warn'}">\u2665 ${v.hearts}/10</span><small>${capFirst(d.about)}. Loves ${itemName(d.fav, 2)}.</small></div>`
+    : `<div class="wh"><b>Empty cottage ${i + 1}</b><span class="chip bad">Not built</span><small>Build it to welcome a new villager.</small></div>`; }).join('');
+  menuBody.innerHTML = h;
 }
 document.getElementById('recipebtn').onclick = () => showMenuView(menuView === 'recipes' ? '' : 'recipes');
 function renderRecipes() {
@@ -5021,13 +5258,17 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, dungDay: dung.lastDay,
+    vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
 if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(Math.min(saved.outfit, padLevel('wardrobe'))), 0);
   if (saved.ride === false) W.ride = false;
   dung.lastDay = saved.dungDay || 0;
+  villSaved = saved.vill || {};
+  if (saved.story) { story.ch = saved.story.ch || 0; story.seen = saved.story.seen ?? -1; Object.assign(light.have, saved.story.lh || {}); light.done = !!saved.story.ld; Object.assign(altar.have, saved.story.ah || {}); altar.done = !!saved.story.ad; }
+  if (saved.rival) Object.assign(rival, saved.rival);
   if (Array.isArray(saved.orders)) { orders.list = saved.orders; orders.next = saved.ordersNext || 10; }
   if (Array.isArray(saved.quests)) { quests = saved.quests; questDay = saved.questDay || 0; }
   W.cash = saved.cash || 0; served = saved.served || 0; dayT = saved.dayT || 6; wasNight = isNight(); nightK = wasNight ? 1 : 0;
@@ -5070,7 +5311,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -5106,7 +5347,7 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__game = { bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
