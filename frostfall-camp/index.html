@@ -822,6 +822,7 @@ class CashPile extends Pile {
     if (typeof RS === 'function' && RS('nightowl') && isNight()) v = Math.round(v * 1.15);
     if (typeof placed !== 'undefined') { const fn = Math.min(3, placed.filter(q => q.k === 'fountain').length); if (fn) v = Math.round(v * (1 + 0.03 * fn)); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
+    if (typeof beautyBonus === 'function') v = Math.round(v * beautyBonus());
     if (legacy.stars) v = Math.round(v * (1 + 0.1 * legacy.stars));
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
@@ -3183,6 +3184,8 @@ class Station {
     for (const i of this.ins) zoneMarker(i.pile.x, i.pile.z, this.accepts ? 'cart' : ICON_OF[i.type] || i.type, '#ffffff');
     if (this.outPile) zoneMarker(this.outPile.x, this.outPile.z, ICON_OF[this.out[0]] || this.out[0], '#ffd23a');
     if (this.cashAt) this.cash = new CashPile(this.cashAt[0], this.cashAt[1]);
+    if (storage.lvl) applyTier(this, true);
+    if (power.built) power.dirty = true;
     if (!instant) { popIn(g); burst(this.pos, 0xffd23a, 14); if (this.hint) toast(this.hint); }
   }
   update(dt) {
@@ -3200,7 +3203,7 @@ class Station {
       return;
     }
     this.t += dt;
-    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)]) return;
+    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul()) return;
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
@@ -3217,7 +3220,7 @@ class Station {
 const ITEM_NAME_EXTRA = {};
 const ICON_OF = { feather: 'feather', mushroom: 'mushroom', pearl: 'pearl', quilt: 'quilt', glowfish: 'fish', obsidian: 'obsidian', blade: 'blade', wheat: 'wheat', carrot: 'carrot', bread: 'bread', stew: 'stew', milk: 'milk', cheese: 'cheese', toy: 'toy', ornament: 'ornament', wool: 'yak', comb: 'comb', candle: 'candle', chair: 'chair', ring: 'ring', pie: 'pie', log: 'log', meat: 'meat', gem: 'gem', gold: 'pick', ore: 'ore', coal: 'coal', bar: 'bar', tool: 'tool', ice: 'ice', jam: 'jam', berry: 'berry', bloom: 'bloom', potion: 'potion', shard: 'gem' };
 // ---- building tiers (Bronze, Silver, Gold): faster, bigger, more golden pieces ----
-const TIER_SPEED = [1, 0.75, 0.55], TIER_NAME = ['Basic', 'Silver', 'Gold'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33];
+const TIER_SPEED = [1, 0.75, 0.55, 0.42], TIER_NAME = ['Basic', 'Silver', 'Gold', 'Diamond'], TIER_COLOR = [0, 0xc8d0d8, 0xffcc33, 0x8ff0ff];
 const goldenChance = st => 0.03 + 0.02 * U('tier_' + st.id) + (RS('eyes') ? 0.02 : 0) + (companionSkill() === 'art' ? 0.03 : 0) + (outfitBonus() === 'gold' ? 0.03 : 0);
 const goldenMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x6a4a00 });
 function makeGolden(m, type) {
@@ -3226,16 +3229,25 @@ function makeGolden(m, type) {
   toast(`Golden ${itemName(type)}! Worth 5x.`); sfx('bell');
 }
 const stationPrice = st => ((PADS.find(p => p.id === st.id) || {}).costs || [2000])[0];
-const tierCost = (st, lvl) => Math.round(stationPrice(st) * [2, 5][lvl] / 100) * 100;
+const tierCost = (st, lvl) => Math.round(stationPrice(st) * [2, 5, 12][lvl] / 100) * 100;
 function applyTier(st, instant) {
   const t = U('tier_' + st.id);
-  const rp = RS('piles') ? 1.25 : 1;
+  const rp = (RS('piles') ? 1.25 : 1) * (1 + 0.25 * storage.lvl);
   for (const i of st.ins) { i.pile.baseMax = i.pile.baseMax || i.pile.max; i.pile.max = Math.round(i.pile.baseMax * (1 + 0.5 * t) * rp); }
   if (st.outPile) { st.outPile.baseMax = st.outPile.baseMax || st.outPile.max; st.outPile.max = Math.round(st.outPile.baseMax * (1 + 0.5 * t) * rp); }
   if (st.g && t) {
     if (st.badge) st.g.remove(st.badge);
     const [w, d] = st.size || [2.2, 1.6];
     st.badge = new THREE.Mesh(new THREE.TorusGeometry(Math.hypot(w, d) * 0.62, 0.09, 6, 28), new THREE.MeshLambertMaterial({ color: TIER_COLOR[t], emissive: t === 2 ? 0x4a3300 : 0x222222 }));
+    if (t >= 3 && !st.loft) {
+      const bb = new THREE.Box3().setFromObject(st.g), top = bb.max.y, lw = Math.min(w, 2.2) * 0.62, ld = Math.min(d, 1.8) * 0.62;
+      const lf = new THREE.Group(); lf.position.y = Math.min(top, 4.2) - 0.1; st.g.add(lf); st.loft = lf;
+      mesh(new THREE.BoxGeometry(lw, 0.9, ld), 0xf2ead8, 0, 0.45, 0, lf);
+      for (const x of [-lw / 4, lw / 4]) { const wdw = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.3), new THREE.MeshBasicMaterial({ color: 0xffe08a })); wdw.position.set(x, 0.5, ld / 2 + 0.01); lf.add(wdw); }
+      const rf = mesh(new THREE.ConeGeometry(Math.hypot(lw, ld) * 0.62, 0.7, 4), 0x3fa8c8, 0, 1.25, 0, lf); rf.rotation.y = PI / 4;
+      mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5), 0x2b3442, 0, 1.9, 0, lf);
+      const fl = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({ color: 0x8ff0ff })); fl.position.y = 2.4; lf.add(fl);
+    }
     st.badge.rotation.x = PI / 2; st.badge.position.y = 0.06; st.g.add(st.badge);
     const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: TIER_COLOR[t] })); star.position.y = 3.1; st.badge.add(star); star.rotation.x = -PI / 2;
     if (!instant) { burst(st.pos, TIER_COLOR[t], 18); firework(st.pos.clone()); }
@@ -3243,17 +3255,17 @@ function applyTier(st, instant) {
 }
 function buyTier(id) {
   const st = STATIONS.find(x => x.id === id), lvl = U('tier_' + id), cost = tierCost(st, lvl);
-  if (lvl >= 2 || W.cash < cost) return;
+  if (lvl >= 3 || W.cash < cost) return;
   W.cash -= cost; UP['tier_' + id] = lvl + 1; setCash(); applyTier(st, false); sfx('buy');
   toast(`${padLabel(id)} upgraded to ${TIER_NAME[lvl + 1]}!`); save(); renderShop(); updateRank(true);
 }
 function renderTiers() {
   const list = STATIONS.filter(st => st.built);
-  shopList.innerHTML = `<p class="tabnote">Upgrade a building to Silver, then Gold: it works faster, holds more, and makes more golden pieces worth 5x.</p>` + (list.map(st => {
-    const lvl = U('tier_' + st.id), cost = lvl < 2 ? tierCost(st, lvl) : undefined;
-    const pips = [1, 2].map(i => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
+  shopList.innerHTML = `<p class="tabnote">Upgrade a building to Silver, Gold, then Diamond: it works faster, holds more, and makes more golden pieces worth 5x. Diamond adds a second floor.</p>` + (list.map(st => {
+    const lvl = U('tier_' + st.id), cost = lvl < 3 ? tierCost(st, lvl) : undefined;
+    const pips = [1, 2, 3].map(i => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
     return `<div class="urow"><div><b>${padLabel(st.id)}</b><span class="pips">${pips}</span><small>${TIER_NAME[lvl]} · ${Math.round(100 / TIER_SPEED[lvl])}% speed · ${Math.round(goldenChance(st) * 100)}% golden</small></div>` +
-      (cost === undefined ? `<button class="buy max" type="button" disabled>Gold</button>` : `<button class="buy" type="button" data-tier="${st.id}" data-cost="${cost}">$${fmt(cost)}</button>`) + `</div>`;
+      (cost === undefined ? `<button class="buy max" type="button" disabled>Diamond</button>` : `<button class="buy" type="button" data-tier="${st.id}" data-cost="${cost}">$${fmt(cost)}</button>`) + `</div>`;
   }).join('') || '<p>Build a workshop first, like the Jam Kitchen.</p>');
   refreshShopButtons();
 }
@@ -3759,6 +3771,10 @@ const GARDEN = [
   { k: 'bench', name: 'Park Bench', cost: 400, desc: 'A spot to rest' },
   { k: 'snowman', name: 'Little Snowman', cost: 150, desc: 'A cheerful little friend' },
   { k: 'tree', name: 'Pine Tree', cost: 200, desc: 'A young blue pine' },
+  { k: 'sculpt', name: 'Ice Sculpture', cost: 800, desc: 'A sparkling swan carved from ice' },
+  { k: 'flag', name: 'Camp Flag', cost: 500, desc: 'Flies your camp colors' },
+  { k: 'arch', name: 'Lantern Arch', cost: 1200, desc: 'A glowing arch to walk under' },
+  { k: 'gazebo', name: 'Gazebo', cost: 2500, desc: 'A cozy round shelter' },
   { k: 'fountain', name: 'Golden Fountain', cost: 5000, desc: 'Exclusive from city contracts: +3% income each (up to 3)', req: () => stat('contracts') >= 1 },
   { k: 'clock', name: 'Clock Tower', cost: 15000, desc: 'Exclusive from 3 city contracts: a grand landmark', req: () => stat('contracts') >= 3 },
 ];
@@ -3773,6 +3789,10 @@ function buildPlaceable(k) {
   else if (k === 'snowman') { mesh(new THREE.SphereGeometry(0.35, 10, 8), 0xffffff, 0, 0.32, 0, g); mesh(new THREE.SphereGeometry(0.24, 10, 8), 0xffffff, 0, 0.8, 0, g); mesh(new THREE.ConeGeometry(0.04, 0.18, 5), 0xff8a2a, 0, 0.8, 0.26, g).rotation.x = PI / 2; mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.2, 8), 0x222222, 0, 1.08, 0, g); }
   else if (k === 'fountain') { mesh(new THREE.CylinderGeometry(1.0, 1.1, 0.4, 16), 0xc8ccd2, 0, 0.2, 0, g); const w = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 16), new THREE.MeshLambertMaterial({ color: 0x5fd0e6, emissive: 0x0d3a44 })); w.position.y = 0.4; g.add(w); mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 8), 0xffcc33, 0, 0.9, 0, g); mesh(new THREE.SphereGeometry(0.25, 10, 8), 0xffcc33, 0, 1.55, 0, g); }
   else if (k === 'clock') { mesh(new THREE.BoxGeometry(1.4, 4.2, 1.4), 0xe6dcc8, 0, 2.1, 0, g); const face = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), mat(0xffffff)); face.position.set(0, 3.4, 0.71); g.add(face); mesh(new THREE.BoxGeometry(0.06, 0.4, 0.02), 0x222222, 0, 3.5, 0.73, g); mesh(new THREE.ConeGeometry(1.15, 1.2, 4), 0x3f6f9f, 0, 4.8, 0, g).rotation.y = PI / 4; }
+  else if (k === 'sculpt') { const ice = new THREE.MeshLambertMaterial({ color: 0xbfe8ff, emissive: 0x1a3a4a, transparent: true, opacity: 0.85 }); mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.3, 8), 0xc8ccd2, 0, 0.15, 0, g); const b = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), ice); b.scale.set(1, 0.7, 1.4); b.position.y = 0.6; g.add(b); const nk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.8, 6), ice); nk.position.set(0, 1.0, 0.4); nk.rotation.x = -0.3; g.add(nk); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), ice); hd.position.set(0, 1.42, 0.52); g.add(hd); }
+  else if (k === 'flag') { mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.2, 6), 0xd8dde4, 0, 1.6, 0, g); const f = mesh(new THREE.BoxGeometry(0.03, 0.6, 0.9), 0xe8433a, 0, 2.85, 0.46, g); f.castShadow = true; mesh(new THREE.BoxGeometry(0.035, 0.2, 0.9), 0xffffff, 0, 2.85, 0.46, g); }
+  else if (k === 'arch') { for (const x of [-1, 1]) mesh(new THREE.BoxGeometry(0.2, 2.2, 0.2), 0x6b4428, x, 1.1, 0, g); mesh(new THREE.BoxGeometry(2.4, 0.2, 0.25), 0x6b4428, 0, 2.25, 0, g); for (const x of [-0.6, 0, 0.6]) { const l = new THREE.Mesh(GEO.lantern, lanternMat); l.position.set(x, 1.95, 0); g.add(l); } }
+  else if (k === 'gazebo') { mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.15, 8), 0xd8c8a8, 0, 0.08, 0, g); for (let i = 0; i < 6; i++) { const a = i / 6 * 2 * PI; mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.8, 6), 0xffffff, Math.cos(a) * 1.2, 1.0, Math.sin(a) * 1.2, g); } mesh(new THREE.ConeGeometry(1.7, 1.0, 8), 0x9a3b2a, 0, 2.4, 0, g); }
   else if (k === 'tree') { const t = new THREE.Mesh(TREE_GEO, vcMat); t.scale.setScalar(0.75); t.castShadow = true; g.add(t); }
   return g;
 }
@@ -3788,7 +3808,7 @@ function buyGarden(k) {
   toast(`${d.name} placed in front of you. Use Menu, Move things to arrange it.`); save(); renderShop();
 }
 function renderGarden() {
-  shopList.innerHTML = `<p class="tabnote">Buy garden pieces to decorate your camp. Each one appears right in front of you; move them any time with Menu → Move things.</p>` +
+  shopList.innerHTML = `<p class="tabnote">Buy garden pieces to decorate your camp. Each one appears right in front of you; move them any time with Menu → Move things.</p><p class="tabnote"><b>Camp beauty: ${placed.length} pieces · +${Math.round((beautyBonus() - 1) * 100)}% income.</b> Every 10 pieces adds +1% (up to +10%).</p>` +
     GARDEN.filter(d => !d.req || d.req()).map(d => `<div class="urow"><div><b>${d.name}</b><small>${d.desc} · you own ${placed.filter(p => p.k === d.k).length}</small></div><button class="buy" type="button" data-garden="${d.k}" data-cost="${d.cost}">$${fmt(d.cost)}</button></div>`).join('');
   refreshShopButtons();
 }
@@ -4390,6 +4410,10 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['train', 'All Aboard', 'Sell 100 goods by freight train', () => stat('trainGoods') >= 100],
+  ['diamond', 'Diamond Hands', 'Upgrade a building to Diamond', () => STATIONS.some(st => U('tier_' + st.id) >= 3)],
+  ['beauty', 'Picture Perfect', 'Place 30 garden pieces', () => placed.length >= 30],
+  ['powered', 'Lights On', 'Run the Power Plant', () => power.built && power.fuel > 0],
   ['trip', 'Road Trip', 'Take a villager on a day trip', () => stat('trips') >= 1],
   ['tame3', 'Wild Whisperer', 'Tame 3 wild animals', () => stat('tamed') >= 3],
   ['nm5', 'Night Owl Shopper', 'Buy 5 things at the Night Market', () => stat('nightmarket') >= 5],
@@ -4620,6 +4644,9 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'shed', label: 'Storage Shed', icon: 'house', costs: [3000, 8000, 18000], x: -1.6, z: -15.4, req: () => padLevel('hall') > 0, apply: (l, i) => buildShed(l, i) },
+  { id: 'power', label: 'Power Plant', icon: 'fire', costs: [9000, 18000], x: -8.0, z: -14.6, req: () => padLevel('hall') > 0 && STATIONS.some(st => st.built), apply: (l, i) => buildPower(l, i) },
+  { id: 'train', label: 'Freight Train', icon: 'cart', costs: [12000, 20000, 32000], x: 13.4, z: -14.8, req: () => STATIONS.filter(st => st.built).length >= 2, apply: (l, i) => buildTrain(l, i) },
   { id: 'cabin', label: 'Your Cabin', icon: 'house', costs: [10000], x: 11.4, z: -1.8, req: () => sawmill.unlocked, apply: (l, i) => buildCabin(i) },
   { id: 'guild', label: 'Guild Hall', icon: 'board', costs: [8000], x: 6.8, z: 24.4, req: () => town.built, apply: unlockGuild },
   { id: 'racetrack', label: 'Ice Race Track', icon: 'exit', costs: [6000], x: 169, z: 54, req: () => FAR.lake.built, apply: (l, i) => buildRace(i) },
@@ -4946,6 +4973,7 @@ function playerInteract() {
   if (cutter.unlocked) drops.push([cutter.input, 'gem']);
   if (smoke.unlocked) drops.push([smoke.input, 'fish']);
   if (springs.unlocked) drops.push([springs.input, 'log']);
+  if (power.built) drops.push([power.input, 'log']);
   for (const [pile, type] of drops) {
     if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
@@ -5469,6 +5497,9 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  shed: 'Every building holds 25% more goods per level, so they keep working longer while you are away.',
+  power: 'Burns logs you bring. While it has fuel, every building works 20% faster (30% at level 2).',
+  train: 'A little freight train loops the tracks. Each lap it sells goods from any building more than half full. More cars carry more.',
   saw: 'Buys the logs you chop from the forest.', server: 'Carries cooked steaks from the grill to the counter.',
   bag: 'Lets you carry more in your pack.', lumber: 'Chops trees and feeds the Sawmill.', hunter: 'Hunts frost boars and brings the meat to the grill.',
   tower: 'Shoots wolves that raid camp at night.', boots: 'You walk faster.', grill: 'The grill cooks steaks faster.',
@@ -6175,6 +6206,110 @@ function renderAlbum() {
   menuBody.querySelectorAll('[data-pc]').forEach(b => b.onclick = () => { const a = album[+b.dataset.pc]; showCard(a.caption, `<img src="${a.img}" alt="" style="width:100%;border-radius:12px;display:block">Day ${a.day}`, '', 'Close'); });
 }
 
+// ================= Camp beauty =================
+const beautyBonus = () => 1 + Math.min(0.10, Math.floor(placed.length / 10) * 0.01);
+
+// ================= Storage sheds =================
+const storage = { lvl: 0, g: null };
+function buildShed(l, instant) {
+  storage.lvl = l + 1;
+  if (!storage.g) {
+    const g = stationGroup(-1.6, -19.4); storage.g = g;
+    mesh(new THREE.BoxGeometry(3.2, 1.8, 2.2), 0x8a5a36, 0, 0.9, 0, g);
+    mesh(new THREE.BoxGeometry(1.2, 1.4, 0.06), 0x5a3a1e, 0, 0.7, 1.11, g);
+    const rf = mesh(new THREE.BoxGeometry(3.6, 0.15, 2.6), 0x3f6f9f, 0, 1.9, 0, g); rf.rotation.z = 0.05;
+    colliders.push({ x0: -3.2, x1: 0, z0: -20.5, z1: -18.3 });
+  }
+  for (let i = storage.g.children.length; i < 5 + storage.lvl * 3; i++) mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), [0xb8733d, 0xa86a3a, 0xc88a40][i % 3], -1.4 + (i % 6) * 0.55, 0.2 + Math.floor((i - 5) / 6) * 0.42, 1.45, storage.g);
+  for (const st of STATIONS) if (st.built) applyTier(st, true);
+  if (!instant) { popIn(storage.g); toast(`Storage Shed level ${storage.lvl}: every building holds ${25 * storage.lvl}% more.`); }
+}
+
+// ================= Power plant =================
+const power = { built: false, lvl: 0, fuel: 0, input: new Pile(-3.4, -16.0, 3, 3, 30, 0.6, 0.6, H.log + 0.02), wires: null, dirty: true, smokeT: 0, on: false };
+const powerMul = () => (power.fuel > 0 ? (power.lvl >= 2 ? 0.7 : 0.8) : 1);
+function buildPower(l, instant) {
+  power.lvl = l + 1; if (power.built) { if (!instant) toast('Power Plant upgraded: buildings now work 30% faster while it runs.'); return; }
+  power.built = true;
+  const g = stationGroup(-6.8, -18.2); power.g = g;
+  mesh(new THREE.BoxGeometry(3.0, 2.0, 2.4), 0x8d97a6, 0, 1.0, 0, g);
+  mesh(new THREE.BoxGeometry(3.1, 0.2, 2.5), 0x5a6878, 0, 2.05, 0, g);
+  mesh(new THREE.CylinderGeometry(0.3, 0.38, 2.2, 8), 0x6b4428, 0.9, 3.0, -0.5, g);
+  power.bulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({ color: 0x555555 })); power.bulb.position.set(-0.7, 2.5, 0.6); g.add(power.bulb);
+  const coil = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.08, 6, 14), mat(0xd88a3a)); coil.position.set(-0.7, 1.2, 1.25); g.add(coil);
+  colliders.push({ x0: -8.4, x1: -5.2, z0: -19.5, z1: -16.9 });
+  zoneMarker(power.input.x, power.input.z, 'log', '#ffffff');
+  if (!instant) { popIn(g); toast('Power Plant built! Feed it logs and every building works 20% faster while it has fuel.'); }
+}
+function updatePower(dt) {
+  if (!power.built) return;
+  if (power.fuel <= 0 && power.input.n > 0) { const m = power.input.take(); scene.remove(m); power.fuel += power.lvl >= 2 ? 30 : 20; }
+  if (power.fuel > 0) power.fuel -= dt;
+  const on = power.fuel > 0;
+  if (on !== power.on || power.dirty) {
+    power.on = on; power.bulb.material.color.setHex(on ? 0xffe23a : 0x555555);
+    power.dirty = false;
+  }
+  if (on) { power.smokeT -= dt; if (power.smokeT <= 0 && regionOf(player.g.position) === 'main') { power.smokeT = 0.5; const m = new THREE.Mesh(SMOKE_GEO, smokeMat); m.position.set(-5.9, 4.2, -18.7); scene.add(m); smoke.parts.push({ m, life: 2.5 }); } }
+}
+
+// ================= Freight train =================
+const train = { built: false, lvl: 0, a: 0, laps: 0, cars: [], C: { x: 6.4, z: -18 }, rx: 4.6, rz: 2.5, cash: null, first: true };
+const trainPos = (a, y = 0) => new V3(train.C.x + Math.cos(a) * train.rx, y, train.C.z + Math.sin(a) * train.rz);
+function buildTrain(l, instant) {
+  train.lvl = l + 1;
+  if (!train.built) {
+    train.built = true;
+    const tg = new THREE.Group(); scene.add(tg); train.g = tg;
+    for (let i = 0; i < 44; i++) {
+      const a = i / 44 * 2 * PI, p = trainPos(a, 0.04), sl = mesh(new THREE.BoxGeometry(0.9, 0.06, 0.18), 0x6b4428, p.x, p.y, p.z, tg);
+      sl.rotation.y = -Math.atan2(Math.cos(a) * train.rz, -Math.sin(a) * train.rx) + PI / 2; sl.castShadow = false;
+    }
+    for (const off of [-0.3, 0.3]) {
+      const pts = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * 2 * PI; pts.push(new V3(train.C.x + Math.cos(a) * (train.rx + off), 0.1, train.C.z + Math.sin(a) * (train.rz + off))); }
+      tg.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x8d97a6 })));
+    }
+    const plat = mesh(new THREE.BoxGeometry(4.4, 0.3, 1.6), 0xc8ccd2, train.C.x, 0.15, train.C.z, tg);
+    mesh(new THREE.BoxGeometry(4.4, 0.12, 1.8), 0x9a3b2a, train.C.x, 2.2, train.C.z, tg);
+    for (const x of [-2, 2]) mesh(new THREE.BoxGeometry(0.12, 2.0, 0.12), 0x2b3442, train.C.x + x, 1.15, train.C.z, tg);
+    colliders.push({ x0: train.C.x - train.rx - 0.6, x1: train.C.x + train.rx + 0.6, z0: train.C.z - train.rz - 0.6, z1: train.C.z + train.rz + 0.6 });
+    train.cash = new CashPile(train.C.x, train.C.z + train.rz + 1.7);
+  }
+  while (train.cars.length < 1 + train.lvl * 2) {
+    const i = train.cars.length, g = new THREE.Group(); scene.add(g);
+    if (i === 0) { mesh(new THREE.BoxGeometry(0.8, 0.7, 1.3), 0x2b3442, 0, 0.55, 0, g); mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.0, 10), 0xe8433a, 0, 0.75, 0.25, g).rotation.x = PI / 2; mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.45, 8), 0x2b3442, 0, 1.2, 0.5, g); mesh(new THREE.BoxGeometry(0.8, 0.5, 0.5), 0x2b3442, 0, 1.0, -0.4, g); }
+    else { mesh(new THREE.BoxGeometry(0.8, 0.5, 1.1), [0xb8733d, 0x3f6f9f, 0x4f9a5a, 0xffcc33, 0x7a4fc8][i % 5], 0, 0.5, 0, g); g.load = mesh(new THREE.BoxGeometry(0.6, 0.25, 0.8), 0xa86a3a, 0, 0.85, 0, g); g.load.visible = false; }
+    train.cars.push(g);
+  }
+  if (!instant) toast(train.lvl === 1 ? 'The Freight Train runs! Every lap it sells extra goods from any building that is more than half full.' : 'More freight cars: the train carries more each lap.');
+}
+function trainSell() {
+  let cap = 6 + 6 * train.lvl, got = 0, value = 0;
+  const list = STATIONS.filter(st => st.built && st.outPile && st.outPile.n > st.outPile.max * 0.5);
+  while (cap > 0 && list.length) {
+    for (let i = list.length - 1; i >= 0 && cap > 0; i--) {
+      const st = list[i], pl = st.outPile;
+      if (pl.n <= pl.max * 0.5) { list.splice(i, 1); continue; }
+      const m = pl.take(); if (!m) { list.splice(i, 1); continue; }
+      scene.remove(m); cap--; got++; value += (SHIP_PRICE[st.out[0]] || 20) * (m.userData.golden ? 5 : 1) * 0.8;
+    }
+  }
+  train.cars.forEach((c, i) => { if (c.load) c.load.visible = i <= Math.ceil(got / 4); });
+  if (!got) return;
+  train.cash.addValue(Math.round(value), trainPos(train.a, 1)); bump('trainGoods', got);
+  if (train.first) { train.first = false; toast(`The train sold ${got} extra goods for $${fmt(Math.round(value))}. Collect it at the station.`); }
+}
+function updateTrain(dt) {
+  if (!train.built) return;
+  const sp = 0.55, prev = train.a; train.a = (train.a + dt * sp) % (2 * PI);
+  if (train.a < prev) { train.laps++; trainSell(); }
+  if (regionOf(player.g.position) !== 'main') return;
+  train.cars.forEach((c, i) => {
+    const a = train.a - i * 0.3, p = trainPos(a);
+    c.position.copy(p); c.rotation.y = Math.atan2(-Math.sin(a) * train.rx, Math.cos(a) * train.rz);
+  });
+}
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -6477,7 +6612,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -6485,6 +6620,7 @@ if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(outfitOwned(saved.outfit) ? saved.outfit : 0), 0);
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
+  if (saved.f1) setTimeout(() => { power.fuel = saved.f1.fuel || 0; }, 0);
   if (saved.home) home.filled = saved.home;
   if (saved.nmNight) { nightMarket.night = saved.nmNight[0]; nightMarket.offers = saved.nmNight[1].filter(([i]) => i >= 0).map(([i, sold]) => ({ ...NM_OFFERS[i], sold })); nightMarket.paid = saved.nmNight[2] || [0, 0, 0]; }
   if (saved.guild) Object.assign(guild, saved.guild);
@@ -6542,7 +6678,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -6579,7 +6715,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
