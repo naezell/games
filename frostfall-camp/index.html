@@ -50,6 +50,8 @@
   #bar { width: 54px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
   #barfill { display: block; height: 100%; width: 0; background: #ffd23a; }
   #clock.night #barfill { background: #9fb6ff; }
+  #chal { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 64px); transform: translateX(-50%); background: rgba(20,28,48,.88); color: #ffe27a; border-radius: 12px; padding: 8px 14px; font: 800 14px var(--font-body); white-space: nowrap; pointer-events: none; z-index: 5; }
+  .hardrow { display: block; margin: 6px 0; font: 700 13px var(--font-body); } .hardrow small { color: #5a6878; }
   #toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); box-sizing: border-box;
     background: rgba(20,28,48,.85); color: var(--white); border-radius: 16px; padding: 12px 20px; text-align: center;
     font: 22px/1.2 var(--font-display); letter-spacing: .3px; pointer-events: none; animation: pop .35s ease-out; }
@@ -259,7 +261,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="chalbtn" type="button">Challenges</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -307,6 +309,13 @@ try { const l = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null'); if (l) l
 function saveLegacy() { try { localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy)); } catch (e) {} }
 const stat = id => legacy.stats[id] || 0;
 const bump = (id, k = 1) => { legacy.stats[id] = stat(id) + k; };
+const HARD = [
+  { id: 'slow', name: 'Frozen Gears', desc: 'Buildings work 30% slower' },
+  { id: 'pricey', name: 'Short Supply', desc: 'Everything costs 50% more to build' },
+  { id: 'wolves', name: 'Wolf Winter', desc: 'Twice as many wolves at night' },
+  { id: 'poor', name: 'Thin Wallets', desc: 'All income is 25% lower' },
+];
+const hardOn = id => Array.isArray(legacy.hard) && legacy.hard.includes(id);
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { saved = null; }
 
@@ -823,6 +832,7 @@ class CashPile extends Pile {
     if (typeof placed !== 'undefined') { const fn = Math.min(3, placed.filter(q => q.k === 'fountain').length); if (fn) v = Math.round(v * (1 + 0.03 * fn)); }
     if (eventFor(Math.floor(dayT / CYCLE) + 1) === 'festival') v = Math.round(v * 1.25);
     if (typeof beautyBonus === 'function') v = Math.round(v * beautyBonus());
+    if (hardOn('poor')) v = Math.round(v * 0.75);
     if (legacy.stars) v = Math.round(v * (1 + 0.1 * legacy.stars));
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
@@ -2655,29 +2665,33 @@ function unlockDungeon(instant) {
   for (let i = 0; i < 7; i++) { const x = 110 + i * 2.6, z = 84 + (i % 2) * 10; const c = { x, z, r: 1.0, on: () => dung.built }; circles.push(c); dung.pillars.push({ c, m: mesh(new THREE.CylinderGeometry(0.8, 1.1, 3.5, 7), 0x9fd2e8, x, 1.75, z) }); }
   if (!instant) { popIn(a); burst(new V3(-4, 0, -28), 0x9fe8ff, 18); toast('An ice cave opens north of the hunting field!'); }
 }
-function freshDungeon() {
+function freshDungeon(deep = false) {
+  if (!deep) dung.depth = 0;
   for (const o of dung.objs) scene.remove(o); dung.objs = []; dung.chests = []; dung.spikes = [];
   for (const gm of mine.golems.slice()) if (gm.variant) { scene.remove(gm.g); mine.golems.splice(mine.golems.indexOf(gm), 1); }
   const taken = [];
   const spot = (minD = 3) => { for (let t = 0; t < 40; t++) { const x = rand(108, 130), z = rand(78, 102); if (!taken.some(p => Math.hypot(p[0] - x, p[1] - z) < minD) && !(x > 122 && Math.abs(z - 90) < 4)) { taken.push([x, z]); return [x, z]; } } return [rand(108, 130), rand(78, 102)]; };
   for (const pl of dung.pillars) { const [x, z] = spot(4); pl.c.x = x; pl.c.z = z; pl.m.position.set(x, 1.75, z); }
-  const day = Math.floor(dayT / CYCLE) + 1, fresh = dung.lastDay !== day;
-  for (let i = 0; i < 5; i++) {
+  const day = Math.floor(dayT / CYCLE) + 1, fresh = deep || dung.lastDay !== day, D = dung.depth;
+  for (let i = 0; i < (deep ? 2 : 5); i++) {
     const [x, z] = spot(3); const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); dung.objs.push(g);
     mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), 0x8a5328, 0, 0.25, 0, g); mesh(new THREE.BoxGeometry(0.95, 0.08, 0.65), 0xffcc33, 0, 0.3, 0, g);
     const lid = new THREE.Group(); lid.position.set(0, 0.5, -0.3); g.add(lid); mesh(new THREE.BoxGeometry(0.9, 0.22, 0.6), 0x9a6234, 0, 0.11, 0.3, lid);
     if (!fresh) lid.rotation.x = -1.9;
     dung.chests.push({ g, lid, open: !fresh, big: false });
   }
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < Math.min(14, 6 + D); i++) {
     const [x, z] = spot(2.5); const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); dung.objs.push(g);
     mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.04, 16), 0x3a5a6a, 0, 0.03, 0, g);
     const sp = new THREE.Group(); g.add(sp);
     for (let k = 0; k < 7; k++) mesh(new THREE.ConeGeometry(0.1, 0.45, 5), 0xdff8ff, Math.cos(k) * 0.5, 0.2, Math.sin(k) * 0.5, sp);
     dung.spikes.push({ g, sp, t: rand(0, 2), up: false, cd: 0 });
   }
-  for (let i = 0; i < 5; i++) { const [x, z] = spot(3); mine.golems.push(new Golem(x, z, false, false, 'imp')); }
-  if (fresh) {
+  for (let i = 0; i < Math.min(14, 5 + D); i++) { const [x, z] = spot(3); mine.golems.push(new Golem(x, z, false, false, 'imp')); }
+  if (deep) {
+    const w = new Golem(127, 90, true, false, 'wraith'); w.lvl += D; w.max = w.hp = Math.round(60 * (1 + 0.5 * (w.lvl - 1))); w.drawBar(); mine.golems.push(w);
+    dung.big = null;
+  } else if (fresh) {
     mine.golems.push(new Golem(127, 90, true, false, 'wraith'));
     const g = new THREE.Group(); g.position.set(130, 0, 90); scene.add(g); dung.objs.push(g);
     mesh(new THREE.BoxGeometry(1.4, 0.8, 0.9), 0x6a3ab0, 0, 0.4, 0, g); mesh(new THREE.BoxGeometry(1.45, 0.1, 0.95), 0xffcc33, 0, 0.5, 0, g);
@@ -2685,7 +2699,29 @@ function freshDungeon() {
     dung.big = { g, lid, open: false, locked: true };
   } else dung.big = null;
 }
+function dungeonStairs() {
+  const g = new THREE.Group(); g.position.set(107, 0, 82); scene.add(g); dung.objs.push(g);
+  const hole = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 1.8), new THREE.MeshBasicMaterial({ color: 0x0a1018 })); hole.position.y = 0.03; g.add(hole);
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(1.6, 0.08, 0.3), 0x6a8a9a, 0, 0.06 + i * 0.001, -0.6 + i * 0.4, g);
+  const glow = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.08, 6, 24), new THREE.MeshBasicMaterial({ color: 0x9fe8ff })); glow.rotation.x = PI / 2; glow.position.y = 0.1; g.add(glow);
+  dung.stairs = g; burst(g.position, 0x9fe8ff, 16);
+  toast(`Stairs down to Floor ${dung.depth + 1} have opened!${legacy.stats.deepest ? ' Best: Floor ' + legacy.stats.deepest : ''}`);
+}
+function dungeonDescend() {
+  dung.depth++; dung.stairs = null; freshDungeon(true); teleport(dung.start); camShake = 0.3;
+  legacy.stats.deepest = Math.max(stat('deepest'), dung.depth); saveLegacy();
+  toast(`Floor ${dung.depth} of the Endless Depths. More spikes, more imps, a tougher Wraith.`);
+}
 function dungeonCleared(w) {
+  if (dung.depth > 0) {
+    bump('wraith'); camShake = 0.5;
+    const reward = Math.round(Math.max((3000 + dung.depth * 2500) * w.lvl / 2, incomeRate * 60 * dung.depth) / 10) * 10;
+    W.cash += reward; setCash(); sfx('buy'); save();
+    for (let i = 0; i < 2 + dung.depth; i++) dropGround(['gem', 'gold', 'shard', 'potion', 'ring', 'blade'][randi(0, 5)], w.pos.clone());
+    toast(`Floor ${dung.depth} cleared! +$${fmt(reward)}`);
+    for (let k = 0; k < 4; k++) setTimeout(() => firework(w.pos.clone()), k * 250);
+    setTimeout(dungeonStairs, 1500); return;
+  }
   bump('wraith'); camShake = 0.5;
   const day = Math.floor(dayT / CYCLE) + 1, reward = Math.round((2000 + day * 80) * w.lvl / 10) * 10;
   W.cash += reward; setCash(); dung.lastDay = day; save();
@@ -2701,6 +2737,7 @@ function openChest(ch, big) {
   const loot = ['gem', 'gold', 'shard', 'potion', 'ring', 'blade'].filter(t => t !== 'blade' || big);
   for (let i = 0; i < (big ? 4 : 1); i++) dropGround(loot[randi(0, loot.length - 1)], at.clone());
   bump('chests'); toast(big ? `Treasure! +$${fmt(cash)} and rare loot.` : `Chest: +$${fmt(cash)}`);
+  if (big) setTimeout(dungeonStairs, 2500);
   if (Math.random() < (big ? 0.5 : 0.15)) giveMap();
 }
 function updateDungeon(dt) {
@@ -2715,8 +2752,9 @@ function updateDungeon(dt) {
     if (b.open) b.lid.rotation.x += (-1.9 - b.lid.rotation.x) * Math.min(1, dt * 6);
     else if (d2(b.g.position, pp) < 1.6) { if (b.locked) { if (!b.warned) { b.warned = true; toast('Beat the Frost Wraith to unlock this chest.'); } } else openChest(b, true); }
   }
+  if (dung.stairs) { dung.stairs.children[dung.stairs.children.length - 1].rotation.z += dt * 2; if (d2(dung.stairs.position, pp) < 0.9) { dungeonDescend(); return; } }
   for (const s of dung.spikes) {
-    s.t -= dt; s.cd -= dt;
+    s.t -= dt * (1 + Math.min(1, dung.depth * 0.08)); s.cd -= dt;
     if (s.t <= 0) { s.up = !s.up; s.t = s.up ? 1.2 : 2.2; }
     s.sp.position.y += ((s.up ? 0 : -0.45) - s.sp.position.y) * Math.min(1, dt * 12);
     if (s.up && s.cd <= 0 && d2(s.g.position, pp) < 1.0) {
@@ -3203,7 +3241,7 @@ class Station {
       return;
     }
     this.t += dt;
-    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul()) return;
+    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul() * (hardOn('slow') ? 1.3 : 1)) return;
     if (this.accepts) {
       const pile = this.ins[0].pile; if (!pile.n) return;
       this.t = 0; const [m, type] = pile.takeT();
@@ -4410,6 +4448,11 @@ const ACH = [
   ['bugs', 'Bug Catcher', 'Complete the bug collection', () => !!legacy.collDone.bugs],
   ['gems', 'Gem Hunter', 'Complete the gem collection', () => !!legacy.collDone.gems],
   ['photo', 'Say Cheese', 'Save a postcard in photo mode', () => stat('photos') >= 1],
+  ['depth5', 'Into the Deep', 'Reach Floor 5 of the Endless Depths', () => stat('deepest') >= 5],
+  ['titan', 'Titan Toppler', 'Defeat a Frost Titan', () => stat('titan') >= 1],
+  ['gold3', 'Medal Hunter', 'Win Gold in 3 challenges', () => Object.values(legacy.medals || {}).filter(v => v >= 3).length >= 3],
+  ['turret25', 'Sharpshooters', 'Turrets take down 25 wolves', () => stat('turretKills') >= 25],
+  ['hard', 'Hard as Ice', 'Golden Restart a camp played with hard rules', () => stat('hardwins') >= 1],
   ['train', 'All Aboard', 'Sell 100 goods by freight train', () => stat('trainGoods') >= 100],
   ['diamond', 'Diamond Hands', 'Upgrade a building to Diamond', () => STATIONS.some(st => U('tier_' + st.id) >= 3)],
   ['beauty', 'Picture Perfect', 'Place 30 garden pieces', () => placed.length >= 30],
@@ -4487,20 +4530,23 @@ function checkTrophies(dt) {
 let legacyConfirm = false;
 const starsFor = xp => Math.floor(Math.sqrt(xp / 2500));
 function renderLegacy() {
-  const gain = starsFor(campXP());
+  const gain = Math.floor(starsFor(campXP()) * (1 + 0.4 * (legacy.hard || []).length));
   shopList.innerHTML = `<div class="legacy">
     <p class="big">★ ${legacy.stars} Golden Star${legacy.stars === 1 ? '' : 's'}</p>
     <p>Every star adds <b>+10% to all money you earn</b> and <b>$100 of starting cash</b>, forever. Trophies stay with you.</p>
     <p>A Golden Restart wipes this camp, its workers and cash, and starts you fresh with your stars. Land plots you have bought stay yours. The more you have built, the more stars you get.</p>
-    <p>You would earn <b>${gain} star${gain === 1 ? '' : 's'}</b> now.${gain < 1 ? ' Build more to earn your first star.' : ''}</p>
+    <p>You would earn <b>${gain} star${gain === 1 ? '' : 's'}</b> now.${gain < 1 ? ' Build more to earn your first star.' : ''}${(legacy.hard || []).length ? ` That includes +${(legacy.hard || []).length * 40}% for the hard rules you are playing with.` : ''}</p>
+    <h4>Hard rules for your next camp</h4><p>Pick rules to make the next camp tougher. Each rule you finish a camp with gives 40% more stars at your next Golden Restart.</p>
+    ${HARD.map(h => `<label class="hardrow"><input type="checkbox" data-hard="${h.id}" ${(legacy.nextHard || []).includes(h.id) ? 'checked' : ''}> <b>${h.name}</b> <small>${h.desc}${hardOn(h.id) ? ' · active now' : ''}</small></label>`).join('')}
     <div class="row2">${legacyConfirm
       ? `<button type="button" class="red" id="lgo">Yes, restart for ${gain} ★</button><button type="button" class="no" id="lno">Not yet</button>`
       : `<button type="button" class="gold" id="lask" ${gain < 1 ? 'disabled' : ''}>Golden Restart</button>`}</div></div>`;
   const q = id => document.getElementById(id);
   if (q('lask')) q('lask').onclick = () => { legacyConfirm = true; renderLegacy(); };
+  shopList.querySelectorAll('[data-hard]').forEach(cb => cb.onchange = () => { const set = new Set(legacy.nextHard || []); if (cb.checked) set.add(cb.dataset.hard); else set.delete(cb.dataset.hard); legacy.nextHard = [...set]; saveLegacy(); });
   if (q('lno')) q('lno').onclick = () => { legacyConfirm = false; renderLegacy(); };
   if (q('lgo')) q('lgo').onclick = () => {
-    legacy.stars += gain; legacy.plots = ownedPlotPrices(); bump('prestige'); saveLegacy();
+    legacy.stars += gain; legacy.plots = ownedPlotPrices(); bump('prestige'); if ((legacy.hard || []).length) bump('hardwins'); legacy.hard = (legacy.nextHard || []).slice(); saveLegacy();
     try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
     resetting = true; location.reload();
   };
@@ -4644,6 +4690,7 @@ const PADS = [
   { id: 'volcano', label: 'Lava Tunnel', icon: 'fire', costs: [20000], x: 130.6, z: -11.6, req: () => mine.built && smelter.built, apply: unlockVolcano },
   { id: 'forge', label: 'Lava Forge', icon: 'blade', costs: [12000], x: 110, z: -40.5, req: () => volc.built, apply: (l, i) => forge.unlock(i) },
   { id: 'obsminer', label: 'Obsidian Miner', icon: 'person', costs: [8000, 15000], x: 108, z: -45, req: () => forge.built, apply: () => new Worker('obsminer', 108, -45) },
+  { id: 'turret', label: 'Crossbow Turret', icon: 'tower', costs: [4000, 9000, 16000], x: -12.2, z: -12.2, req: () => padLevel('tower') > 0, apply: (l, i) => buildTurret(l, i) },
   { id: 'shed', label: 'Storage Shed', icon: 'house', costs: [3000, 8000, 18000], x: -1.6, z: -15.4, req: () => padLevel('hall') > 0, apply: (l, i) => buildShed(l, i) },
   { id: 'power', label: 'Power Plant', icon: 'fire', costs: [9000, 18000], x: -8.0, z: -14.6, req: () => padLevel('hall') > 0 && STATIONS.some(st => st.built), apply: (l, i) => buildPower(l, i) },
   { id: 'train', label: 'Freight Train', icon: 'cart', costs: [12000, 20000, 32000], x: 13.4, z: -14.8, req: () => STATIONS.filter(st => st.built).length >= 2, apply: (l, i) => buildTrain(l, i) },
@@ -4835,6 +4882,7 @@ PADS.push(...PLOTS.map(pl => (pl.pad = {
 })));
 window.__plots = PLOTS;
 const padState = {};
+if (hardOn('pricey')) for (const p of PADS) p.costs = p.costs.map(c => Math.round(c * 1.5));
 const padLevel = id => (padState[id] ? padState[id].level : 0);
 for (const p of PADS) {
   padState[p.id] = { level: 0, paid: 0 };
@@ -5134,7 +5182,7 @@ function updatePlayer(dt) {
   // auto chop / hunt
   player.atk -= dt;
   if (player.atk <= 0) {
-    const b = nearest(boars.concat(wolves, bear ? [bear] : [], mine.golems), pos, b => b.pos);
+    const b = nearest(boars.concat(wolves, bear ? [bear] : [], mine.golems, titan.alive ? [titan] : []), pos, b => b.pos);
     if (b && d2(b.pos, pos) < (b.reach || 1.9) + gearReach()) {
       player.atk = 0.45 * (1 - 0.2 * U('axe')); player.p.swing = 1; b.hit(gearDmg() + (outfitBonus() === 'hunt' ? 1 : 0)); sfx('hit');
       if (!moving) player.g.rotation.y = Math.atan2(b.pos.x - pos.x, b.pos.z - pos.z);
@@ -5357,7 +5405,7 @@ function spawnWolf(alpha = false) {
   const p = side === 0 ? [-24, rand(-20, 18)] : side === 1 ? [rand(-20, 12), -28] : [rand(-20, -3), 21];
   new Wolf(p[0], p[1], alpha);
 }
-const maxWolves = () => Math.ceil((2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1) * (light.done ? 0.75 : 1));
+const maxWolves = () => Math.ceil((2 + Math.min(4, Math.floor(dayT / CYCLE))) * (siege.active ? 2 : 1) * (light.done ? 0.75 : 1) * (hardOn('wolves') ? 2 : 1));
 function eventFor(day) { return day % 10 === 0 ? 'siege' : day % 8 === 0 ? 'festival' : null; }
 const siege = { active: false, stolen: 0 };
 let festT = 0;
@@ -5497,6 +5545,7 @@ const regionOf = p => (farOf(p) || (inDungeon(p) ? 'dungeon' : inIsle(p) ? 'isle
 
 // What each build pad is for (shown when you tap it).
 const PAD_INFO = {
+  turret: 'Each level adds a crossbow turret at the camp edge. Turrets shoot wolves that come close, and level 3 bolts hit twice as hard.',
   shed: 'Every building holds 25% more goods per level, so they keep working longer while you are away.',
   power: 'Burns logs you bring. While it has fuel, every building works 20% faster (30% at level 2).',
   train: 'A little freight train loops the tracks. Each lap it sells goods from any building more than half full. More cars carry more.',
@@ -6310,6 +6359,136 @@ function updateTrain(dt) {
   });
 }
 
+// ================= Crossbow turrets =================
+const TURRET_AT = [[-13, -9], [-13.5, 11], [15.5, -10]];
+const turrets = { lvl: 0, list: [], bolts: [] };
+function buildTurret(l, instant) {
+  turrets.lvl = l + 1;
+  while (turrets.list.length < turrets.lvl) {
+    const [x, z] = TURRET_AT[turrets.list.length], g = stationGroup(x, z);
+    mesh(new THREE.CylinderGeometry(0.75, 0.9, 1.4, 8), 0x8d97a6, 0, 0.7, 0, g);
+    mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.2, 8), 0x6a7480, 0, 1.45, 0, g);
+    const head = new THREE.Group(); head.position.y = 1.75; g.add(head);
+    mesh(new THREE.BoxGeometry(0.3, 0.3, 1.0), 0x6b4428, 0, 0, 0.1, head);
+    const bow = mesh(new THREE.BoxGeometry(1.2, 0.08, 0.12), 0x5a3a1e, 0, 0.05, 0.5, head); bow.castShadow = true;
+    mesh(new THREE.BoxGeometry(0.05, 0.05, 0.6), 0xc9d3dc, 0, 0.12, 0.45, head);
+    colliders.push({ x0: x - 0.9, x1: x + 0.9, z0: z - 0.9, z1: z + 0.9 });
+    turrets.list.push({ g, head, cd: rand(0, 1) });
+    if (!instant) popIn(g);
+  }
+  if (!instant) toast(`Crossbow turret ${turrets.lvl} built! Turrets shoot any wolf that comes close.`);
+}
+function updateTurrets(dt) {
+  if (!turrets.list.length) return;
+  for (const t of turrets.list) {
+    t.cd -= dt; const at = t.g.position;
+    const w = nearest(wolves.filter(w => w.alive), at, w => w.pos);
+    if (!w || d2(w.pos, at) > 10) { t.head.rotation.y += dt * 0.4; continue; }
+    t.head.rotation.y = lerpAng(t.head.rotation.y, Math.atan2(w.pos.x - at.x, w.pos.z - at.z), 0.3);
+    if (t.cd > 0) continue;
+    t.cd = 1.3 - 0.15 * turrets.lvl;
+    const bolt = mesh(new THREE.BoxGeometry(0.06, 0.06, 0.5), 0xffd23a, at.x, 1.9, at.z);
+    fly(bolt, at.clone().setY(1.9), () => w.pos.clone().setY(0.8), Math.max(0.12, d2(w.pos, at) / 22), () => { scene.remove(bolt); if (w.alive) { w.hit(turrets.lvl >= 3 ? 2 : 1); if (!w.alive) bump('turretKills'); } }, 0.2);
+  }
+}
+
+// ================= Weekly Frost Titan =================
+const titan = { alive: false, g: null, hp: 0, max: 0, week: -1, beat: -1, reach: 3.2, slam: 4, lastQ: 4, at: new V3(4, 0, -25.5) };
+Object.defineProperty(titan, 'pos', { get: () => titan.at });
+function titanMax(week) { return 400 + 250 * week; }
+function buildTitanMesh() {
+  const g = new THREE.Group(); g.position.copy(titan.at); scene.add(g); titan.g = g;
+  titan.mat = new THREE.MeshLambertMaterial({ color: 0x9ab8d8, emissive: 0x000000 });
+  const ice = new THREE.MeshBasicMaterial({ color: 0xbff8ff });
+  mesh(new THREE.BoxGeometry(2.6, 2.6, 1.8), titan.mat, 0, 3.2, 0, g);
+  mesh(new THREE.BoxGeometry(1.3, 1.1, 1.2), titan.mat, 0, 5.0, 0.1, g);
+  for (const ex of [-0.3, 0.3]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.05), ice); e.position.set(ex, 5.1, 0.72); g.add(e); }
+  titan.arms = [-1, 1].map(sd => { const a = new THREE.Group(); a.position.set(sd * 1.7, 4.2, 0); g.add(a); mesh(new THREE.BoxGeometry(0.8, 2.4, 0.9), titan.mat, 0, -1.1, 0, a); return a; });
+  for (const sd of [-1, 1]) mesh(new THREE.BoxGeometry(0.9, 1.9, 0.9), titan.mat, sd * 0.7, 0.95, 0, g);
+  for (let i = 0; i < 6; i++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), ice); c.position.set(rand(-1, 1), rand(4, 4.6), -0.9); c.scale.y = 2.2; g.add(c); }
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 40; titan.bar = cv;
+  titan.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false })); titan.sprite.scale.set(3.6, 0.56, 1); titan.sprite.position.y = 7.2; titan.sprite.renderOrder = 6; g.add(titan.sprite);
+  colliders.push({ x0: titan.at.x - 1.4, x1: titan.at.x + 1.4, z0: titan.at.z - 1.0, z1: titan.at.z + 1.0 });
+}
+function drawTitanBar() {
+  const x = titan.bar.getContext('2d'); x.clearRect(0, 0, 256, 40);
+  x.fillStyle = 'rgba(20,28,48,.85)'; roundRect(x, 0, 0, 256, 40, 12); x.fill();
+  x.fillStyle = '#7fd8ff'; roundRect(x, 5, 5, 246 * Math.max(0, titan.hp / titan.max), 30, 9); x.fill();
+  barLabel(x, `Frost Titan · ${fmt(Math.max(0, Math.ceil(titan.hp)))} HP`); titan.sprite.material.map.needsUpdate = true;
+}
+titan.hit = dmg => {
+  if (!titan.alive) return;
+  titan.hp -= dmg; titan.flash = 0.15; drawTitanBar(); burst(titan.at.clone().setY(2.5), 0x9ff0ff, 4); sfx('mine');
+  const q = Math.ceil(titan.hp / titan.max * 4);
+  if (q < titan.lastQ && titan.hp > 0) { titan.lastQ = q; for (let i = 0; i < 4; i++) dropGround('cash', titan.at.clone().add(new V3(rand(-2, 2), 0, 3))); dropGround('gem', titan.at.clone().add(new V3(0, 0, 3))); toast(`The Titan cracks! ${4 - q}/4 down. Its health stays down all week.`); }
+  if (titan.hp <= 0) {
+    titan.alive = false; titan.beat = titan.week; titan.g.visible = false; camShake = 0.7; bump('titan');
+    const reward = Math.round(Math.max(20000 + 8000 * titan.week, incomeRate * 400) / 100) * 100; W.cash += reward; setCash(); sfx('buy');
+    for (let i = 0; i < 8; i++) dropGround(['gold', 'gem', 'shard', 'ring', 'blade'][randi(0, 4)], titan.at.clone().add(new V3(rand(-2, 2), 0, rand(2, 4))));
+    for (let k = 0; k < 6; k++) setTimeout(() => firework(titan.at.clone()), k * 250);
+    toast(`The Frost Titan falls! +$${fmt(reward)}. A stronger one returns next week.`); save();
+  }
+};
+function updateTitan(dt) {
+  const day = Math.floor(dayT / CYCLE) + 1, week = Math.floor((day - 1) / 7);
+  if (day < 5) return;
+  if (!titan.g) buildTitanMesh();
+  if (titan.week !== week) { titan.week = week; titan.max = titanMax(week); titan.hp = titan.max; titan.lastQ = 4; if (day > 5) setTimeout(() => toast('A new Frost Titan stands north of camp. Chip away at it all week!'), 3000); }
+  titan.alive = titan.beat !== week && titan.hp > 0; titan.g.visible = titan.alive;
+  if (!titan.alive || regionOf(player.g.position) !== 'main') return;
+  if (!titan.drawn) { titan.drawn = true; drawTitanBar(); }
+  if (titan.flash > 0) { titan.flash -= dt; titan.mat.emissive.setHex(0x3060a0); } else titan.mat.emissive.setHex(0);
+  const pp = player.g.position, near = d2(pp, titan.at) < 5.5;
+  titan.slam -= dt;
+  const k = Math.max(0, titan.slam) < 0.6 ? 1 - titan.slam / 0.6 : 0;
+  titan.arms.forEach(a => { a.rotation.x = near ? -k * 2.2 : Math.sin(performance.now() / 900) * 0.1; });
+  if (titan.slam <= 0) {
+    titan.slam = 3.5;
+    if (near) { camShake = 0.4; burst(titan.at.clone().add(new V3(0, 0.2, 2)), 0xdff8ff, 14); const dir = new V3(pp.x - titan.at.x, 0, pp.z - titan.at.z).normalize(); player.kb.set(dir.x * 11 * armorKB(), 0, dir.z * 11 * armorKB()); dropFromCarrier(player.c, 1); sfx('hit'); }
+  }
+}
+
+// ================= Timed challenges =================
+const CHALLENGES = [
+  { id: 'lumber', name: 'Lumber Rush', stat: 'log', dur: 120, goals: () => [15, 25, 40], unit: 'logs' },
+  { id: 'cash', name: 'Cash Dash', stat: 'earned', dur: 180, goals: () => { const b = Math.max(400, incomeRate * 180); return [b, b * 1.5, b * 2.2].map(v => Math.round(v / 50) * 50); }, unit: 'dollars' },
+  { id: 'fish', name: 'Fishing Frenzy', stat: 'fish', dur: 120, goals: () => [4, 7, 11], unit: 'fish' },
+  { id: 'wolf', name: 'Wolf Patrol', stat: 'wolf', dur: 150, goals: () => [3, 6, 10], unit: 'wolves', night: true },
+  { id: 'steak', name: 'Grill Master', stat: 'steak', dur: 150, goals: () => [10, 20, 32], unit: 'steaks' },
+];
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'];
+const chal = { on: null, t: 0, start: 0, goals: null };
+const chalEl = document.createElement('div'); chalEl.id = 'chal'; chalEl.hidden = true; document.body.appendChild(chalEl);
+function startChallenge(id) {
+  const c = CHALLENGES.find(x => x.id === id); if (!c || chal.on) return;
+  if (c.night && !isNight()) { toast('Wolf Patrol can only start at night.'); return; }
+  chal.on = c; chal.t = c.dur; chal.start = stat(c.stat); chal.goals = c.goals(); menuEl.hidden = true; chalEl.hidden = false;
+  toast(`${c.name}! ${c.dur / 60 | 0}:${String(c.dur % 60).padStart(2, '0')} on the clock. Go!`); sfx('bell');
+}
+function updateChallenge(dt) {
+  if (!chal.on) return;
+  const c = chal.on, got = stat(c.stat) - chal.start; chal.t -= dt;
+  const medal = chal.goals.filter(g => got >= g).length, next = chal.goals[medal];
+  chalEl.textContent = `${c.name} · ${Math.max(0, Math.ceil(chal.t))}s · ${fmt(Math.floor(got))}${next ? ' / ' + fmt(next) + ' for ' + MEDAL[medal + 1] : ' · Gold!'}`;
+  if (chal.t > 0 && medal < 3) return;
+  chal.on = null; chalEl.hidden = true;
+  legacy.medals = legacy.medals || {};
+  if (!medal) { toast(`${c.name} over: ${fmt(Math.floor(got))} ${c.unit}. No medal this time.`); return; }
+  const prev = legacy.medals[c.id] || 0; legacy.medals[c.id] = Math.max(prev, medal); saveLegacy();
+  const reward = Math.round(medal * Math.max(1000, incomeRate * 45) / 50) * 50; W.cash += reward; setCash(); sfx('buy'); bump('medals');
+  toast(`${MEDAL[medal]} medal in ${c.name}! +$${fmt(reward)}${medal > prev ? ' (new best)' : ''}`);
+  for (let k = 0; k < medal; k++) setTimeout(() => firework(player.g.position.clone()), k * 250);
+}
+function renderChallenges() {
+  const m = legacy.medals || {};
+  menuBody.innerHTML = `<h4>Timed challenges</h4><p>Race the clock for Bronze, Silver and Gold medals. Better medals pay more.</p>` + CHALLENGES.map(c => {
+    const g = c.goals();
+    return `<div class="wh"><b>${c.name}</b><span class="chip ${m[c.id] ? 'ok' : 'warn'}">${m[c.id] ? MEDAL[m[c.id]] : 'No medal'}</span><small>${c.dur}s · ${g.map((v, i) => MEDAL[i + 1] + ' ' + fmt(v)).join(' · ')} ${c.unit}${c.night ? ' · night only' : ''}</small><div class="rowbtns"><button type="button" data-chal="${c.id}" ${chal.on ? 'disabled' : ''}>Start</button></div></div>`;
+  }).join('');
+  menuBody.querySelectorAll('[data-chal]').forEach(b => b.onclick = () => startChallenge(b.dataset.chal));
+}
+document.getElementById('chalbtn').onclick = renderChallenges;
+
 // ---------------- starter tutorial (new camps only) ----------------
 const tut = { step: 99, t: 0 };
 const TUT = [
@@ -6612,7 +6791,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function save() {
   if (resetting) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ cash: W.cash, pads: padState, served, dayT, quests, questDay, outfit: W.outfit, ride: W.ride, tut: tut.step, dungDay: dung.lastDay, coveDay: FAR.cove.lastDay, f1: { fuel: power.fuel, th: [titan.week, titan.hp, titan.beat] }, home: home.filled, nmNight: [nightMarket.night, nightMarket.offers.map(o => [NM_OFFERS.findIndex(x => x.name === o.name), !!o.sold]), nightMarket.paid], research, guild: { exps: guild.exps, contracts: guild.contracts, offers: guild.offers }, treasure: { maps: treasure.maps, active: treasure.active }, raceDay: [race.day, race.today], garden: placed.map(p => [p.k, +p.g.position.x.toFixed(2), +p.g.position.z.toFixed(2), +p.g.rotation.y.toFixed(2)]), sanct: sanct.residents.map(r2 => r2.def.k),
     vill: Object.fromEntries(villagers.map(v => [v.def.name, v.hearts])), story: { ch: story.ch, seen: story.seen, lh: light.have, ld: light.done, ah: altar.have, ad: altar.done }, rival, up: UP, orders: orders.list, ordersNext: orders.next, savedAt: Date.now(), rate: incomeRate })); } catch (e) {}
   saveLegacy();
 }
@@ -6620,7 +6799,7 @@ if (saved && saved.pads) {
   if (saved.outfit) setTimeout(() => wearOutfit(outfitOwned(saved.outfit) ? saved.outfit : 0), 0);
   if (saved.ride === false) W.ride = false;
   if (saved.research) Object.assign(research, saved.research);
-  if (saved.f1) setTimeout(() => { power.fuel = saved.f1.fuel || 0; }, 0);
+  if (saved.f1) setTimeout(() => { power.fuel = saved.f1.fuel || 0; if (saved.f1.th) { [titan.week, titan.hp, titan.beat] = saved.f1.th; titan.max = titanMax(titan.week); titan.lastQ = Math.ceil(titan.hp / titan.max * 4); } }, 0);
   if (saved.home) home.filled = saved.home;
   if (saved.nmNight) { nightMarket.night = saved.nmNight[0]; nightMarket.offers = saved.nmNight[1].filter(([i]) => i >= 0).map(([i, sold]) => ({ ...NM_OFFERS[i], sold })); nightMarket.paid = saved.nmNight[2] || [0, 0, 0]; }
   if (saved.guild) Object.assign(guild, saved.guild);
@@ -6678,7 +6857,7 @@ function frame() {
   updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateDungeon(dt); updateWaves(dt); updateVillagers(dt); updateStory(dt); updateRival(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
-  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
+  updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateGuild(dt); updateRace(dt); updateTreasure(dt); updateWildlife(dt); updateNightMarket(dt); updateCabin(dt); updateBugs(dt); updatePower(dt); updateTrain(dt); updateTurrets(dt); updateTitan(dt); updateChallenge(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
   for (const n of crops) n.update(dt); trackIncome(dt); updateBossCal();
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } } if (bear) bear.update(dt);
   for (const w of wolves.slice()) w.update(dt);
@@ -6715,7 +6894,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
