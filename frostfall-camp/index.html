@@ -67,7 +67,7 @@
   .dgrid span.got { background: #c8f0d2; } .dgrid span.today { outline: 2px solid #3f8fd8; }
   #storycard .polbtn, .polbtn { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 10px 12px; border: 2px solid #d5dde6; border-radius: 12px; background: #fff; color: var(--ink, #1d2433); font: 800 15px var(--font-body); cursor: pointer; }
   #storycard .polbtn small, .polbtn small { display: block; font: 700 12px var(--font-body); color: #5a6878; margin-top: 2px; }
-  #zoombtn { position: fixed; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 14px); border: 0; border-radius: 12px; padding: 8px 12px; background: rgba(20,28,48,.75); color: #fff; font: 800 13px var(--font-body); z-index: 4; cursor: pointer; }
+  #zoombtn { pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px; background: rgba(20,28,48,.75); color: #fff; font: 800 13px var(--font-body); z-index: 4; cursor: pointer; }
   body.photo #zoombtn, body.hudmin #zoombtn, #menu:not([hidden]) ~ #zoombtn, #shop:not([hidden]) ~ #zoombtn, #trophies:not([hidden]) ~ #zoombtn, #guild:not([hidden]) ~ #zoombtn, #armory:not([hidden]) ~ #zoombtn, #fishgame:not([hidden]) ~ #zoombtn { display: none; }
   body.riding #photosnap, body.riding #photox { display: none !important; }
   .statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
@@ -78,6 +78,11 @@
   #obscv { width: 100%; height: auto; border-radius: 12px; touch-action: none; margin: 8px 0; }
   #obsquit { border: 0; border-radius: 10px; padding: 8px 14px; background: #e3e9f0; font: 800 13px var(--font-body); cursor: pointer; }
   .hardrow { display: block; margin: 6px 0; font: 700 13px var(--font-body); } .hardrow small { color: #5a6878; }
+  #toastfeed { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 142px); transform: translateX(-50%); width: min(340px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 6; }
+  .tmsg { background: rgba(20,28,48,.82); color: #fff; border-radius: 12px; padding: 7px 12px; font: 800 14px/1.25 var(--font-body); text-align: center; animation: tin .25s ease-out; transition: opacity .4s; }
+  .tmsg.out { opacity: 0; }
+  @keyframes tin { from { opacity: 0; transform: translateY(8px); } }
+  body.photo #toastfeed { display: none; }
   #toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); box-sizing: border-box;
     background: rgba(20,28,48,.85); color: var(--white); border-radius: 16px; padding: 12px 20px; text-align: center;
     font: 22px/1.2 var(--font-display); letter-spacing: .3px; pointer-events: none; animation: pop .35s ease-out; }
@@ -287,7 +292,7 @@
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="museumbtn" type="button">Museum &amp; Castle</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="petsbtn" type="button">Pets</button><button id="ridebtn2" type="button">Balloon ride $500</button><button id="dailybtn" type="button">Daily rewards</button><button id="councilbtn" type="button">Town Council</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
+<button id="museumbtn" type="button">Museum &amp; Castle</button><button id="msgbtn" type="button">Pop-up messages: On</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="petsbtn" type="button">Pets</button><button id="ridebtn2" type="button">Balloon ride $500</button><button id="dailybtn" type="button">Daily rewards</button><button id="councilbtn" type="button">Town Council</button><button id="tourbtn" type="button">Tournament</button><button id="chalbtn" type="button">Challenges</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="outfitbtn" type="button">Outfits</button><button id="collbtn" type="button">Collections</button><button id="albumbtn" type="button">Postcards</button><button id="mapbtn" type="button">Treasure map</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="fishbtn" type="button">Fish book</button><button id="calbtn" type="button">Calendar</button><button id="movebtn" type="button">Move things</button><button id="storybtn" type="button">Story</button><button id="peoplebtn" type="button">Villagers &amp; rival</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
@@ -5413,13 +5418,21 @@ muteBtn.onclick = () => { muted = !muted; showMute(); audioInit(); try { localSt
 const toastEl = document.getElementById('toast');
 let toastT = 0;
 const activity = [];
-let toastQ = [], toastAt = 0;
-function showToastNow(msg) { toastAt = performance.now(); toastEl.textContent = msg; toastEl.hidden = false; toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = ''; clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; if (toastQ.length) showToastNow(toastQ.shift()); }, 3200); }
+const feedEl = document.createElement('div'); feedEl.id = 'toastfeed'; document.body.appendChild(feedEl);
+let msgsOn = true; try { msgsOn = localStorage.getItem(SAVE_KEY + '-msgs') !== '0'; } catch (e) {}
 function toast(msg) {
   activity.unshift({ day: Math.floor(dayT / CYCLE) + 1, msg }); if (activity.length > 80) activity.pop();
-  if (!toastEl.hidden && performance.now() - toastAt < 1500) { if (toastQ.length < 3) toastQ.push(msg); else toastQ[2] = msg; return; }
-  showToastNow(msg);
+  if (!msgsOn) return;
+  const last = feedEl.lastElementChild;
+  if (last && last.textContent === msg) { clearTimeout(last._t); last._t = setTimeout(() => fadeMsg(last), 2600); return; }
+  const d = document.createElement('div'); d.className = 'tmsg'; d.textContent = msg; feedEl.appendChild(d);
+  while (feedEl.children.length > 2) feedEl.firstElementChild.remove();
+  d._t = setTimeout(() => fadeMsg(d), 2600);
 }
+const msgBtn = document.getElementById('msgbtn');
+const showMsgBtn = () => { msgBtn.textContent = 'Pop-up messages: ' + (msgsOn ? 'On' : 'Off'); };
+showMsgBtn(); msgBtn.onclick = () => { msgsOn = !msgsOn; showMsgBtn(); feedEl.textContent = ''; try { localStorage.setItem(SAVE_KEY + '-msgs', msgsOn ? '1' : '0'); } catch (e) {} };
+function fadeMsg(d) { d.classList.add('out'); setTimeout(() => d.remove(), 400); }
 
 // ---------------- day / night & wolves ----------------
 const DAY = 100, NIGHT = 40, CYCLE = DAY + NIGHT;
@@ -7485,7 +7498,7 @@ function updateCouncil(dt) {
 const camZoom = { k: 1, target: 1, ride: 0, pts: new Map(), d0: 0, z0: 1 };
 try { camZoom.target = camZoom.k = Math.min(1.8, Math.max(0.55, +localStorage.getItem(SAVE_KEY + '-zoom') || 1)); } catch (e) {}
 const saveZoom = () => { try { localStorage.setItem(SAVE_KEY + '-zoom', String(camZoom.target)); } catch (e) {} };
-const zoomBtn = document.createElement('button'); zoomBtn.type = 'button'; zoomBtn.id = 'zoombtn'; document.body.appendChild(zoomBtn);
+const zoomBtn = document.createElement('button'); zoomBtn.type = 'button'; zoomBtn.id = 'zoombtn'; (document.querySelector('.right') || document.body).appendChild(zoomBtn);
 const ZLEV = [[0.65, 'Close'], [1, 'Normal'], [1.45, 'Far']];
 const showZoom = () => { const l = ZLEV.reduce((a, b) => Math.abs(b[0] - camZoom.target) < Math.abs(a[0] - camZoom.target) ? b : a); zoomBtn.textContent = '\u2295 ' + l[1]; };
 zoomBtn.onclick = () => { const i = ZLEV.findIndex(l => l[0] > camZoom.target + 0.05); camZoom.target = (ZLEV[i] || ZLEV[0])[0]; showZoom(); saveZoom(); };
@@ -8375,7 +8388,7 @@ function frame() {
   if (cardQ.length) capturePostcard();
   requestAnimationFrame(frame);
 }
-window.__game = { ski, startSki, arena, startFight, museum, museumDonate, castle, castleDeliver, obs, openObs, renderMuseum, camZoom, balloonRide, drawCampSign, petx, applyCostume, doTrick, renderPets, renderStats, icecream, summer, isSummer, incomeHist, toggleJob, giftshop, tourists, spawnTourists, beacon, council, showCouncil, STORY, dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
+window.__game = { toast, ski, startSki, arena, startFight, museum, museumDonate, castle, castleDeliver, obs, openObs, renderMuseum, camZoom, balloonRide, drawCampSign, petx, applyCostume, doTrick, renderPets, renderStats, icecream, summer, isSummer, incomeHist, toggleJob, giftshop, tourists, spawnTourists, beacon, council, showCouncil, STORY, dens, aval, startAvalanche, deep, openFishGame, reel, tour, tourBoard, checkDaily, balloon, mill, mgr, ALLCASH, fishmkt, shipyard, cafe, bootmk, sledworks, skishop, buffs, pot, aquarium, snowmo, amb, cookDish, pets, favors, ship, mail, fest, newLetter, festivalDawn, eventFor, titan, turrets, dung, chal, startChallenge, dungeonDescend, hardOn, renderLegacy, colliders, CAM, scene, camera, power, train, storage, beautyBonus, buyTier, addPlaced,  bugs, findGem, album: () => album, postcard, OUTFITS, home, nightMarket, wild, toggleTrip, guild, research, race, treasure, TREASURE, giveMap, wx, sanct, placed, FISH, catchSpecies, edit, villagers, story, rival, light, altar, bench, RECIPES, BELTS, makeItem, oven, legacyRef: () => legacy, W, player, grill, counter, sawmill, boars, trees, rocks, wolves, cutter, bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, spawnBear, getBear: () => bear, dock, smoke, gates, GATES, springs, husky, getQuests: () => quests, storm, boost, traderArrive, trader, wearOutfit, depot, firework, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, legacy, teleport, boat, owl, isle, hotel, exch, spawnWolf, offlineReport, getRate: () => incomeRate, STATIONS, kitchen, smelter, smithy, icesaw, carver, store, apoth, town, beeyard, chandler, furniture, jeweler, bakery, barn, creamery, toyshop, glass, berries, coals, irons, blooms };
 requestAnimationFrame(frame);
 })();
 </script>
