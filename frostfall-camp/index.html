@@ -83,6 +83,20 @@
     border-radius: 12px; background: var(--panel); color: var(--white); font: 800 14px/1.3 var(--font-body); }
   #gamealert[hidden], #infobox[hidden], #orders[hidden] { display: none; }
   #gamealert button { font: inherit; }
+  .buildtools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .buildtools input, .buildtools select { flex: 1; min-width: 120px; border: 1px solid #abb8c9; border-radius: 8px;
+    padding: 8px; background: #fff; color: var(--ink); font: 16px var(--font-body); user-select: text; }
+  .planrow { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px 10px;
+    border-top: 1px solid #d5dde6; padding: 9px 0; font: 800 14px var(--font-body); }
+  .planrow small { display: block; color: #536075; font: 700 12px/1.4 var(--font-body); margin-top: 2px; }
+  .planrow button, .projectaction { border: 0; border-radius: 8px; padding: 8px 10px; background: #e3e9f0;
+    color: var(--ink); font: 800 13px var(--font-body); cursor: pointer; }
+  .planrow button:disabled { opacity: .55; cursor: default; }
+  .projectaction { margin: 4px 0 8px; }
+  #vendorstatus { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 2;
+    max-width: min(270px, calc(100% - 24px)); background: rgba(25, 38, 56, .9); color: var(--white);
+    border-radius: 9px; padding: 4px 8px; font: 800 12px/1.3 var(--font-body); text-align: center; }
+  body.photo #vendorstatus, body.hudmin #vendorstatus { display: none; }
   #menubtn {
     pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px;
     background: var(--panel); color: var(--white); font: 15px var(--font-body); font-weight: 800; cursor: pointer;
@@ -269,12 +283,13 @@
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
-<button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
+<button id="buildbtn" type="button">Build &amp; Expand</button><button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
-<button id="castlebtn" type="button">Ice Castle</button><button id="msgbtn" type="button">Pop-ups: Important only</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="movebtn" type="button">Move things</button><button id="peoplebtn" type="button">Villager jobs</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="albumbtn" type="button">Photos</button><button id="reset" type="button">Restart</button></div>
+<button id="castlebtn" type="button">Projects</button><button id="msgbtn" type="button">Pop-ups: Important only</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="movebtn" type="button">Move things</button><button id="peoplebtn" type="button">Villager jobs</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="albumbtn" type="button">Photos</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
 <button id="photoexit" type="button" hidden>Exit photo mode</button><button id="photosnap" type="button" hidden>Save postcard</button>
 <div id="confirm" hidden><div><h2>Start over?</h2>Your camp, workers and cash will be wiped.<div class="row"><button id="no" type="button">Keep playing</button><button id="yes" type="button">Restart</button></div></div></div>
+<div id="vendorstatus" hidden></div>
 <div id="info" hidden role="dialog" aria-label="What this is"></div>
 <div id="deliver" hidden aria-hidden="true"><span></span><svg class="tip" viewBox="0 0 44 44"><path d="M22 3 L40 25 H29 V41 H15 V25 H4 Z" fill="#ffd23a" stroke="#1d2a3a" stroke-width="3" stroke-linejoin="round"/></svg></div>
 
@@ -1779,17 +1794,23 @@ function drawMap(dt) {
     if (fk === 'cove') for (const ch of cove.chests) if (!ch.open) dot(ch.g.position.x, ch.g.position.z, 3.5, '#ffcc33');
     dot(f.exit.x, f.exit.z, 4, '#e8433a');
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    drawPlanMarker(c);
     return;
   }
-  if (inMine(player.g.position)) {
-    Object.assign(MAP, { x0: MINE.x0 - 1, x1: MINE.x1 + 1, z0: MINE.z0 - 1, z1: MINE.z1 + 1 });
+  if (inMine(player.g.position) || inIsle(player.g.position) || inVolcano(player.g.position)) {
+    const bounds = inMine(player.g.position) ? MINE : inIsle(player.g.position) ? ISLE : VOLC;
+    Object.assign(MAP, { x0: bounds.x0 - 1, x1: bounds.x1 + 1, z0: bounds.z0 - 1, z1: bounds.z1 + 1 });
     const c = mapX; c.fillStyle = '#1c2333'; c.fillRect(0, 0, mapCv.width, mapCv.height);
     const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(mx(x), mz(z), r, 0, 2 * PI); c.fill(); };
     for (const gn of golds) if (!gn.down) dot(gn.pos.x, gn.pos.z, 3, '#ffcc33');
     for (const n of coals) if (!n.down) dot(n.pos.x, n.pos.z, 3, '#0b0d12');
     for (const n of irons) if (!n.down) dot(n.pos.x, n.pos.z, 3, '#d07a4a');
-    dot(mine.exitZone.x, mine.exitZone.z, 4, '#8fe8f8');
+    const exit = bounds === MINE ? mine.exitZone : bounds === ISLE ? isle.exitZone : volc.exitZone;
+    dot(exit.x, exit.z, 4, '#8fe8f8');
+    if (bounds === ISLE) for (const shard of isle.shards) if (!shard.down) dot(shard.pos.x, shard.pos.z, 3, '#b681ef');
+    if (bounds === VOLC) for (const node of obsidians) if (!node.down) dot(node.pos.x, node.pos.z, 3, '#ff9457');
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    drawPlanMarker(c);
     return;
   }
   Object.assign(MAP, landBox());
@@ -1816,6 +1837,7 @@ function drawMap(dt) {
   if (trader.state !== 'away') dot(trader.g.position.x, trader.g.position.z, 3.5, '#7a4fc8');
   const pp = player.g.position;
   c.strokeStyle = '#ffffff'; c.lineWidth = 2; dot(pp.x, pp.z, 5, '#2f78d6'); c.beginPath(); c.arc(mx(pp.x), mz(pp.z), 5, 0, 2 * PI); c.stroke();
+  drawPlanMarker(c);
 }
 
 // ================= Ridge Camp =================
@@ -2079,7 +2101,8 @@ function applyUpgrade(id, instant) {
 }
 function buyItem(id) {
   const u = UPGRADES.find(x => x.id === id), d = DECOS.find(x => x.id === id);
-  const cost = u ? upgradeCost(u) : (UP[id] ? undefined : d.cost);
+  if (u?.req && !u.req()) return;
+  const cost = u ? upgradeCost(u) : (UP[id] ? undefined : d?.cost);
   if (cost === undefined || W.cash < cost) return;
   W.cash -= cost; UP[id] = U(id) + 1; setCash();
   applyUpgrade(id, false);
@@ -2634,7 +2657,7 @@ function renderTiers() {
 // ---- conveyor belts: goods slide between buildings on their own ----
 const beltTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 16; const x = c.getContext('2d'); x.fillStyle = '#3a4250'; x.fillRect(0, 0, 64, 16); x.fillStyle = '#56606f'; for (let i = 0; i < 64; i += 16) x.fillRect(i, 0, 8, 16); const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; return t; })();
 const BELTS = [
-  { id: 'grill', name: 'Grill → Steak Counter', src: () => [grill.output, 'steak'], dst: () => counter.input, ok: () => true },
+  { id: 'grill', name: 'Grill → Steak Counter', price: 120, src: () => [grill.output, 'steak'], dst: () => counter.input, ok: () => served > 0 || U('belt_grill') > 0 },
   { id: 'jam', name: 'Jam Kitchen → General Store', src: () => [kitchen.outPile, 'jam'], dst: () => store.ins[0].pile, ok: () => kitchen.built && store.built },
   { id: 'pie', name: 'Pie Bakery → General Store', src: () => [bakery.outPile, 'pie'], dst: () => store.ins[0].pile, ok: () => bakery.built && store.built },
   { id: 'tool', name: 'Blacksmith → General Store', src: () => [smithy.outPile, 'tool'], dst: () => store.ins[0].pile, ok: () => smithy.built && store.built },
@@ -2650,7 +2673,7 @@ const BELTS = [
   { id: 'lantern', name: 'Lantern Shop → Market Stall', src: () => [workshop.out, 'lantern'], dst: () => market.input, ok: () => workshop.built && market.built },
 ];
 const beltLen = b => d2(b.src()[0].center, b.dst().center);
-const beltCost = b => Math.round((600 + beltLen(b) * 90) * (RS('belts') ? 0.6 : 1) / 50) * 50;
+const beltCost = b => b.price ?? Math.round((600 + beltLen(b) * 90) * (RS('belts') ? 0.6 : 1) / 50) * 50;
 function buildBelt(b, instant) {
   if (b.mesh) return;
   const a = b.src()[0].center, z = b.dst().center, L = d2(a, z);
@@ -2661,10 +2684,12 @@ function buildBelt(b, instant) {
   if (!instant) { burst(a, 0x8d97a6, 10); burst(z, 0x8d97a6, 10); }
 }
 function buyBelt(id) {
-  const b = BELTS.find(x => x.id === id), cost = beltCost(b);
-  if (UP['belt_' + id] || W.cash < cost) return;
+  const b = BELTS.find(x => x.id === id);
+  if (!b || !b.ok() || U('belt_' + id)) return false;
+  const cost = beltCost(b);
+  if (W.cash < cost) return false;
   W.cash -= cost; UP['belt_' + id] = 1; setCash(); buildBelt(b, false); sfx('buy'); bump('belts');
-  toast(`Conveyor belt built: ${b.name}`); save(); renderShop();
+  toast(`Conveyor belt built: ${b.name}`); save(); renderShop(); return true;
 }
 function renderBelts() {
   const list = BELTS.filter(b => b.ok());
@@ -3673,7 +3698,7 @@ class Worker {
         if (b && go(b.pos, 1.5) && this.t > 0.6) { this.t = 0; this.p.swing = 1; b.hit(1); }
         if (!b && this.c.load > 0) this.state = 'deliver';
       }
-      if (this.c.full()) this.state = 'deliver';
+      if (this.c.full() || (this.c.load >= 2 && grill.input.free() > 0)) this.state = 'deliver';
     } else if (this.kind === 'banker') {
       const piles = cashPiles().filter(cp => cp.value >= 5 && cp.n > 0);
       const cp = nearest(piles, pos, cp => cp.center);
@@ -3725,7 +3750,7 @@ const PADS = [
   { id: 'fisher', label: 'Hire Fisher', icon: 'person', costs: [220], x: 17, z: -1.8, req: () => smoke.unlocked, apply: () => new Worker('fisher', 17, -1.8) },
   { id: 'springs', label: 'Hot Springs', icon: 'spa', costs: [400], x: -7, z: 15, req: () => padLevel('lumber') > 0 || bridge.unlocked, apply: unlockSprings },
   { id: 'husky', label: 'Adopt Husky', icon: 'dog', costs: [300], x: 0.9, z: 4.6, req: () => sawmill.unlocked, apply: adoptHusky },
-  { id: 'banker', label: 'Hire Banker', icon: 'cash', costs: [500], x: -0.6, z: -1.3, req: () => padLevel('server') > 0, apply: () => new Worker('banker', -0.6, -1.3) },
+  { id: 'banker', label: 'Hire Banker', icon: 'cash', costs: [500], x: -0.6, z: -1.3, req: () => padLevel('server') > 0 || U('belt_grill') > 0, apply: () => new Worker('banker', -0.6, -1.3) },
   { id: 'depot', label: 'Reindeer Sled', icon: 'sled', costs: [450], x: 9, z: 15, req: () => sawmill.unlocked && served >= 10, apply: unlockDepot },
   { id: 'hall', label: 'Town Hall', icon: 'board', costs: [200], x: -3.4, z: 10.4, req: () => sawmill.unlocked, apply: unlockHall },
   { id: 'ridge', label: 'Ridge Camp', icon: 'house', costs: [1500], x: 45, z: 1.5, req: () => bridge.unlocked, apply: unlockRidge },
@@ -3819,6 +3844,18 @@ const PADS = [
 const PLOT_BASE = 2000, PLOT_GROWTH = 1.35, PLOT_BOARS = 3, MIST_A = 0.3;
 const plotPrice = n => { const v = PLOT_BASE * Math.pow(PLOT_GROWTH, n), s = v < 10000 ? 100 : 1000; return Math.round(v / s) * s; };
 // each plot: its land, its buy pad (on land you already own) and the plot it is bought from ('' = the starting map)
+const PLOT_SPECIALTIES = {
+  plotw1: 'timber', plotw2: 'berries', plotn1: 'hunting', plotn2: 'timber', plotn3: 'crystals',
+  plots1: 'berries', plots2: 'crops', plots3: 'hunting', plote1: 'crystals', plote2: 'timber',
+  plotc1: 'timber', plotc2: 'crops', plotc3: 'crystals', plotc4: 'berries',
+};
+const PLOT_YIELDS = {
+  timber: 'Dense timber for the Sawmill and Furniture Shop.',
+  berries: 'Berry bushes for jam, pies, and ice cream.',
+  hunting: 'More frost boars for the Grill and Pie Bakery.',
+  crystals: 'Crystal deposits for the Gem Cutter, Lantern Shop, and Jeweler.',
+  crops: 'Wheat and carrots for bread and stew.',
+};
 const PLOTS = [
   { id: 'plotw1', name: 'Pine Hollow', x0: -45, x1: -25, z0: -29, z1: 2.5, px: -23, pz: -16, from: '' },
   { id: 'plotw2', name: 'Fox Glen', x0: -45, x1: -25, z0: 2.5, z1: 34, px: -23, pz: 19, from: '' },
@@ -3830,14 +3867,14 @@ const PLOTS = [
   { id: 'plots3', name: 'Elk Meadow', x0: 30, x1: 58, z0: 34, z1: 54, px: 46, pz: 32.6, from: '' },
   { id: 'plote1', name: 'Far Ridge', x0: 58, x1: 78, z0: -29, z1: 2.5, px: 56, pz: -16, from: '' },
   { id: 'plote2', name: 'Cedar Bend', x0: 58, x1: 78, z0: 2.5, z1: 34, px: 56, pz: 22, from: '' },
-  { id: 'plotc1', name: 'Wolf Den', x0: -45, x1: -25, z0: -49, z1: -29, px: -35, pz: -27, from: 'plotw1' },
+  { id: 'plotc1', name: 'Timber Basin', x0: -45, x1: -25, z0: -49, z1: -29, px: -35, pz: -27, from: 'plotw1' },
   { id: 'plotc2', name: 'Owl Wood', x0: -45, x1: -25, z0: 34, z1: 54, px: -35, pz: 32, from: 'plotw2' },
   { id: 'plotc3', name: 'Icefall', x0: 58, x1: 78, z0: -49, z1: -29, px: 68, pz: -27, from: 'plote1' },
   { id: 'plotc4', name: 'Snowy Bluff', x0: 58, x1: 78, z0: 34, z1: 54, px: 68, pz: 32, from: 'plote2' },
 ].map(pl => {
   const cx = (pl.x0 + pl.x1) / 2, cz = (pl.z0 + pl.z1) / 2, hw = (pl.x1 - pl.x0) * 0.22, hd = (pl.z1 - pl.z0) * 0.22;
   // boars roam a clearing in the middle; trees fill the rest
-  return Object.assign(pl, { owned: false, east: pl.x0 >= RIVER.x1, mist: null, fade: 1, boarT: 0,
+  return Object.assign(pl, { specialty: PLOT_SPECIALTIES[pl.id], owned: false, east: pl.x0 >= RIVER.x1, mist: null, fade: 1, boarT: 0,
     home: { x0: cx - hw, x1: cx + hw, z0: cz - hd, z1: cz + hd } });
 });
 const plotById = id => PLOTS.find(pl => pl.id === id);
@@ -3882,14 +3919,29 @@ function clearBackdrop(pl) {
   if (hit) backdrop.inst.instanceMatrix.needsUpdate = true;
 }
 function growPlot(pl, instant) {
+  const { specialty, home } = pl;
+  const bonusNodes = {
+    berries: ['berry', 'berry', 'berry', 'berry', 'berry', 'berry'],
+    crops: ['wheat', 'carrot', 'wheat', 'carrot', 'wheat', 'carrot'],
+    crystals: ['rock', 'rock', 'rock', 'rock', 'rock', 'rock'],
+  }[specialty] || [];
+  const patch = bonusNodes.map((kind, i) => ({
+    kind, x: (home.x0 + home.x1) / 2 - 3 + (i % 3) * 3,
+    z: (home.z0 + home.z1) / 2 - 1.4 + Math.floor(i / 3) * 2.8,
+  }));
+  for (const { kind, x, z } of patch) {
+    const node = new Tree(x, z, kind);
+    (kind === 'berry' ? berries : kind === 'rock' ? rocks : crops).push(node);
+    if (!instant) node.grow = 0;
+  }
   for (let x = pl.x0 + 1.4; x < pl.x1 - 1; x += 2.6) for (let z = pl.z0 + 1.4; z < pl.z1 - 1; z += 2.6) {
     const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8), h = pl.home;
     if (px > RIVER.x0 - 1.5 && px < RIVER.x1 + 1.5) continue;            // riverbank
     if (px > 1 && px < 11.5 && pz > 30) continue;                         // the sled's road south
     if (px > h.x0 - 1 && px < h.x1 + 1 && pz > h.z0 - 1 && pz < h.z1 + 1) continue; // boar clearing
     if (PLOTS.some(o => Math.hypot(px - o.px, pz - o.pz) < 2.6)) continue; // pads stay open
-    if (Math.random() < 0.4) continue;
-    const rock = pl.east && Math.random() < 0.35, t = new Tree(px, pz, rock ? 'rock' : 'tree');
+    if (Math.random() < (specialty === 'timber' ? 0.18 : 0.4)) continue;
+    const rock = specialty !== 'timber' && pl.east && Math.random() < 0.35, t = new Tree(px, pz, rock ? 'rock' : 'tree');
     (rock ? rocks : trees).push(t);
     if (!instant) t.grow = 0;
   }
@@ -3900,7 +3952,7 @@ function ownPlot(pl, instant) {
   if (instant) removeMist(pl);
   else {
     padState[pl.id].price = pl.pad.costs[0];
-    toast(`${pl.name} is yours! Trees and boars are moving in.`);
+    toast(`${pl.name} is yours. ${PLOT_YIELDS[pl.specialty]}`);
     burst(new V3((pl.x0 + pl.x1) / 2, 0, (pl.z0 + pl.z1) / 2), 0xffffff, 20);
   }
   repricePlots();
@@ -3923,7 +3975,7 @@ function updatePlots(dt, t) {
     if (pl.owned && (pl.boarT -= dt) <= 0) {
       pl.boarT = 4;
       const h = pl.home;
-      if (boars.filter(b => b.home === h).length < PLOT_BOARS) new Boar(rand(h.x0, h.x1), rand(h.z0, h.z1), h);
+      if (boars.filter(b => b.home === h).length < (pl.specialty === 'hunting' ? PLOT_BOARS + 2 : PLOT_BOARS)) new Boar(rand(h.x0, h.x1), rand(h.z0, h.z1), h);
     }
   }
 }
@@ -3994,6 +4046,7 @@ function payPad(p) {
   if (st.paid >= cost) {
     st.level++; st.paid = 0; p.lock = true; sfx('buy');
     p.apply(st.level - 1, false);
+    if (p.id === 'castle' && buildPin?.kind === 'pad' && buildPin.id === p.id) buildPin = { kind: 'castle' };
     toast(p.label + (p.costs.length > 1 ? ' level ' + st.level : '') + ' complete.');
     burst(new V3(p.x, 0, p.z), 0x7be38a, 16);
     refreshPads(); save();
@@ -4260,7 +4313,12 @@ let goalText = '';
 function setGoal(t) { if (t !== goalText) { goalText = t; goalEl.textContent = t; goalEl.hidden = !t; } }
 function updateGuide(t) {
   let target = null, text = '';
-  const c = player.c;
+  const c = player.c, pin = planTarget();
+  if (pin) {
+    guide.visible = false;
+    setGoal(shopEl.hidden && menuEl.hidden ? pin.summary : '');
+    return;
+  }
   if (padLevel('saw') === 0) {
     if (c.count('steak') > 0) { target = counter.input.center; text = 'Sell steaks at the counter'; }
     else if (counter.cash.value > 0) { target = counter.cash.center; text = 'Collect your cash'; }
@@ -4271,7 +4329,7 @@ function updateGuide(t) {
     else { const b = nearest(boars, player.g.position, b => b.pos); if (b) target = b.pos; text = 'Hunt frost boars in the north field'; }
   } else if (!bridge.unlocked && padLevel('lumber') === 0 && padLevel('server') === 0 && c.count('log') === 0 && sawmill.input.n === 0 && sawmill.cash.value === 0) {
     text = 'Chop trees in the forest for the sawmill';
-    target = nearest(trees.filter(t => !t.down), player.g.position).pos;
+    target = nearest(trees.filter(t => !t.down), player.g.position)?.pos;
   } else if (!bridge.unlocked && W.cash >= 120) {
     target = new V3(23.6, 0, BRIDGE_Z); text = 'Build a bridge to the crystal ridge';
   } else if (bridge.unlocked && !cutter.unlocked) {
@@ -4502,13 +4560,13 @@ const PAD_INFO = {
   giftshop: 'A ferry brings tourists every few minutes. While they wait, the Gift Shop sells souvenirs for extra: toys, ornaments, candles, rings and more.',
   balloon: 'Flies to Ridge Camp and the far lands, picks up their finished goods, and sells them here at home.',
   mill: 'A water wheel on the river. Every building works 15% faster, forever, no fuel needed. Level 2 makes it 20%.',
-  harbor: 'Opens a new district by the sea with workshops you can buy with cash.',
+  harbor: 'Sells fish and pearls, turns timber and iron into boats, and brings tourists to the Gift Shop.',
   fishmkt: 'Buys fish, glowfish and pearls.',
   shipyard: '3 logs + 2 iron bars = a rowboat worth $320.',
   cafe: 'Milk + honeycomb = cocoa worth $80.',
-  bootmk: 'Yak wool + meat = snow boots worth $140. Needs the Boot Patterns research.',
-  sledworks: '2 logs + an iron bar = a sled worth $200. Needs the Sled Blueprints research.',
-  skishop: 'A log + honeycomb wax = skis worth $150. Needs the Ski Design research.',
+  bootmk: 'Yak wool and meat make snow boots worth $140.',
+  sledworks: 'Two logs and an iron bar make a sled worth $200.',
+  skishop: 'A log and honeycomb make skis worth $150.',
   hare: 'A fluffy pet that makes you walk 10% faster and digs up snacks and coins.',
   yetipet: 'A little yeti that chops trees near you and hands you the logs.',
   pot: 'Drop in two different ingredients to cook a dish. Each recipe gives a short buff, like faster chopping or bigger tips.',
@@ -4525,9 +4583,9 @@ const PAD_INFO = {
   fisher: 'Catches fish for the Smokehouse.', springs: 'Villagers pay to soak. It burns logs, so keep it stocked.',
   husky: 'Fetches dropped resources.', banker: 'Collects your cash for you.',
   depot: 'Ships goods by reindeer sled for better prices.', hall: 'Opens the Town Hall shop: upgrades and decorations.',
-  ridge: 'A second camp across the river with new shops.', workshop: 'Turns a log and a crystal into a lantern.', market: 'Buys lanterns.',
+  ridge: 'Combine crystals and logs for lanterns, and raise yaks for wool and milk.', workshop: 'Turns a log and a crystal into a lantern.', market: 'Buys lanterns.',
   pen: 'Adds a yak. Yaks grow wool (and give milk at the barn).', tailor: 'Turns wool into coats and pays you for them.',
-  crafter: 'Helps run the Lantern Shop.', shepherd: 'Carries wool from the Yak Pen to the Tailor.', town: 'Opens Market Town to the south.',
+  crafter: 'Helps run the Lantern Shop.', shepherd: 'Carries wool from the Yak Pen to the Tailor.', town: 'A market for finished goods such as jam, tools, candles, and cheese.',
   store: 'Buys jam, tools, potions, pies, candles, chairs, rings, cheese, toys and ornaments.', kitchen: 'Turns two berries into a jar of jam.',
   picker: 'Picks berries for the Jam Kitchen and the Pie Bakery.', clerk: 'Carries finished goods to the General Store.',
   smithy: 'Turns iron bars into tools.', smelter: 'Turns iron ore and coal into iron bars.', smelterhand: 'Brings ore and coal to the Smelter.',
@@ -4536,8 +4594,15 @@ const PAD_INFO = {
   bakery: 'Turns meat and two berries into a pie.', barn: 'Your yaks give milk here.', creamery: 'Turns two bottles of milk into cheese.',
   milkmaid: 'Carries milk from the barn to the Creamery.', toyshop: 'Turns wool and a log into a toy bear.', glass: 'Turns an ice block and coal into an ornament.',
   icesaw: 'Cuts ice blocks from the river on its own.', carver: 'Carves ice blocks into sculptures and pays you.', apoth: 'Turns a snowbloom and an aurora shard into a potion.',
-  herbalist: 'Gathers snowblooms and shards for the Apothecary.', boat: 'A boat that brings fish back to the dock.', ferry: 'Sails to Aurora Isle.',
+  herbalist: 'Gathers snowblooms and shards for the Apothecary.', boat: 'A boat that brings fish back to the dock.', ferry: 'Sail to Aurora Isle to gather shards and snowblooms, brew potions, and sell lanterns to hotel guests.',
   hotel: 'Guests pay to stay. It uses lanterns.', exch: 'Buys aurora shards.', sharder: 'Mines aurora shards on the isle.',
+  mine: 'Gather gold, iron ore, and coal. Turn ore and coal into bars at the Smelter, then make tools at the Blacksmith.',
+  volcano: 'Mine obsidian for blades at the Lava Forge.',
+  cablecar: 'Reach Sky Peak to gather feathers for the Down Workshop.',
+  laketrail: 'Reach the Frozen Lake for fishing and the skating rink.',
+  steamtunnel: 'Reach the Steam Caves for mushrooms and greenhouse crops.',
+  divebell: 'Reach Shipwreck Cove for pearls and salvage.',
+  cabin: 'Furnish your cabin for camp bonuses.',
   smith: 'Buys gold nuggets.', runner: 'Carries lanterns from the Lantern Shop to the Market Stall.', sawup: 'The Sawmill pays more per log.',
 };
 
@@ -4546,17 +4611,17 @@ const padLabel = id => (PADS.find(p => p.id === id) || {}).label || id;
 const VENDORS = [
   { name: 'Grill', pos: grill.pos, ok: () => true, about: 'Cooks raw meat into steaks.', needs: [{ pile: grill.input, type: 'meat', n: 1 }], makes: { type: 'steak', pile: grill.output } },
   { name: 'Steak Counter', pos: counter.pos, ok: () => true, about: 'Villagers line up here to buy steaks.', needs: [{ pile: counter.input, type: 'steak', n: 1 }], pays: () => STEAK_PRICE, cash: () => counter.cash },
-  { name: 'Sawmill', pos: sawmill.pos, ok: () => sawmill.unlocked, about: PAD_INFO.saw, needs: [{ pile: sawmill.input, type: 'log', n: 1 }], pays: () => LOG_PRICE * (1 + padLevel('sawup')), cash: () => sawmill.cash },
-  { name: 'Gem Cutter', pos: cutter.pos, ok: () => cutter.unlocked, about: PAD_INFO.cutter, needs: [{ pile: cutter.input, type: 'gem', n: 1 }], pays: () => GEM_PRICE + 2 * U('gem'), cash: () => cutter.cash },
-  { name: 'Smokehouse', pos: smoke.pos, ok: () => smoke.unlocked, about: PAD_INFO.smoke, needs: [{ pile: smoke.input, type: 'fish', n: 1 }], pays: () => FISH_PRICE + 2 * U('fish'), cash: () => smoke.cash },
+  { id: 'saw', name: 'Sawmill', pos: sawmill.pos, ok: () => sawmill.unlocked, about: PAD_INFO.saw, needs: [{ pile: sawmill.input, type: 'log', n: 1 }], pays: () => LOG_PRICE * (1 + padLevel('sawup')), cash: () => sawmill.cash },
+  { id: 'cutter', name: 'Gem Cutter', pos: cutter.pos, ok: () => cutter.unlocked, about: PAD_INFO.cutter, needs: [{ pile: cutter.input, type: 'gem', n: 1 }], pays: () => GEM_PRICE + 2 * U('gem'), cash: () => cutter.cash },
+  { id: 'smoke', name: 'Smokehouse', pos: smoke.pos, ok: () => smoke.unlocked, about: PAD_INFO.smoke, needs: [{ pile: smoke.input, type: 'fish', n: 1 }], pays: () => FISH_PRICE + 2 * U('fish'), cash: () => smoke.cash },
   { name: 'Hot Springs', pos: springs.pos, ok: () => springs.unlocked, about: 'Each guest burns one log, then pays for the soak.', needs: [{ pile: springs.input, type: 'log', n: 1 }], pays: () => SPA_PRICE + 4 * U('spa'), payWord: 'per guest', cash: () => springs.cash },
   { name: 'Lantern Shop', pos: workshop.pos, ok: () => workshop.built, about: PAD_INFO.workshop, needs: [{ pile: workshop.logs, type: 'log', n: 1 }, { pile: workshop.gems, type: 'gem', n: 1 }], makes: { type: 'lantern', pile: workshop.out } },
-  { name: 'Market Stall', pos: market.pos, ok: () => market.built, about: PAD_INFO.market, needs: [{ pile: market.input, type: 'lantern', n: 1 }], pays: () => LANTERN_PRICE + 8 * U('lantern'), cash: () => market.cash },
+  { id: 'market', name: 'Market Stall', pos: market.pos, ok: () => market.built, about: PAD_INFO.market, needs: [{ pile: market.input, type: 'lantern', n: 1 }], pays: () => LANTERN_PRICE + 8 * U('lantern'), cash: () => market.cash },
   { name: 'Tailor', pos: tailor.pos, ok: () => tailor.built, about: PAD_INFO.tailor, needs: [{ pile: tailor.input, type: 'wool', n: 1 }], pays: () => COAT_PRICE + 5 * U('coat'), payWord: 'per coat', cash: () => tailor.cash },
   { name: 'Yak Pen', pos: pen.pos, ok: () => pen.level > 0, about: 'Your yaks grow wool. Pick it up here.', needs: [], makes: { type: 'wool', pile: pen.out } },
-  { name: 'Goldsmith', pos: smith.pos, ok: () => smith.built, about: PAD_INFO.smith, needs: [{ pile: smith.input, type: 'gold', n: 1 }], pays: () => GOLD_PRICE + 10 * U('goldp'), cash: () => smith.cash },
+  { id: 'smith', name: 'Goldsmith', pos: smith.pos, ok: () => smith.built, about: PAD_INFO.smith, needs: [{ pile: smith.input, type: 'gold', n: 1 }], pays: () => GOLD_PRICE + 10 * U('goldp'), cash: () => smith.cash },
   { name: 'Ice Hotel', pos: hotel.pos, ok: () => hotel.built, about: 'Each guest uses one lantern, then pays for the stay.', needs: [{ pile: hotel.input, type: 'lantern', n: 1 }], cash: () => hotel.cash },
-  { name: 'Shard Exchange', pos: exch.pos, ok: () => exch.built, about: PAD_INFO.exch, needs: [{ pile: exch.input, type: 'shard', n: 1 }], pays: () => SHARD_PRICE + 20 * U('shardp'), cash: () => exch.cash },
+  { id: 'exch', name: 'Shard Exchange', pos: exch.pos, ok: () => exch.built, about: PAD_INFO.exch, needs: [{ pile: exch.input, type: 'shard', n: 1 }], pays: () => SHARD_PRICE + 20 * U('shardp'), cash: () => exch.cash },
   { name: 'Reindeer Sled', pos: depot.pos, ok: () => depot.built, open: () => depot.state === 'load', about: 'Load goods; the sled ships them for better prices.',
     needs: [{ pile: depot.input, types: Object.keys(SHIP_PRICE), n: 1 }], pays: t => SHIP_PRICE[t], cash: () => depot.cash },
   { name: 'Fishing Boat', pos: boat.pile.center, ok: () => boat.owned, about: 'Your boat drops its catch here. Take the fish to the Smokehouse.', needs: [], makes: { type: 'fish', pile: boat.pile } },
@@ -4598,7 +4663,8 @@ function needRow(need, c) {
 }
 function vendorHtml(v) {
   const c = player.c, closed = v.open && !v.open();
-  let h = `<h3>${v.name}</h3><p>${v.about}</p>`;
+  const [statusClass, statusLabel] = vendorStatus(v);
+  let h = `<h3>${v.name}</h3><span class="chip ${statusClass}">${statusLabel}</span><p>${v.about}</p>`;
   if (v.needs.length) {
     const sold = v.needs[0].types;
     h += `<h4>${sold ? 'Buys (each)' : v.makes ? `Bring for each ${v.makes.name || itemName(v.makes.type)}` : 'Bring'}</h4>`;
@@ -4607,13 +4673,13 @@ function vendorHtml(v) {
   }
   if (v.makes && !v.needs.length) h += `<h4>Pick up</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span>${capFirst(itemName(v.makes.type, 2))}</span><em>${v.makes.pile.n} ready</em></div>`;
   else if (v.makes) h += `<h4>Makes</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span><b>1</b> × ${itemName(v.makes.type)}</span><em>${v.makes.pile.n} ready</em></div>`;
-  else if (v.pays && !v.needs[0].types) h += `<h4>Pays</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(v.pays())}</b> ${v.payWord || 'each'}</span></div>`;
+  else if (v.pays && !v.needs[0]?.types) h += `<h4>Pays</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(v.pays())}</b> ${v.payWord || 'each'}</span></div>`;
   if (closed) h += `<p class="warn">The sled is out on a run. It takes goods again when it's back.</p>`;
   return h;
 }
 function padHtml(p) {
   const st = padState[p.id], cost = p.costs[st.level], left = cost - st.paid, lv = p.costs.length > 1 ? ` <small>level ${st.level + 1} of ${p.costs.length}</small>` : '';
-  return `<h3>${iconImg(p.icon)}${p.label}${lv}</h3><p>${PAD_INFO[p.id] || (p.plot ? 'Buys this land so you can walk, chop and build there.' : '')}</p>` +
+  return `<h3>${iconImg(p.icon)}${p.label}${lv}</h3><p>${buildDescription(p)}</p>` +
     `<h4>Needs</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(left)}</b>${st.paid ? ` more (of $${fmt(cost)})` : ''}</span>` +
     `<em>${W.cash >= left ? 'you have enough' : `$${fmt(left - W.cash)} short`}</em></div><p class="hint">Walk onto the pad to pay.</p>`;
 }
@@ -4705,9 +4771,9 @@ function findDelivery() {
 }
 function updateDeliver(dt, t) {
   arrowT -= dt;
-  if (arrowT <= 0) { arrowT = 0.2; arrowGoal = findDelivery(); }
+  if (arrowT <= 0) { arrowT = 0.2; arrowGoal = planWaypoint() || findDelivery(); }
   const g = arrowGoal;
-  const show = g && !guide.visible && shopEl.hidden && d2(g.p, player.g.position) > 1.3;
+  const show = g && !guide.visible && shopEl.hidden && menuEl.hidden && cardEl.hidden && d2(g.p, player.g.position) > (buildPin ? 0.65 : 1.3);
   if (!show) { if (!arrowEl.hidden) arrowEl.hidden = true; return; }
   if (arrowEl.hidden) arrowEl.hidden = false;
   if (arrowLbl.textContent !== g.label) arrowLbl.textContent = g.label;
@@ -4729,6 +4795,7 @@ function updateDeliver(dt, t) {
 }
 function updateHelp(dt, t) {
   updateDeliver(dt, t);
+  updateNearbyVendor(dt);
   if (info) { info.t += dt; if (info.t > 0.5) { info.t = 0; infoEl.innerHTML = info.render(); } placeInfo(); }
 }
 window.__help = { onTap, closeInfo, findDelivery, getInfo: () => info, VENDORS, toScreen };
@@ -5623,10 +5690,6 @@ function updateMuseum(dt) {
   museum.t += dt; if (museum.t < 6) return; museum.t = 0;
   museum.cash.addValue(45 + 7 * museum.done.length, museum.at.clone().setY(2));
 }
-function renderCastle() {
-  const h = '<h4>Ice Castle</h4>' + (castle.built ? CASTLE.map((st, i) => `<div class="wh"><b>${st.name}</b><span class="chip ${i < castle.stage ? 'ok' : i === castle.stage ? 'warn' : ''}">${i < castle.stage ? 'Built' : i === castle.stage ? 'Building' : 'Later'}</span><small>${Object.entries(st.need).map(([t, n]) => `${capFirst(itemName(t, 2))} ${i < castle.stage ? n : i === castle.stage ? Math.min(n, castle.have[t] || 0) : 0}/${n}`).join(' · ')}</small></div>`).join('') : '<p>Start the Ice Castle east of the river. It takes four big deliveries, and the finished castle adds 10% to all income.</p>');
-  menuBody.innerHTML = h;
-}
 document.getElementById('castlebtn').onclick = () => showMenuView('castle');
 
 // ================= Ice Castle =================
@@ -5689,7 +5752,7 @@ const TUT = [
   { when: () => player.c.count('meat') > 0, title: 'Raw meat!', text: 'It stacks on your back. Carry it to the grill: walk onto the square with the meat picture. The yellow arrow shows the way.' },
   { when: () => player.c.count('steak') > 0, title: 'Hot steaks', text: 'Villagers wait at the counter. Drop the steaks on the counter square and they pay you.' },
   { when: () => counter.cash.value > 0 || W.cash > 0, title: 'Cash!', text: 'Walk over the green cash pile to collect it. Then stand on a dashed build square to buy it: start with the Sawmill.' },
-  { when: () => Object.values(padState).some(s => s.level > 0), title: 'Your camp grows', text: 'Every building earns more money. Tap anything to learn what it does, and open Menu for travel, the warehouse and more.' },
+  { when: () => Object.values(padState).some(s => s.level > 0), title: 'Your camp grows', text: 'Every building earns more money. Open Menu → Build & Expand to plan what to buy next, or Warehouse to see what your shops need.' },
 ];
 function updateTutorial(dt) {
   if (tut.step >= TUT.length) return;
@@ -5700,7 +5763,7 @@ function updateTutorial(dt) {
 
 // ---------------- menu: travel, warehouse, backup, update, photo, music ----------------
 const menuEl = document.getElementById('menu'), menuBody = document.getElementById('menubody');
-let menuView = '', menuT = 0;
+let menuView = '', menuT = 0, liveMenuMarkup = '';
 function openMenu(view = '') { menuEl.hidden = false; showMenuView(view); }
 function closeMenu() { menuEl.hidden = true; menuView = ''; }
 document.getElementById('menubtn').onclick = () => { audioInit(); menuEl.hidden ? openMenu() : closeMenu(); };
@@ -5708,11 +5771,13 @@ document.getElementById('menux').onclick = closeMenu;
 document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
 function showMenuView(v) {
   menuView = v;
-  const tabs = [['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
+  liveMenuMarkup = '';
+  const tabs = [['buildbtn', 'build'], ['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
     ['castlebtn', 'castle'], ['peoplebtn', 'people'], ['logbtn', 'log'], ['albumbtn', 'album']];
   for (const [id, key] of tabs) document.getElementById(id).classList.toggle('on', v === key);
   if (v === 'album') { renderAlbum(); return; }
-  if (v === 'castle') { renderCastle(); return; }
+  if (v === 'build') { openBuildPlanner(); return; }
+  if (v === 'castle') { renderProjects(); return; }
   if (v === 'log') {
     menuBody.innerHTML = '<h4>Activity</h4>';
     for (const { day, msg } of activity) {
@@ -5728,6 +5793,7 @@ function showMenuView(v) {
   if (v === 'people') { renderPeople(); return; }
   if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
 }
+document.getElementById('buildbtn').onclick = () => showMenuView('build');
 document.getElementById('logbtn').onclick = () => showMenuView('log');
 document.getElementById('albumbtn').onclick = () => showMenuView('album');
 const gfxBtn = document.getElementById('gfxbtn');
@@ -5789,41 +5855,308 @@ function renderTravel() {
 }
 
 // warehouse: every building, its stock and whether it's stuck
-const AREA_NAME = { harbor: 'Harbor District', home: 'Your Cabin', main: 'Main area', mine: 'Frost Mine', isle: 'Aurora Isle', volcano: 'Ember Volcano', dungeon: 'Ice Cave', peak: 'Sky Peak', lake: 'Frozen Lake', steam: 'Steam Caves', cove: 'Shipwreck Cove' };
+const AREA_NAME = {
+  main: 'Main Camp', ridge: 'Ridge Camp', town: 'Market Town', mine: 'Frost Mine', isle: 'Aurora Isle',
+  harbor: 'Harbor District', volcano: 'Ember Volcano', peak: 'Sky Peak', lake: 'Frozen Lake',
+  steam: 'Steam Caves', cove: 'Shipwreck Cove', home: 'Your Cabin',
+};
+function areaLabelKey(pos) {
+  const region = regionOf(pos);
+  if (region !== 'main') return region;
+  if (pos.x >= RIVER.x1) return 'ridge';
+  if (pos.z >= 20) return 'town';
+  return 'main';
+}
 function vendorStatus(v) {
-  const st = v.station;
-  const missing = v.needs.filter(n => n.pile.n < (n.n || 1)).map(n => n.types ? 'goods' : itemName(n.type, 2));
-  if (st) {
-    if (st.ins.length && missing.length) return ['bad', 'Needs ' + missing.join(' + ')];
-    if (st.outPile && st.outPile.free() <= 0) return ['warn', 'Output full'];
-    return ['ok', 'Working'];
+  const st = v.station, output = v.makes?.pile;
+  if (st === icecream && !isSummer()) return ['warn', 'Opens in summer'];
+  if (v.open && !v.open()) return ['warn', 'Out on a delivery'];
+  if (st?.make > 0 || output?.pending > 0) return ['ok', 'Producing'];
+  if (output && output.n >= output.max) return ['warn', 'Output full'];
+  const missing = v.needs.filter(n => n.pile.n < n.n);
+  if (missing.length) {
+    if (missing.every(n => n.pile.n + n.pile.pending >= n.n)) return ['ok', 'Delivery incoming'];
+    const names = missing.filter(n => n.pile.n + n.pile.pending < n.n)
+      .map(n => n.types ? 'goods to sell' : itemName(n.type, n.type === 'meat' || n.type === 'wool' || n.type === 'coal' ? 1 : 2));
+    return ['bad', 'Waiting for ' + names.join(' and ')];
   }
-  if (v.makes && v.makes.pile.free() <= 0) return ['warn', 'Full, pick it up'];
-  if (v.needs.some(n => n.pile.free() <= 0)) return ['warn', 'Input full'];
-  if (v.needs.length && v.needs.every(n => n.pile.n === 0)) return ['bad', 'Empty'];
+  if (st === giftshop && tourists.waiting <= 0) return ['warn', 'Waiting for the ferry'];
+  if (!st && !v.needs.length && v.makes) return ['ok', output.n > 0 ? 'Ready to collect' : 'Gathering'];
   return ['ok', 'Working'];
 }
 function renderWarehouse() {
   const groups = {};
-  for (const v of VENDORS) { if (!v.ok()) continue; (groups[regionOf(v.pos)] = groups[regionOf(v.pos)] || []).push(v); }
-  let h = '<h4>Warehouse</h4><p>Every building, what it holds, and anything that is stuck. Updates live.</p>';
-  for (const area of Object.keys(AREA_NAME)) {
+  for (const v of VENDORS) {
+    if (!v.ok()) continue;
+    const area = areaLabelKey(v.pos);
+    (groups[area] ||= []).push(v);
+  }
+  let h = '<h4>Warehouse</h4>';
+  for (const [area, areaName] of Object.entries(AREA_NAME)) {
     const list = groups[area]; if (!list) continue;
-    h += `<div class="wh-area">${AREA_NAME[area]}</div>`;
+    h += `<div class="wh-area">${areaName}</div>`;
     for (const v of list) {
       const [cls, label] = vendorStatus(v);
-      const bits = v.needs.map(n => `${n.types ? 'Goods' : capFirst(itemName(n.type, 2))} ${n.pile.n}/${n.pile.max}`);
-      if (v.makes) bits.push(`Made: ${capFirst(itemName(v.makes.type, 2))} ${v.makes.pile.n}/${v.makes.pile.max}`);
-      const cp = v.cash && v.cash(); if (cp && cp.value > 0) bits.push(`$${fmt(cp.value)} waiting`);
-      h += `<div class="wh"><b>${v.name}</b><span class="chip ${cls}">${label}</span><small>${bits.join(' · ') || '&nbsp;'}</small></div>`;
+      const bits = v.needs.map(n => `${n.types ? 'Goods' : capFirst(itemName(n.type, 2))} ${n.pile.n}/${n.pile.max}${n.pile.pending ? ` (+${n.pile.pending} incoming)` : ''}`);
+      if (v.makes) bits.push(`Output: ${capFirst(itemName(v.makes.type, 2))} ${v.makes.pile.n}/${v.makes.pile.max}`);
+      const cp = v.cash?.();
+      if (cp?.value > 0) bits.push(`${dollars(cp.value)} ready to collect`);
+      h += `<div class="wh"><b>${v.name}</b><span class="chip ${cls}">${label}</span>${bits.length ? `<small>${bits.join(' · ')}</small>` : ''}</div>`;
     }
   }
-  menuBody.innerHTML = h;
+  updateMenuMarkup(menuBody, h);
 }
+
+const nearbyStatus = document.getElementById('vendorstatus');
+let nearbyVendor = null, nearbyT = 0;
+function updateNearbyVendor(dt) {
+  if (!menuEl.hidden || !shopEl.hidden || !cardEl.hidden || info || !document.getElementById('welcome').hidden) {
+    nearbyStatus.hidden = true;
+    return;
+  }
+  nearbyT -= dt;
+  if (nearbyT <= 0) {
+    nearbyT = 0.2;
+    const pos = player.g.position, area = regionOf(pos);
+    nearbyVendor = nearest(VENDORS.filter(v => v.ok() && regionOf(v.pos) === area && d2(v.pos, pos) < 4.4), pos);
+  }
+  if (!nearbyVendor || d2(nearbyVendor.pos, player.g.position) >= 4.4) { nearbyStatus.hidden = true; return; }
+  const { x, y, behind } = toScreen(nearbyVendor.pos.x, 2.9, nearbyVendor.pos.z);
+  nearbyStatus.hidden = behind || x < 12 || x > innerWidth - 12 || y < 96 || y > innerHeight - 110;
+  if (nearbyStatus.hidden) return;
+  const message = nearbyVendor.name + ' · ' + vendorStatus(nearbyVendor)[1];
+  if (nearbyStatus.textContent !== message) nearbyStatus.textContent = message;
+  const half = nearbyStatus.offsetWidth / 2;
+  nearbyStatus.style.transform = `translate(${Math.round(clamp(x - half, 8, innerWidth - half * 2 - 8))}px, ${Math.round(y)}px)`;
+}
+
+const EXPANSION_UNLOCKS = {
+  saw: ['bridge', 'lumber', 'hall', 'town'], bridge: ['cutter', 'dock', 'ridge', 'icesaw', 'mill'],
+  ridge: ['workshop', 'pen', 'mine', 'ferry', 'cablecar'], mine: ['smith', 'smelter'],
+  town: ['store', 'farm', 'orders', 'laketrail', 'smithy'], workshop: ['market', 'crafter'],
+  pen: ['tailor', 'barn'], farm: ['oven', 'soup'], ferry: ['apoth', 'hotel', 'exch', 'divebell'],
+  harbor: ['fishmkt', 'shipyard', 'cafe', 'bootmk', 'sledworks', 'skishop', 'giftshop'],
+  volcano: ['forge', 'steamtunnel'], cablecar: ['downshop', 'weather'], laketrail: ['rink'],
+  steamtunnel: ['greenhouse'], smelter: ['smelterhand', 'volcano'], dock: ['boat', 'smoke'],
+  store: ['clerk'], icesaw: ['castle', 'glass'], chandler: ['beekeeper'], smoke: ['fisher'],
+};
+const TRANSPORT_UPGRADES = new Set(['minecart', 'icewagon', 'courier', 'supply', 'fsupply', 'woolcart', 'gsupply', 'jsupply', 'ssupply', 'psupply']);
+const DISTRICT_PADS = new Set(['bridge', 'ridge', 'mine', 'town', 'harbor', 'ferry', 'volcano', 'cablecar', 'laketrail', 'steamtunnel', 'divebell']);
+const dollars = amount => '$' + Math.max(0, Math.round(amount)).toLocaleString('en-US');
+let buildPin = null, buildFilter = 'all', buildQuery = '';
+const activePad = p => padState[p.id].level < p.costs.length && p.req();
+const padRemaining = p => Math.max(0, p.costs[padState[p.id].level] - padState[p.id].paid);
+const padLocation = p => new V3(p.x, 0, p.z);
+
+function buildDescription(p) {
+  if (p.plot) return PLOT_YIELDS[p.plot.specialty];
+  const description = PAD_INFO[p.id];
+  if (description) {
+    const buyer = VENDORS.find(v => v.id === p.id);
+    if (buyer?.pays) return description + ' Pays ' + dollars(buyer.pays()) + ' per delivery item before bonuses.';
+    return description;
+  }
+  const st = STATIONS.find(st => st.id === p.id);
+  if (!st) return 'Build at the marked pad.';
+  const inputs = st.ins.map(i => `${i.n} ${itemName(i.type, i.n)}`);
+  if (st.accepts) return 'Buys ' + Object.keys(st.accepts).slice(0, 5).map(t => itemName(t, 2)).join(', ') + '.';
+  const product = st.out ? itemName(st.out[0]) : 'goods for sale';
+  return inputs.length ? `Turns ${inputs.join(' + ')} into ${product}.` : `Produces ${product}.`;
+}
+function setBuildPin(pin) {
+  buildPin = pin;
+  arrowT = 0;
+  mapT = 0;
+  save();
+}
+function planTarget() {
+  if (!buildPin) return null;
+  if (buildPin.kind === 'pad') {
+    const pad = PADS.find(p => p.id === buildPin.id);
+    if (!pad || padState[pad.id].level !== buildPin.level || !activePad(pad)) return null;
+    const left = padRemaining(pad), short = left - W.cash;
+    return { p: padLocation(pad), label: pad.label, summary: `${pad.label} · ${short > 0 ? dollars(short) + ' short' : dollars(left) + ' to build'}` };
+  }
+  const isCastle = buildPin.kind === 'castle';
+  if (!isCastle && buildPin.kind !== 'beacon') return null;
+  const site = isCastle ? castle : beacon, stage = isCastle ? CASTLE[castle.stage] : null;
+  if (isCastle ? !castle.built || !stage : !FAR.harbor.built || beacon.done) return null;
+  const label = isCastle ? 'Ice Castle' : 'Harbor Beacon';
+  const needs = Object.entries(isCastle ? stage.need : beacon.need)
+    .filter(([type, count]) => (site.have[type] || 0) < count)
+    .map(([type, count]) => { const left = count - (site.have[type] || 0); return `${left} ${itemName(type, left)}`; });
+  return { p: site.zone, label, summary: `${stage ? stage.name : label} · ${needs.length ? needs.join(' + ') : 'Finishing'}` };
+}
+function planWaypoint() {
+  const target = planTarget();
+  if (!target) return null;
+  const pos = player.g.position, from = regionOf(pos), to = regionOf(target.p);
+  let p = target.p, label = target.label;
+  if (from !== to) {
+    const entrances = { mine: mine.entrance, isle: isle.ferry, volcano: volc.entrance };
+    const exits = { mine: mine.exitZone, isle: isle.exitZone, volcano: volc.exitZone };
+    const entrance = entrances[to] || FAR[to]?.entrance;
+    if (entrance && regionOf(entrance) === from) { p = entrance; label = 'To ' + AREA_NAME[to]; }
+    else if (from === 'main' && (to === 'volcano' || to === 'steam')) { p = mine.entrance; label = 'To the Frost Mine'; }
+    else if (from === 'main' && to === 'cove') { p = isle.ferry; label = 'To the Aurora Ferry'; }
+    else if (from === 'mine' && to === 'steam') { p = volc.entrance; label = 'To Ember Volcano'; }
+    else { p = exits[from] || FAR[from]?.exit; label = 'Leave ' + AREA_NAME[from]; }
+  }
+  if (!p) return null;
+  if (from === 'main' && regionOf(p) === 'main' && bridge.unlocked) {
+    const crossingEast = pos.x < RIVER.x1 && p.x >= RIVER.x1;
+    const crossingWest = pos.x > RIVER.x0 && p.x <= RIVER.x0;
+    if (crossingEast || crossingWest) {
+      const banks = [RIVER.x0 - 1.8, RIVER.x1 + 1.8];
+      const approach = crossingEast ? banks[0] : banks[1];
+      const across = crossingEast ? banks[1] : banks[0];
+      p = new V3(Math.abs(pos.z - BRIDGE_Z) > 1.2 ? approach : across, 0, BRIDGE_Z);
+      label = 'Cross the bridge';
+    }
+  }
+  return { p, label };
+}
+function drawPlanMarker(ctx) {
+  const waypoint = planWaypoint();
+  if (!waypoint) return;
+  const x = mx(waypoint.p.x), y = mz(waypoint.p.z);
+  if (x < 0 || x > mapCv.width || y < 0 || y > mapCv.height) return;
+  ctx.save();
+  ctx.translate(clamp(x, 8, mapCv.width - 8), clamp(y, 8, mapCv.height - 8));
+  ctx.rotate(PI / 4);
+  ctx.fillStyle = '#ffd23a'; ctx.strokeStyle = '#253246'; ctx.lineWidth = 2;
+  ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
+  ctx.restore();
+}
+function openBuildPlanner() {
+  menuBody.innerHTML = `<h4>Build &amp; Expand</h4><div class="buildtools">
+    <input type="search" id="buildsearch" aria-label="Search builds" placeholder="Search builds">
+    <select id="buildfilter" aria-label="Filter builds">
+      <option value="all">All available</option><option value="affordable">Can afford</option>
+      <option value="expand">Land &amp; districts</option><option value="automation">Automation</option>
+    </select></div><div id="buildlist"></div>`;
+  const search = document.getElementById('buildsearch'), filter = document.getElementById('buildfilter');
+  search.value = buildQuery; filter.value = buildFilter;
+  search.onkeydown = e => e.stopPropagation();
+  search.oninput = () => { buildQuery = search.value; renderBuildList(); };
+  filter.onchange = () => { buildFilter = filter.value; renderBuildList(); };
+  renderBuildList();
+}
+function renderBuildList() {
+  const list = document.getElementById('buildlist');
+  if (!list) return;
+  const query = buildQuery.trim().toLowerCase();
+  const matches = (...parts) => parts.join(' ').toLowerCase().includes(query);
+  const automation = buildFilter === 'automation', expansion = buildFilter === 'expand', affordable = buildFilter === 'affordable';
+  const pinned = buildPin ? '<button class="projectaction" type="button" data-plan-clear>Clear map pin</button>' : '';
+  let h = '';
+  const rows = PADS.filter(p => {
+    if (!activePad(p) || (affordable && padRemaining(p) > W.cash)) return false;
+    if (expansion && !p.plot && !DISTRICT_PADS.has(p.id)) return false;
+    if (automation && p.icon !== 'person' && !['banker', 'train', 'balloon', 'depot', 'mill', 'power', 'shed'].includes(p.id)) return false;
+    return matches(p.label, AREA_NAME[areaLabelKey(padLocation(p))], buildDescription(p));
+  }).sort((a, b) => padRemaining(a) - padRemaining(b));
+  for (const p of rows) {
+    const left = padRemaining(p), short = left - W.cash, level = padState[p.id].level + 1;
+    const unlocks = [...(EXPANSION_UNLOCKS[p.id] || []), ...PLOTS.filter(pl => pl.from === p.id).map(pl => pl.id)];
+    const followOns = unlocks.filter(id => !padLevel(id) && !plotById(id)?.owned).map(padLabel);
+    const isPinned = buildPin?.kind === 'pad' && buildPin.id === p.id;
+    h += `<div class="planrow"><div><b>${p.label}${p.costs.length > 1 ? ` · Level ${level}` : ''}</b>
+      <small>${AREA_NAME[areaLabelKey(padLocation(p))]} · ${dollars(left)}${padState[p.id].paid ? ' remaining' : ''} · ${short > 0 ? dollars(short) + ' short' : 'Can afford'}</small>
+      <small>${buildDescription(p)}</small>${followOns.length ? `<small>Builds it leads to: ${followOns.join(', ')}</small>` : ''}</div>
+      <button type="button" data-plan-pad="${p.id}">${isPinned ? 'Show pin' : 'Pin on map'}</button></div>`;
+  }
+  let routes = '';
+  if (!expansion) for (const b of BELTS) {
+    if (b.id !== 'grill' && !hall.built) continue;
+    const owned = U('belt_' + b.id), cost = beltCost(b), locked = !b.ok();
+    if (!matches(b.name, 'conveyor') || (locked && b.id !== 'grill') || (affordable && (owned || locked || W.cash < cost))) continue;
+    routes += `<div class="planrow"><div><b>${b.name}</b><small>${owned ? 'Conveyor running' : locked ? 'Serve your first customer to unlock the conveyor' : `Conveyor · ${dollars(cost)}${W.cash < cost ? ' · ' + dollars(cost - W.cash) + ' short' : ''}`}</small></div>
+      ${owned ? '' : `<button type="button" data-plan-belt="${b.id}"${locked || W.cash < cost ? ' disabled' : ''}>Buy</button>`}</div>`;
+  }
+  if (!expansion && hall.built) for (const u of UPGRADES) {
+    if (!TRANSPORT_UPGRADES.has(u.id) || (u.req && !u.req()) || !matches(u.name, u.desc)) continue;
+    const cost = upgradeCost(u);
+    if (affordable && (cost === undefined || W.cash < cost)) continue;
+    routes += `<div class="planrow"><div><b>${u.name}</b><small>${u.desc}</small>
+      <small>${cost === undefined ? 'Running' : dollars(cost) + (W.cash < cost ? ' · ' + dollars(cost - W.cash) + ' short' : '')}</small></div>
+      ${cost === undefined ? '' : `<button type="button" data-plan-upgrade="${u.id}"${W.cash < cost ? ' disabled' : ''}>Buy</button>`}</div>`;
+  }
+  if (!rows.length && !routes) h = '<p>No available builds match.</p>';
+  const routing = routes ? '<h4>Delivery routes</h4>' + routes : '';
+  const content = pinned + (automation ? routing + h : h + routing);
+  updateMenuMarkup(list, content);
+}
+
+const PROJECT_SOURCES = { ice: 'Ice Saw', log: 'Forests', bar: 'Smelter', gem: 'Crystal deposits',
+  gold: 'Frost Mine', lantern: 'Lantern Shop', ring: 'Jeweler', quilt: 'Down Workshop',
+  potion: 'Apothecary', pearl: 'Shipwreck Cove' };
+function projectMaterials(need, have) {
+  return Object.entries(need).map(([type, count]) => {
+    const delivered = Math.min(count, have[type] || 0), left = count - delivered;
+    const packed = Math.min(left, player.c.count(type));
+    return `<div class="wh"><b>${capFirst(itemName(type, count))}</b><span class="chip ${left ? 'warn' : 'ok'}">${delivered}/${count} delivered</span>
+      <small>${left ? `${left} left${packed ? ` · ${packed} in pack` : ''} · ${PROJECT_SOURCES[type]}` : 'Complete'}</small></div>`;
+  }).join('');
+}
+function renderProjects() {
+  let h = '<h4>Ice Castle</h4><p>Complete all four stages to earn 10% more income.</p>';
+  if (!castle.built) {
+    const pad = PADS.find(p => p.id === 'castle');
+    h += activePad(pad)
+      ? `<p>Build the site for ${dollars(padRemaining(pad))}.</p><button class="projectaction" type="button" data-plan-pad="castle">Pin build site</button>`
+      : '<p>Build the Bridge and Ice Saw to open the site.</p>';
+  } else if (castle.stage === CASTLE.length) h += '<p>All four stages complete.</p>';
+  else {
+    const stage = CASTLE[castle.stage];
+    h += `<p>Stage ${castle.stage + 1} of ${CASTLE.length} · ${stage.name}</p>
+      <button class="projectaction" type="button" ${buildPin?.kind === 'castle' ? 'data-plan-clear' : 'data-plan-project="castle"'}>${buildPin?.kind === 'castle' ? 'Clear map pin' : 'Pin current stage'}</button>`
+      + projectMaterials(stage.need, castle.have);
+  }
+  h += '<h4>Harbor Beacon</h4><p>Deliver goods from Ridge Camp, Aurora Isle, and Shipwreck Cove for a 10% income bonus.</p>';
+  if (!FAR.harbor.built) h += '<p>Open the Harbor District to start.</p>';
+  else if (beacon.done) h += '<p>Beacon complete.</p>';
+  else h += `<button class="projectaction" type="button" ${buildPin?.kind === 'beacon' ? 'data-plan-clear' : 'data-plan-project="beacon"'}>${buildPin?.kind === 'beacon' ? 'Clear map pin' : 'Pin Harbor Beacon'}</button>`
+    + projectMaterials(beacon.need, beacon.have);
+  updateMenuMarkup(menuBody, h);
+}
+menuBody.addEventListener('click', e => {
+  const button = e.target.closest('button');
+  if (!button) return;
+  const { planPad, planBelt, planProject, planUpgrade } = button.dataset;
+  if (planPad) {
+    const pad = PADS.find(p => p.id === planPad);
+    if (pad && activePad(pad)) {
+      setBuildPin({ kind: 'pad', id: pad.id, level: padState[pad.id].level });
+      closeMenu();
+    }
+  } else if (planProject) {
+    setBuildPin({ kind: planProject });
+    closeMenu();
+  } else if (planBelt) {
+    buyBelt(planBelt);
+    renderBuildList();
+  } else if (planUpgrade && hall.built && TRANSPORT_UPGRADES.has(planUpgrade)) {
+    buyItem(planUpgrade);
+    renderBuildList();
+  } else if (button.hasAttribute('data-plan-clear')) {
+    setBuildPin(null);
+    showMenuView(menuView);
+  }
+});
+function updateMenuMarkup(el, markup) {
+  if (liveMenuMarkup === markup) return;
+  liveMenuMarkup = markup;
+  el.innerHTML = markup;
+}
+const LIVE_MENU = { wh: renderWarehouse, build: renderBuildList, castle: renderProjects };
 function menuTick(dt) {
-  if (menuEl.hidden || menuView !== 'wh') return;
+  const render = LIVE_MENU[menuView];
+  if (menuEl.hidden || !render) return;
   menuT -= dt; if (menuT > 0) return; menuT = 1;
-  const y = menuEl.querySelector('.sheet').scrollTop; renderWarehouse(); menuEl.querySelector('.sheet').scrollTop = y;
+  const sheet = menuEl.querySelector('.sheet'), y = sheet.scrollTop;
+  render();
+  sheet.scrollTop = y;
 }
 
 // Backup code includes the current camp and its persistent data.
@@ -5912,7 +6245,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function campSave() {
   return {
-    cash: W.cash, pads: padState, served, dayT, ride: W.ride, tut: tut.step,
+    cash: W.cash, pads: padState, served, dayT, plan: buildPin, ride: W.ride, tut: tut.step,
     coveDay: FAR.cove.lastDay, up: UP, orders: orders.list, ordersNext: orders.next,
     f1: { fuel: power.fuel }, f4: { buffs },
     i: { museum: [null, museum.done], castle: [castle.stage, castle.have] },
@@ -5938,6 +6271,7 @@ function save() {
 }
 if (saved && saved.pads) {
   let merchantRefund = 0;
+  buildPin = saved.plan || null;
   if (saved.ride === false) W.ride = false;
   if (saved.research?.done) {
     for (const upgrade of UPGRADES) {
@@ -6035,6 +6369,7 @@ function frame() {
     if (g.userData.pop >= 1) popping.splice(i, 1);
   }
   padTick += dt; if (padTick > 0.5) { padTick = 0; refreshPads(); }
+  if (buildPin && !planTarget()) setBuildPin(null);
   updateGuide(t);
 
   // camera & light follow
