@@ -83,6 +83,22 @@
     border-radius: 12px; background: var(--panel); color: var(--white); font: 800 14px/1.3 var(--font-body); }
   #gamealert[hidden], #infobox[hidden], #orders[hidden] { display: none; }
   #gamealert button { font: inherit; }
+  .mapboard { position: relative; height: 220px; border: 1px solid #abb8c9; border-radius: 12px;
+    overflow: hidden; background: #d9e9f2; margin: 8px 0; }
+  .mapboard[data-water]::before { content: ''; position: absolute; inset: 0 auto 0 var(--river-left);
+    width: var(--river-width); background: #9bc7e9; pointer-events: none; }
+  .map-crossing { position: absolute; height: 5px; transform: translateY(-50%); background: #fff;
+    left: var(--river-left); width: var(--river-width); pointer-events: none; }
+  .map-dot { position: absolute; transform: translate(-50%, -50%); border: 1px solid #28394f;
+    border-radius: 999px; min-width: 24px; min-height: 24px; padding: 3px 6px; background: #fff; color: #23364d;
+    max-width: 34%; overflow: hidden; text-overflow: ellipsis;
+    font: 800 11px var(--font-body); white-space: nowrap; cursor: pointer; }
+  .map-dot[aria-current] { background: #ffe289; z-index: 1; }
+  .map-you { position: absolute; transform: translate(-50%, -50%); width: 9px; height: 9px;
+    border: 2px solid #fff; border-radius: 50%; background: #2f78d6; pointer-events: none; z-index: 2; }
+  .map-result { grid-template-columns: 1fr; }
+  .map-result .rowbtns { margin: 0; }
+  .map-result .rowbtns button { padding: 7px 10px; }
   .buildtools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   .buildtools input, .buildtools select { flex: 1; min-width: 120px; border: 1px solid #abb8c9; border-radius: 8px;
     padding: 8px; background: #fff; color: var(--ink); font: 16px var(--font-body); user-select: text; }
@@ -273,7 +289,7 @@
 <body>
 <div id="hud">
   <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="boosts"></div><div id="infobox" hidden><div class="itabs"><button type="button" id="orderbtn" aria-controls="orders" aria-expanded="false">Orders</button></div><div id="orders" hidden></div></div></div>
-  <div class="right"><button id="menubtn" type="button">Menu</button><button id="hudbtn" type="button" aria-pressed="false">Hide</button><canvas id="map" width="240" height="150" aria-label="Map of the area, tap to travel"></canvas></div>
+  <div class="right"><button id="menubtn" type="button">Menu</button><button id="hudbtn" type="button" aria-pressed="false">Hide</button><canvas id="map" width="240" height="150" role="button" tabindex="0" aria-label="Open map and travel"></canvas></div>
 </div>
 <aside id="gamealert" hidden><span role="alert" id="alerttext"></span><button type="button" id="alertx">Dismiss</button></aside>
 <div id="goal">Drag anywhere to move</div>
@@ -283,7 +299,7 @@
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
 <div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
-<button id="buildbtn" type="button">Build &amp; Expand</button><button id="travelbtn" type="button">Fast travel</button><button id="whbtn" type="button">Warehouse</button>
+<button id="buildbtn" type="button">Build &amp; Expand</button><button id="travelbtn" type="button">Map &amp; Travel</button><button id="districtbtn" type="button">Districts</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
 <button id="castlebtn" type="button">Projects</button><button id="msgbtn" type="button">Pop-ups: Important only</button><button id="statsbtn" type="button">Stats</button><button id="namebtn" type="button">Camp name</button><button id="cookbtn" type="button">Cookbook</button><button id="ambbtn" type="button">Ambience on</button><button id="logbtn" type="button">Activity</button><button id="gfxbtn" type="button">Graphics: High</button><button id="movebtn" type="button">Move things</button><button id="peoplebtn" type="button">Villager jobs</button><button id="recipebtn" type="button">Recipe book</button><button id="photobtn" type="button">Photo mode</button><button id="albumbtn" type="button">Photos</button><button id="reset" type="button">Restart</button></div>
 <div id="menubody"></div></div></div>
@@ -308,7 +324,7 @@ const FIELD = { x0: -8, x1: 12, z0: -26, z1: -10 };
 const BOUNDS = { x0: -25, x1: 58, z0: -29, z1: 34 };
 const RIDGE = { x0: 36, x1: 54, z0: -6, z1: 8 };
 const inRidge = p => p.x > RIDGE.x0 && p.x < RIDGE.x1 && p.z > RIDGE.z0 && p.z < RIDGE.z1;
-const RIVER = { x0: 26, x1: 30 }, BRIDGE_Z = 1.5;
+const RIVER = { x0: 26, x1: 30 }, BRIDGE_Z = 1.5, SOUTH_BRIDGE_Z = 19;
 const riverSide = p => p.x > (RIVER.x0 + RIVER.x1) / 2;
 const BRIDGE = { w: new V3(24.4, 0, BRIDGE_Z), e: new V3(31.6, 0, BRIDGE_Z) };
 const GEM_PRICE = 8;
@@ -642,7 +658,9 @@ const bridge = { unlocked: false };
   colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -6.2, z1: -3.8, on: () => !dock.built });
   colliders.push({ x0: 28.4, x1: RIVER.x1 + 0.3, z0: -6.2, z1: -3.8, on: () => dock.built });
   colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: -3.8, z1: BRIDGE_Z - 1.1 });
-  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: BRIDGE_Z + 1.1, z1: 300 });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: BRIDGE_Z + 1.1, z1: SOUTH_BRIDGE_Z - 1.35 });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: SOUTH_BRIDGE_Z + 1.35, z1: 300 });
+  colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: SOUTH_BRIDGE_Z - 1.35, z1: SOUTH_BRIDGE_Z + 1.35, on: () => !shortBuilds.southbridge.done });
   colliders.push({ x0: RIVER.x0 - 0.3, x1: RIVER.x1 + 0.3, z0: BRIDGE_Z - 1.2, z1: BRIDGE_Z + 1.2, on: () => !bridge.unlocked });
 }
 function updateRiver(dt) {
@@ -1066,7 +1084,7 @@ for (const [x0, x1, z0, z1] of [[-23, -12, -26, 16], [13.5, 23, -26, 16]]) {
 }
 for (let x = -22.5; x <= -13.5; x += 2.2) for (let z = -6.5; z <= 2; z += 2.1) if (Math.random() < 0.9) berries.push(new Tree(x + rand(-0.5, 0.5), z + rand(-0.5, 0.5), 'berry'));
 for (let x = 33.5; x <= 57; x += 3.2) for (let z = -24; z <= 19; z += 3.2) {
-  if (Math.abs(z - BRIDGE_Z) < 2.5 && x < 37) continue;
+  if ((Math.abs(z - BRIDGE_Z) < 2.5 || Math.abs(z - SOUTH_BRIDGE_Z) < 2.5) && x < 37) continue;
   if (Math.abs(x - 45) < 3.8 && z > -16 && z < -6) continue;
   if (x > RIDGE.x0 - 2 && x < RIDGE.x1 + 2 && z > RIDGE.z0 - 2.4 && z < RIDGE.z1 + 8) continue;
   const px = x + rand(-0.8, 0.8), pz = z + rand(-0.8, 0.8);
@@ -1398,14 +1416,17 @@ function updateSawmill(dt) {
 function unlockBridge(instant) {
   if (bridge.unlocked) return;
   bridge.unlocked = true;
-  const g = stationGroup((RIVER.x0 + RIVER.x1) / 2, BRIDGE_Z);
+  buildRiverBridge(BRIDGE_Z, instant);
+}
+function buildRiverBridge(zAt, instant) {
+  const g = stationGroup((RIVER.x0 + RIVER.x1) / 2, zAt);
   const span = RIVER.x1 - RIVER.x0 + 2.4;
   for (let i = 0, n = 14; i < n; i++) mesh(new THREE.BoxGeometry(span / n - 0.04, 0.14, 2.3), i % 2 ? 0xd9dee5 : 0x7e8ca0, -span / 2 + (i + 0.5) * span / n, 0.32, 0, g);
   for (const z of [-1.15, 1.15]) {
     mesh(new THREE.BoxGeometry(span, 0.12, 0.12), 0x3f7fc8, 0, 1.0, z, g);
     for (let x = -span / 2; x <= span / 2 + 0.01; x += span / 4) mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), 0x3f7fc8, x, 0.65, z, g);
   }
-  if (!instant) { popIn(g); burst(new V3(28, 0, BRIDGE_Z), 0xd9dee5, 16); }
+  if (!instant) { popIn(g); burst(new V3(28, 0, zAt), 0xd9dee5, 16); }
 }
 
 // Gem cutter
@@ -1794,6 +1815,7 @@ function drawMap(dt) {
     if (fk === 'cove') for (const ch of cove.chests) if (!ch.open) dot(ch.g.position.x, ch.g.position.z, 3.5, '#ffcc33');
     dot(f.exit.x, f.exit.z, 4, '#e8433a');
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    drawMiniDistricts(c, f.name);
     drawPlanMarker(c);
     return;
   }
@@ -1810,6 +1832,7 @@ function drawMap(dt) {
     if (bounds === ISLE) for (const shard of isle.shards) if (!shard.down) dot(shard.pos.x, shard.pos.z, 3, '#b681ef');
     if (bounds === VOLC) for (const node of obsidians) if (!node.down) dot(node.pos.x, node.pos.z, 3, '#ff9457');
     const pp = player.g.position; dot(pp.x, pp.z, 5, '#2f78d6');
+    drawMiniDistricts(c, bounds === MINE ? 'Frost Mine' : bounds === ISLE ? 'Aurora Isle' : 'Ember Volcano');
     drawPlanMarker(c);
     return;
   }
@@ -1820,7 +1843,10 @@ function drawMap(dt) {
   c.fillStyle = 'rgba(120,135,155,0.45)';
   for (const pl of PLOTS) if (!pl.owned) c.fillRect(mx(pl.x0), mz(pl.z0), mx(pl.x1) - mx(pl.x0), mz(pl.z1) - mz(pl.z0));
   c.fillStyle = '#4f9fe0'; c.fillRect(mx(RIVER.x0), 0, mx(RIVER.x1) - mx(RIVER.x0), H_);
-  if (bridge.unlocked) { c.fillStyle = '#c9d3dc'; c.fillRect(mx(RIVER.x0 - 1), mz(BRIDGE_Z - 1.2), mx(RIVER.x1 + 1) - mx(RIVER.x0 - 1), mz(BRIDGE_Z + 1.2) - mz(BRIDGE_Z - 1.2)); }
+  for (const z of openCrossings()) {
+    c.fillStyle = '#c9d3dc';
+    c.fillRect(mx(RIVER.x0 - 1), mz(z - 1.2), mx(RIVER.x1 + 1) - mx(RIVER.x0 - 1), mz(z + 1.2) - mz(z - 1.2));
+  }
   c.fillStyle = 'rgba(80,140,200,0.35)';
   for (const t of trees) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
   c.fillStyle = '#8fe8f8'; for (const t of rocks) if (!t.down) c.fillRect(mx(t.pos.x) - 1.5, mz(t.pos.z) - 1.5, 3, 3);
@@ -1837,6 +1863,7 @@ function drawMap(dt) {
   if (trader.state !== 'away') dot(trader.g.position.x, trader.g.position.z, 3.5, '#7a4fc8');
   const pp = player.g.position;
   c.strokeStyle = '#ffffff'; c.lineWidth = 2; dot(pp.x, pp.z, 5, '#2f78d6'); c.beginPath(); c.arc(mx(pp.x), mz(pp.z), 5, 0, 2 * PI); c.stroke();
+  drawMiniDistricts(c);
   drawPlanMarker(c);
 }
 
@@ -2048,16 +2075,16 @@ const UPGRADES = [
   { id: 'toolp', name: 'Tempered Steel', desc: '+$20 for every tool', costs: [3000, 8000], req: () => store.built },
   { id: 'potionp', name: 'Crystal Vials', desc: '+$30 for every potion', costs: [4000, 10000], req: () => store.built },
   { id: 'icep', name: 'Fine Chisels', desc: '+$12 for every ice sculpture', costs: [2000, 5000], req: () => carver.built },
-  { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built },
+  { id: 'minecart', name: 'Mine Cart', desc: 'Sends iron bars from the Smelter to the Blacksmith', costs: [4000], req: () => smelter.built && smithy.built && !shortBuilds.minedepot.done },
   { id: 'icewagon', name: 'Ice Wagon', desc: 'Sends ice blocks from the Ice Saw to the Carver', costs: [2500], req: () => icesaw.built && carver.built },
-  { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [5000], req: () => apoth.built && store.built },
+  { id: 'courier', name: 'Potion Courier', desc: 'Sends potions from the Apothecary to the General Store', costs: [1500], req: () => apoth.built && store.built },
   { id: 'mgr_town', name: 'Town Manager', desc: 'Collects every cash pile in Market Town for you', costs: [20000], req: () => town.built },
   { id: 'mgr_ridge', name: 'Ridge Manager', desc: 'Collects every cash pile at Ridge Camp for you', costs: [30000], req: () => ridge.unlocked },
   { id: 'mgr_far', name: 'Far Lands Manager', desc: 'Collects cash in the Mine, Volcano, Isle, Harbor and other outlying areas', costs: [50000], req: () => mine.built },
   { id: 'petlvl', name: 'Pet Treats', desc: 'All pets get stronger: harder bites, faster swoops, more carrying, more digging. Plus collars, then hats', costs: [3000, 8000, 20000], req: () => husky.owned || !!pets.penguin || !!pets.fox },
   { id: 'reindeer', name: 'Riding Reindeer', desc: 'Ride a reindeer and move 60% faster (switch it in the Menu)', costs: [15000] },
   { id: 'bladep', name: 'Dragonglass Edge', desc: '+$60 for every obsidian blade', costs: [10000, 25000], req: () => store.built && forge.built },
-  { id: 'fsupply', name: 'Forge Supply', desc: 'Sends iron bars from the Smelter to the Lava Forge', costs: [8000], req: () => forge.built && smelter.built },
+  { id: 'fsupply', name: 'Forge Supply', desc: 'Sends iron bars from the Smelter to the Lava Forge', costs: [2400], req: () => forge.built && smelter.built },
   { id: 'breadp', name: 'Honey Glaze', desc: '+$6 for every loaf of bread', costs: [1500, 4000], req: () => store.built && oven.built },
   { id: 'stewp', name: 'Secret Spices', desc: '+$9 for every bowl of stew', costs: [2000, 5000], req: () => store.built && soup.built },
   { id: 'ssupply', name: 'Stew Supply', desc: 'Sends raw meat from the grill to the Soup Kitchen', costs: [2500], req: () => soup.built },
@@ -2262,14 +2289,14 @@ function unlockMine(instant) {
   zoneMarker(mine.exitZone.x, mine.exitZone.z, 'exit', '#8fe8f8');
   for (let i = 0; i < 18; i++) {
     let x, z, tries = 0;
-    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (x > 127 && z < -8)));
+    do { x = rand(106, 130); z = rand(-12, 12); tries++; } while (tries < 20 && ((x > 121 && Math.abs(z) < 5.5) || golds.some(gn => d2(gn.pos, { x, z }) < 2.4) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 119) < 2.5 && z > 3.3 && z < 9.4) || (x > 127 && z < -8)));
     golds.push(new Tree(x, z, 'gold'));
   }
   mine.wasIn = !instant;
   for (const [list, kind] of [[coals, 'coal'], [irons, 'iron']]) for (let i = 0; i < 8; i++) {
     let x, z, tries = 0;
     const taken = () => golds.concat(coals, irons).some(n => d2(n.pos, { x, z }) < 2.4);
-    do { x = rand(106, 131); z = rand(-12.5, 12.5); tries++; } while (tries < 30 && ((x > 121 && Math.abs(z) < 5.5) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 116.5) < 2 && Math.abs(z - 4.5) < 2) || (x > 127 && z < -8) || taken()));
+    do { x = rand(106, 131); z = rand(-12.5, 12.5); tries++; } while (tries < 30 && ((x > 121 && Math.abs(z) < 5.5) || (x < 110 && z > 4) || (x > 108 && x < 118 && z > 3.5) || (Math.abs(x - 116.5) < 2 && Math.abs(z - 4.5) < 2) || (Math.abs(x - 119) < 2.5 && z > 3.3 && z < 9.4) || (x > 127 && z < -8) || taken()));
     list.push(new Tree(x, z, kind));
   }
   if (!instant) { popIn(m); burst(new V3(45, 0, -11), 0xffcc33, 18); toast('The Frost Mine is open. Gather gold, coal, and iron ore.'); }
@@ -2388,9 +2415,12 @@ function ensureAurora() {
 }
 function deliverSite(site, c) {
   for (const [t, n] of Object.entries(site.need)) {
-    if (site.have[t] >= n) continue;
+    if ((site.have[t] || 0) >= n) continue;
     const it = c.take(t); if (!it) continue;
-    site.have[t]++; sfx('drop'); fly(it.m, it.pos, () => site.zone.clone().add(new V3(0, 1, 2.4)), 0.3, () => scene.remove(it.m));
+    site.have[t] = (site.have[t] || 0) + 1; sfx('drop'); fly(it.m, it.pos, () => site.zone.clone().add(new V3(0, 1, 2.4)), 0.3, () => scene.remove(it.m));
+    if (site.finish && Object.entries(site.need).every(([type, count]) => (site.have[type] || 0) >= count)) {
+      completeShortBuild(site, false);
+    }
     save();
     return true;
   }
@@ -2618,7 +2648,7 @@ function applyTier(st, instant) {
   const t = U('tier_' + st.id);
   const rp = (RS('piles') ? 1.25 : 1) * (1 + 0.25 * storage.lvl);
   for (const i of st.ins) { i.pile.baseMax = i.pile.baseMax || i.pile.max; i.pile.max = Math.round(i.pile.baseMax * (1 + 0.5 * t) * rp); }
-  if (st.outPile) { st.outPile.baseMax = st.outPile.baseMax || st.outPile.max; st.outPile.max = Math.round(st.outPile.baseMax * (1 + 0.5 * t) * rp); }
+  if (st.outPile) { st.outPile.baseMax = st.outPile.baseMax || st.outPile.max; st.outPile.max = Math.round(st.outPile.baseMax * (1 + 0.5 * t) * rp) + (st.id === 'smelter' && shortBuilds.minedepot.done ? 16 : 0); }
   if (st.g && t) {
     if (st.badge) st.g.remove(st.badge);
     const [w, d] = st.size || [2.2, 1.6];
@@ -2658,7 +2688,7 @@ function renderTiers() {
 const beltTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 16; const x = c.getContext('2d'); x.fillStyle = '#3a4250'; x.fillRect(0, 0, 64, 16); x.fillStyle = '#56606f'; for (let i = 0; i < 64; i += 16) x.fillRect(i, 0, 8, 16); const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; return t; })();
 const BELTS = [
   { id: 'grill', name: 'Grill → Steak Counter', price: 120, src: () => [grill.output, 'steak'], dst: () => counter.input, ok: () => served > 0 || U('belt_grill') > 0 },
-  { id: 'jam', name: 'Jam Kitchen → General Store', src: () => [kitchen.outPile, 'jam'], dst: () => store.ins[0].pile, ok: () => kitchen.built && store.built },
+  { id: 'jam', name: 'Jam Kitchen → General Store', price: 700, src: () => [kitchen.outPile, 'jam'], dst: () => store.ins[0].pile, ok: () => kitchen.built && store.built },
   { id: 'pie', name: 'Pie Bakery → General Store', src: () => [bakery.outPile, 'pie'], dst: () => store.ins[0].pile, ok: () => bakery.built && store.built },
   { id: 'tool', name: 'Blacksmith → General Store', src: () => [smithy.outPile, 'tool'], dst: () => store.ins[0].pile, ok: () => smithy.built && store.built },
   { id: 'comb', name: 'Bee Yard → Candle Maker', src: () => [beeyard.outPile, 'comb'], dst: () => chandler.ins[0].pile, ok: () => beeyard.built && chandler.built },
@@ -2670,7 +2700,7 @@ const BELTS = [
   { id: 'ice', name: 'Ice Saw → Ice Carver', src: () => [icesaw.outPile, 'ice'], dst: () => carver.ins[0].pile, ok: () => icesaw.built && carver.built },
   { id: 'milk', name: 'Milking Barn → Creamery', src: () => [barn.outPile, 'milk'], dst: () => creamery.ins[0].pile, ok: () => barn.built && creamery.built },
   { id: 'wool', name: 'Yak Pen → Tailor', src: () => [pen.out, 'wool'], dst: () => tailor.input, ok: () => pen.built && tailor.built },
-  { id: 'lantern', name: 'Lantern Shop → Market Stall', src: () => [workshop.out, 'lantern'], dst: () => market.input, ok: () => workshop.built && market.built },
+  { id: 'lantern', name: 'Lantern Shop → Market Stall', price: 650, src: () => [workshop.out, 'lantern'], dst: () => market.input, ok: () => workshop.built && market.built },
 ];
 const beltLen = b => d2(b.src()[0].center, b.dst().center);
 const beltCost = b => b.price ?? Math.round((600 + beltLen(b) * 90) * (RS('belts') ? 0.6 : 1) / 50) * 50;
@@ -3367,13 +3397,20 @@ function updateTown(dt) {
 let cartT = 0;
 function updateCarts(dt) {
   cartT += dt; if (cartT < 15) return; cartT = 0;
-  const move = (src, dst, type, typed) => {
-    for (let i = 0; i < 6 && src.n > 0 && dst.free() > 0; i++) {
-      scene.remove(src.take()); const m = makeItem(type), from = dst.center.clone().add(new V3(0, 3, 0));
+  const move = (src, dst, type, typed, reserve = 0) => {
+    for (let i = 0; i < 6 && src.n > reserve && dst.free() > 0; i++) {
+      const m = src.take(), from = dst.center.clone().add(new V3(0, 3, 0));
       if (typed) dst.receiveT(m, from, type); else dst.receive(m, from);
     }
   };
-  if (U('minecart') && smelter.built && smithy.built) move(smelter.outPile, smithy.ins[0].pile, 'bar');
+  if ((U('minecart') || shortBuilds.minedepot.done) && smelter.built && smithy.built) move(smelter.outPile, smithy.ins[0].pile, 'bar');
+  if (shortBuilds.freightpier.done) {
+    if (boat.owned) move(boat.pile, freightFish, 'fish', false, 2);
+    if (shortBuilds.harborfishing.done) move(harborCatch, freightFish, 'fish', false, 2);
+    if (smelter.built) move(smelter.outPile, freightBars, 'bar', false, 6);
+    if (fishmkt.built) move(freightFish, fishmkt.ins[0].pile, 'fish', true);
+    if (shipyard.built) move(freightBars, shipyard.ins[1].pile, 'bar', false);
+  }
   if (U('icewagon') && icesaw.built && carver.built) move(icesaw.outPile, carver.ins[0].pile, 'ice');
   if (U('courier') && apoth.built && store.built) move(apoth.outPile, store.ins[0].pile, 'potion', true);
   if (U('jsupply') && jeweler.built) {
@@ -3789,8 +3826,8 @@ const PADS = [
   { id: 'giftshop', label: 'Gift Shop', icon: 'gift', costs: [25000], x: 223.6, z: -9.2, req: () => FAR.harbor.built, apply: (l, i) => giftshop.unlock(i) },
   { id: 'balloon', label: 'Cargo Balloon', icon: 'cart', costs: [16000, 30000], x: -17.5, z: 17.2, req: () => ridge.unlocked, apply: (l, i) => buildBalloon(l, i) },
   { id: 'mill', label: 'Water Mill', icon: 'saw', costs: [12000, 24000], x: 24, z: 11.5, req: () => bridge.unlocked, apply: (l, i) => buildMill(l, i) },
-  { id: 'harbor', label: 'Harbor District', icon: 'boat', costs: [30000], x: 13, z: 21, req: () => town.built && STATIONS.filter(st => st.built).length >= 6, apply: (l, i) => buildHarbor(i) },
-  { id: 'fishmkt', label: 'Fish Market', icon: 'fish', costs: [12000], x: 230, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => fishmkt.unlock(i) },
+  { id: 'harbor', label: 'Harbor District', icon: 'boat', costs: [12000], x: 13, z: 21, req: () => town.built && STATIONS.filter(st => st.built).length >= 3, apply: (l, i) => buildHarbor(i) },
+  { id: 'fishmkt', label: 'Fish Market', icon: 'fish', costs: [650], x: 230, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => fishmkt.unlock(i) },
   { id: 'shipyard', label: 'Shipyard', icon: 'boat', costs: [18000], x: 238, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => shipyard.unlock(i) },
   { id: 'cafe', label: 'Harbor Café', icon: 'milk', costs: [15000], x: 230, z: 8.8, req: () => FAR.harbor.built, apply: (l, i) => cafe.unlock(i) },
   { id: 'bootmk', label: 'Boot Maker', icon: 'boot', costs: [20000], x: 246, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => bootmk.unlock(i) },
@@ -4190,6 +4227,20 @@ function playerInteract() {
     if (ok && inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
   if (farPortals(pos)) return;
+  for (const site of Object.values(shortBuilds)) {
+    if (!site.ready() || site.done || !inZone(pos, site.zone.x, site.zone.z, 1.15)) continue;
+    if (deliverSite(site, c)) return;
+  }
+  for (const [available, pile, type] of [
+    [shortBuilds.harborfishing.done, harborCatch, 'fish'],
+    [shortBuilds.freightpier.done, freightFish, 'fish'],
+    [shortBuilds.freightpier.done, freightBars, 'bar'],
+  ]) {
+    if (available && pile.n && !c.full() && inZone(pos, pile.x, pile.z)) {
+      c.receive(type, pile.take(), pile.slot(pile.n));
+      return;
+    }
+  }
   if (beacon.shown && !beacon.done && inZone(pos, beacon.zone.x, beacon.zone.z, 1.05) && deliverSite(beacon, c)) return;
   if (castle.built && castle.stage < CASTLE.length && inZone(pos, castle.zone.x, castle.zone.z, 1.05) && castleDeliver(c)) return;
   // lava tunnel between the mine and the volcano
@@ -5768,15 +5819,24 @@ function openMenu(view = '') { menuEl.hidden = false; showMenuView(view); }
 function closeMenu() { menuEl.hidden = true; menuView = ''; }
 document.getElementById('menubtn').onclick = () => { audioInit(); menuEl.hidden ? openMenu() : closeMenu(); };
 document.getElementById('menux').onclick = closeMenu;
-document.getElementById('map').addEventListener('click', () => { audioInit(); openMenu('travel'); });
+mapCv.addEventListener('click', () => { audioInit(); openMenu('map'); });
+mapCv.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  openMenu('map');
+});
+document.getElementById('travelbtn').onclick = () => showMenuView('map');
+document.getElementById('districtbtn').onclick = () => showMenuView('districts');
 function showMenuView(v) {
   menuView = v;
   liveMenuMarkup = '';
-  const tabs = [['buildbtn', 'build'], ['travelbtn', 'travel'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
+  const tabs = [['buildbtn', 'build'], ['travelbtn', 'map'], ['districtbtn', 'districts'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
     ['castlebtn', 'castle'], ['peoplebtn', 'people'], ['logbtn', 'log'], ['albumbtn', 'album']];
   for (const [id, key] of tabs) document.getElementById(id).classList.toggle('on', v === key);
   if (v === 'album') { renderAlbum(); return; }
   if (v === 'build') { openBuildPlanner(); return; }
+  if (v === 'map') { openMapDirectory(); return; }
+  if (v === 'districts') { renderDistricts(); return; }
   if (v === 'castle') { renderProjects(); return; }
   if (v === 'log') {
     menuBody.innerHTML = '<h4>Activity</h4>';
@@ -5791,7 +5851,7 @@ function showMenuView(v) {
   }
   if (v === 'recipes') { renderRecipes(); return; }
   if (v === 'people') { renderPeople(); return; }
-  if (v === 'travel') renderTravel(); else if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
+  if (v === 'wh') renderWarehouse(); else if (v === 'backup') renderBackup(); else menuBody.innerHTML = '';
 }
 document.getElementById('buildbtn').onclick = () => showMenuView('build');
 document.getElementById('logbtn').onclick = () => showMenuView('log');
@@ -5845,15 +5905,6 @@ const PLACES = [
   { name: 'Shipwreck Cove', sub: 'Pearls and sunken chests', at: () => { freshCove(); return FAR.cove.start; }, ok: () => FAR.cove.built },
   { name: 'Ember Volcano', sub: 'Obsidian and the Lava Forge', at: () => volc.start, ok: () => volc.built },
 ];
-function renderTravel() {
-  const list = PLACES.filter(pl => pl.ok());
-  menuBody.innerHTML = `<h4>Fast travel</h4><p>Jump straight to any place you have unlocked. Whatever you're carrying comes along.</p><div class="travel">` +
-    list.map((pl, i) => `<button type="button" data-i="${i}"><span>${pl.name}</span><small>${pl.sub}</small></button>`).join('') + `</div>`;
-  menuBody.querySelectorAll('.travel button').forEach(b => b.onclick = () => {
-    const pl = list[+b.dataset.i]; closeMenu(); teleport(pl.at().clone()); toast(pl.name);
-  });
-}
-
 // warehouse: every building, its stock and whether it's stuck
 const AREA_NAME = {
   main: 'Main Camp', ridge: 'Ridge Camp', town: 'Market Town', mine: 'Frost Mine', isle: 'Aurora Isle',
@@ -5971,21 +6022,34 @@ function setBuildPin(pin) {
 }
 function planTarget() {
   if (!buildPin) return null;
+  if (buildPin.kind === 'map') {
+    const entry = mapEntries.get(buildPin.id), p = entry?.ok() && entry.at();
+    return p ? { p, label: entry.name, summary: entry.name + ' · ' + mapAreaName(entry, p) } : null;
+  }
   if (buildPin.kind === 'pad') {
     const pad = PADS.find(p => p.id === buildPin.id);
     if (!pad || padState[pad.id].level !== buildPin.level || !activePad(pad)) return null;
     const left = padRemaining(pad), short = left - W.cash;
     return { p: padLocation(pad), label: pad.label, summary: `${pad.label} · ${short > 0 ? dollars(short) + ' short' : dollars(left) + ' to build'}` };
   }
+  if (buildPin.kind === 'short') {
+    const site = shortBuilds[buildPin.id];
+    return site?.ready() && !site.done ? {
+      p: site.zone, label: site.name, summary: site.name + ' · ' + remainingMaterials(site.need, site.have),
+    } : null;
+  }
   const isCastle = buildPin.kind === 'castle';
   if (!isCastle && buildPin.kind !== 'beacon') return null;
   const site = isCastle ? castle : beacon, stage = isCastle ? CASTLE[castle.stage] : null;
   if (isCastle ? !castle.built || !stage : !FAR.harbor.built || beacon.done) return null;
   const label = isCastle ? 'Ice Castle' : 'Harbor Beacon';
-  const needs = Object.entries(isCastle ? stage.need : beacon.need)
-    .filter(([type, count]) => (site.have[type] || 0) < count)
-    .map(([type, count]) => { const left = count - (site.have[type] || 0); return `${left} ${itemName(type, left)}`; });
-  return { p: site.zone, label, summary: `${stage ? stage.name : label} · ${needs.length ? needs.join(' + ') : 'Finishing'}` };
+  return { p: site.zone, label, summary: `${stage ? stage.name : label} · ${remainingMaterials(isCastle ? stage.need : beacon.need, site.have)}` };
+}
+function remainingMaterials(need, have) {
+  const needs = Object.entries(need)
+    .filter(([type, count]) => (have[type] || 0) < count)
+    .map(([type, count]) => { const left = count - (have[type] || 0); return `${left} ${itemName(type, left)}`; });
+  return needs.length ? needs.join(' + ') : 'Finishing';
 }
 function planWaypoint() {
   const target = planTarget();
@@ -6010,7 +6074,10 @@ function planWaypoint() {
       const banks = [RIVER.x0 - 1.8, RIVER.x1 + 1.8];
       const approach = crossingEast ? banks[0] : banks[1];
       const across = crossingEast ? banks[1] : banks[0];
-      p = new V3(Math.abs(pos.z - BRIDGE_Z) > 1.2 ? approach : across, 0, BRIDGE_Z);
+      const cost = z => Math.hypot(approach - pos.x, z - pos.z) + Math.hypot(across - p.x, z - p.z);
+      const onCrossing = pos.x > RIVER.x0 - 0.3 && pos.x < RIVER.x1 + 0.3;
+      const z = openCrossings().reduce((best, next) => (onCrossing ? Math.abs(next - pos.z) < Math.abs(best - pos.z) : cost(next) < cost(best)) ? next : best);
+      p = new V3(Math.abs(pos.z - z) > 0.85 ? approach : across, 0, z);
       label = 'Cross the bridge';
     }
   }
@@ -6088,9 +6155,82 @@ function renderBuildList() {
   updateMenuMarkup(list, content);
 }
 
+const harborCatch = new Pile(245.2, 4.7, 3, 3, 18, 0.6, 0.6, H.fish + 0.02);
+const freightFish = new Pile(243.8, -1.8, 3, 3, 24, 0.6, 0.6, H.fish + 0.02);
+const freightBars = new Pile(247.2, -1.8, 3, 3, 24, 0.6, 0.6, H.bar + 0.02);
+const shortBuilds = {
+  southbridge: {
+    name: 'South Bridge', zone: new V3(24.1, 0, 19), need: { log: 10, bar: 2 }, ready: () => bridge.unlocked && town.built,
+    requires: 'Build the first Bridge and open Market Town.',
+    reward: 'Walk directly from Market Town to the south side of Ridge Camp.',
+    finish: instant => buildRiverBridge(SOUTH_BRIDGE_Z, instant),
+  },
+  minedepot: {
+    name: 'Mine Loading Depot', zone: new V3(119, 0, 5.4), need: { log: 4, bar: 2 }, ready: () => smelter.built,
+    requires: 'Build the Smelter in Frost Mine.',
+    reward: 'Adds 16 bars of storage at the Smelter. Ships bars to the Blacksmith as soon as it is built.',
+    finish: instant => {
+      const g = stationGroup(119, 7.5);
+      hut(g, 0x99856c, 0x3f6f9f, 2.8, 1.7);
+      for (const x of [-1.7, 1.7]) mesh(new THREE.BoxGeometry(0.6, 0.55, 0.65), 0x956840, x, 0.28, 0, g);
+      colliders.push({ x0: 117.5, x1: 120.5, z0: 6.55, z1: 8.45 });
+      applyTier(smelter, true);
+      if (!instant) popIn(g);
+    },
+  },
+  freightpier: {
+    name: 'Freight Pier', zone: new V3(245.6, 0, -3.5), need: { log: 6, bar: 2 }, ready: () => FAR.harbor.built,
+    requires: 'Open the Harbor District.',
+    reward: 'Stages fish from the boat and Harbor Fishing Dock, plus surplus Smelter bars. Supplies the Fish Market and Shipyard once built.',
+    finish: instant => buildHarborPlatform(245.6, -0.1, 5.4, [freightFish, freightBars], instant),
+  },
+  harborfishing: {
+    name: 'Harbor Fishing Dock', zone: new V3(245.6, 0, 6.8), need: { log: 6, bar: 1 }, ready: () => FAR.harbor.built,
+    requires: 'Open the Harbor District.',
+    reward: 'Lands fresh fish right in the Harbor. Carry them to the Fish Market or let the Freight Pier take over.',
+    finish: instant => buildHarborPlatform(245.6, 3.4, 4.2, [harborCatch], instant),
+  },
+};
+for (const site of Object.values(shortBuilds)) Object.assign(site, { have: {}, done: false, marker: null });
+function openCrossings() {
+  return shortBuilds.southbridge.done ? [BRIDGE_Z, SOUTH_BRIDGE_Z] : bridge.unlocked ? [BRIDGE_Z] : [];
+}
+function buildHarborPlatform(x, z, width, piles, instant) {
+  const g = stationGroup(x, z);
+  for (let i = 0; i < 8; i++) mesh(new THREE.BoxGeometry(width / 8 - 0.03, 0.2, 1.8), i % 2 ? 0xa86a3a : 0x8f582e, (i + 0.5) * width / 8 - width / 2, 0.12, 0, g);
+  for (const px of [-width / 2, width / 2]) for (const pz of [-0.85, 0.85]) {
+    mesh(new THREE.CylinderGeometry(0.08, 0.1, 1, 6), 0x6b3f1f, px, 0.45, pz, g);
+  }
+  for (const pile of piles) zoneMarker(pile.x, pile.z, pile === freightBars ? 'bar' : 'fish', '#9fd2f5');
+  if (!instant) popIn(g);
+}
+function completeShortBuild(site, instant) {
+  if (site.done) return;
+  site.done = true;
+  if (site.marker) scene.remove(site.marker);
+  site.finish(instant);
+  if (!instant) { burst(site.zone, 0x7be38a, 18); toast(site.name + ' complete.'); }
+}
+let harborCatchT = 0;
+function updateShortBuilds(dt) {
+  for (const site of Object.values(shortBuilds)) {
+    if (site.ready() && !site.done && !site.marker) site.marker = zoneMarker(site.zone.x, site.zone.z, 'board', '#ffe08a');
+  }
+  if (!shortBuilds.harborfishing.done) return;
+  harborCatchT += dt;
+  if (harborCatchT >= 4 && harborCatch.free() > 0) {
+    harborCatchT = 0;
+    harborCatch.receive(makeItem('fish'), harborCatch.center.clone().setY(1));
+  }
+}
+
 const PROJECT_SOURCES = { ice: 'Ice Saw', log: 'Forests', bar: 'Smelter', gem: 'Crystal deposits',
   gold: 'Frost Mine', lantern: 'Lantern Shop', ring: 'Jeweler', quilt: 'Down Workshop',
   potion: 'Apothecary', pearl: 'Shipwreck Cove' };
+function shortBuildPinButton(id, label) {
+  const pinned = buildPin?.kind === 'short' && buildPin.id === id;
+  return `<button class="projectaction" type="button" ${pinned ? 'data-plan-clear' : `data-short-build="${id}"`}>${pinned ? 'Clear map pin' : label}</button>`;
+}
 function projectMaterials(need, have) {
   return Object.entries(need).map(([type, count]) => {
     const delivered = Math.min(count, have[type] || 0), left = count - delivered;
@@ -6100,7 +6240,14 @@ function projectMaterials(need, have) {
   }).join('');
 }
 function renderProjects() {
-  let h = '<h4>Ice Castle</h4><p>Complete all four stages to earn 10% more income.</p>';
+  let h = '<h4>Short builds</h4>';
+  for (const [id, site] of Object.entries(shortBuilds)) {
+    h += `<h4>${site.name}</h4><p>${site.reward}</p>`;
+    if (!site.ready()) { h += `<p>${site.requires}</p>`; continue; }
+    if (site.done) { h += '<p>Complete</p>'; continue; }
+    h += shortBuildPinButton(id, 'Pin delivery site') + projectMaterials(site.need, site.have);
+  }
+  h += '<h4>Ice Castle</h4><p>Complete all four stages to earn 10% more income.</p>';
   if (!castle.built) {
     const pad = PADS.find(p => p.id === 'castle');
     h += activePad(pad)
@@ -6123,13 +6270,35 @@ function renderProjects() {
 menuBody.addEventListener('click', e => {
   const button = e.target.closest('button');
   if (!button) return;
-  const { planPad, planBelt, planProject, planUpgrade } = button.dataset;
-  if (planPad) {
+  const { planPad, planBelt, planProject, planUpgrade, shortBuild, mapPin, mapTravel, mapSelect, districtBuy } = button.dataset;
+  if (mapSelect || mapPin || mapTravel) {
+    const entry = mapEntries.get(mapSelect || mapPin || mapTravel);
+    if (!entry?.ok() || !entry.at()) return;
+    if (mapSelect) {
+      mapSelected = entry.id;
+      mapRegion = regionOf(entry.at());
+      renderMapDirectory();
+    } else if (mapPin) {
+      setBuildPin({ kind: 'map', id: entry.id });
+      closeMenu();
+    } else {
+      const destination = travelFor(entry);
+      if (!destination) return;
+      if (!entry.place) setBuildPin({ kind: 'map', id: entry.id });
+      else if (buildPin?.kind === 'map') setBuildPin(null);
+      closeMenu(); teleport(destination.at().clone());
+    }
+  } else if (districtBuy) {
+    buildQuery = districtBuy; buildFilter = 'automation'; showMenuView('build');
+  } else if (planPad) {
     const pad = PADS.find(p => p.id === planPad);
     if (pad && activePad(pad)) {
       setBuildPin({ kind: 'pad', id: pad.id, level: padState[pad.id].level });
       closeMenu();
     }
+  } else if (shortBuild && shortBuilds[shortBuild]?.ready() && !shortBuilds[shortBuild].done) {
+    setBuildPin({ kind: 'short', id: shortBuild });
+    closeMenu();
   } else if (planProject) {
     setBuildPin({ kind: planProject });
     closeMenu();
@@ -6157,6 +6326,205 @@ function menuTick(dt) {
   const sheet = menuEl.querySelector('.sheet'), y = sheet.scrollTop;
   render();
   sheet.scrollTop = y;
+}
+
+// Search uses game data from the same gathering nodes, vendors, and destinations used in play.
+const mapEntries = new Map();
+function addMapEntry(id, entry) {
+  mapEntries.set(id, { id, ...entry });
+}
+const mapId = (kind, name) => kind + '-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+for (const place of PLACES) addMapEntry(mapId('place', place.name), {
+  name: place.name, details: place.sub, ok: place.ok, place,
+  at: place.name === 'Shipwreck Cove' ? () => FAR.cove.start : place.at,
+});
+const mapItems = types => types.map(type => itemName(type) + ' ' + itemName(type, 2)).join(' ');
+const mapVendors = new Set();
+for (const vendor of VENDORS) {
+  mapVendors.add(vendor.name);
+  const inputs = vendor.needs.flatMap(n => n.types || [n.type]);
+  const output = vendor.makes?.type;
+  addMapEntry(mapId('vendor', vendor.name), {
+    name: vendor.name, at: () => vendor.makes?.pile.center || vendor.needs[0]?.pile.center || vendor.pos, ok: vendor.ok,
+    details: output ? 'Makes ' + itemName(output, 2) : inputs.length ? 'Accepts ' + inputs.slice(0, 3).map(t => itemName(t, 2)).join(', ') : vendor.about,
+    keywords: mapItems(output ? [output, ...inputs] : inputs), produces: output ? mapItems([output]) : '',
+  });
+}
+for (const pad of PADS) {
+  if (pad.icon === 'person' || mapVendors.has(pad.label)) continue;
+  addMapEntry('built-' + pad.id, {
+    name: pad.label, at: () => pad.plot ? new V3((pad.plot.home.x0 + pad.plot.home.x1) / 2, 0, (pad.plot.home.z0 + pad.plot.home.z1) / 2) : padLocation(pad),
+    ok: () => pad.plot ? pad.plot.owned : padLevel(pad.id) > 0, details: pad.plot ? PLOT_YIELDS[pad.plot.specialty] : 'Built landmark',
+  });
+}
+for (const [id, site] of Object.entries(shortBuilds)) addMapEntry('project-' + id, {
+  name: site.name, at: () => site.done && id === 'harborfishing' ? harborCatch.center : site.zone, ok: site.ready,
+  details: site.reward, keywords: mapItems(Object.keys(site.need)), produces: id === 'harborfishing' ? 'fish' : '',
+});
+function addResource(id, name, type, at, ok = () => true) {
+  addMapEntry('resource-' + id, { name, at, ok, details: 'Gather ' + itemName(type, 2), produces: mapItems([type]) });
+}
+const nodePosition = (nodes, keep = () => true) => nodes.find(n => keep(n) && !n.down)?.pos || nodes.find(keep)?.pos;
+addResource('wood', 'Main Camp forest', 'log', () => nodePosition(trees, n => n.pos.x < RIVER.x0));
+addResource('ridgewood', 'Ridge forest', 'log', () => nodePosition(trees, n => n.pos.x >= RIVER.x1), () => bridge.unlocked);
+addResource('berry', 'Berry thicket', 'berry', () => nodePosition(berries));
+addResource('boar', 'Frost boar clearing', 'meat', () => new V3((FIELD.x0 + FIELD.x1) / 2, 0, (FIELD.z0 + FIELD.z1) / 2));
+addResource('crystal', 'Crystal deposits', 'gem', () => nodePosition(rocks), () => bridge.unlocked);
+addResource('ore', 'Iron ore veins', 'ore', () => nodePosition(irons), () => mine.built);
+addResource('coal', 'Coal seams', 'coal', () => nodePosition(coals), () => mine.built);
+addResource('gold', 'Gold veins', 'gold', () => nodePosition(golds), () => mine.built);
+addResource('fish', 'River Fishing Dock', 'fish', () => dock.spot, () => dock.built);
+addResource('lakefish', 'Frozen Lake fishing holes', 'fish', () => lake.holes[0], () => FAR.lake.built);
+addResource('wheat', 'Farm wheat', 'wheat', () => nodePosition(crops, n => n.kind === 'wheat'), () => farm.built);
+addResource('carrots', 'Farm carrots', 'carrot', () => nodePosition(crops, n => n.kind === 'carrot'), () => farm.built);
+addResource('shards', 'Aurora shard beds', 'shard', () => nodePosition(isle.shards), () => isle.built);
+addResource('blooms', 'Snowbloom beds', 'bloom', () => nodePosition(blooms), () => isle.built);
+addResource('obsidian', 'Obsidian deposits', 'obsidian', () => nodePosition(obsidians), () => volc.built);
+addResource('feathers', 'Sky Peak nests', 'feather', () => nodePosition(feathers), () => FAR.peak.built);
+addResource('mushrooms', 'Steam Caves mushrooms', 'mushroom', () => nodePosition(mushrooms), () => FAR.steam.built);
+addResource('pearls', 'Pearl beds', 'pearl', () => nodePosition(pearls), () => FAR.cove.built);
+
+let mapQuery = '', mapRegion = 'main', mapSelected = '';
+function mapAreaName(entry, p) {
+  return entry.place?.name || AREA_NAME[areaLabelKey(p)] || 'Main Camp';
+}
+function travelFor(entry) {
+  if (entry.place) return entry.place;
+  const p = entry.at();
+  if (!p) return null;
+  const here = areaLabelKey(p);
+  return PLACES.find(place => place.name === AREA_NAME[here] && place.ok())
+    || (regionOf(p) === 'main' ? PLACES[0] : null);
+}
+function openMapDirectory() {
+  mapRegion = regionOf(player.g.position);
+  menuBody.innerHTML = `<h4>Map &amp; Travel</h4><div class="buildtools">
+    <input type="search" id="mapsearch" aria-label="Search locations or materials" placeholder="Find a place or material">
+    <select id="mapregion" aria-label="Map region"></select></div>
+    <div id="mapdirectory"></div>`;
+  const input = document.getElementById('mapsearch'), select = document.getElementById('mapregion');
+  input.value = mapQuery;
+  input.onkeydown = e => e.stopPropagation();
+  input.oninput = () => { mapQuery = input.value; mapSelected = ''; renderMapDirectory(); };
+  select.onchange = () => { mapRegion = select.value; mapSelected = ''; renderMapDirectory(); };
+  const regions = [...new Set([...mapEntries.values()].filter(e => e.place && e.ok()).map(e => regionOf(e.at())))];
+  select.innerHTML = regions.map(region => `<option value="${region}">${region === 'main' ? 'Camp valley' : AREA_NAME[region]}</option>`).join('');
+  renderMapDirectory();
+}
+function renderMapDirectory() {
+  const select = document.getElementById('mapregion');
+  select.value = mapRegion;
+  const query = mapQuery.toLowerCase().trim(), words = query.split(/\s+/);
+  const entries = [...mapEntries.values()].flatMap(entry => {
+    const p = entry.ok() && entry.at();
+    return p ? [{ entry, p, area: mapAreaName(entry, p) }] : [];
+  });
+  const matches = entries.filter(({ entry, area, p }) => {
+    if (!query) return regionOf(p) === mapRegion;
+    const haystack = [entry.name, area, entry.details, entry.keywords, entry.produces].join(' ').toLowerCase();
+    return words.every(word => haystack.includes(word));
+  }).sort((a, b) => query
+    ? Number((b.entry.produces || '').includes(query)) - Number((a.entry.produces || '').includes(query))
+    : Number(!!b.entry.place) - Number(!!a.entry.place));
+  const active = planTarget();
+  const rect = mapRegion === 'main' ? landBox() : ({ mine: MINE, isle: ISLE, volcano: VOLC }[mapRegion] || FAR[mapRegion]?.rect);
+  const left = x => clamp(100 * (x - rect.x0) / (rect.x1 - rect.x0), 4, 96);
+  const top = z => clamp(100 * (z - rect.z0) / (rect.z1 - rect.z0), 7, 93);
+  let h = active ? `<p>Pin · ${active.label} <button class="projectaction" type="button" data-plan-clear>Clear</button></p>` : '';
+  h += `<div class="mapboard" aria-label="Locations in this region" ${mapRegion === 'main' ? `data-water style="--river-left:${left(RIVER.x0)}%;--river-width:${left(RIVER.x1)-left(RIVER.x0)}%"` : ''}>`;
+  if (mapRegion === 'main') for (const z of openCrossings()) h += `<i class="map-crossing" style="top:${top(z)}%"></i>`;
+  const pos = player.g.position;
+  if (regionOf(pos) === mapRegion) h += `<i class="map-you" title="You" style="left:${left(pos.x)}%;top:${top(pos.z)}%"></i>`;
+  const selected = mapSelected || (buildPin?.kind === 'map' ? buildPin.id : '');
+  const markers = entries.filter(({ entry, p }) => regionOf(p) === mapRegion && (entry.place || entry.id === selected));
+  for (const { entry, p } of markers) h += `<button type="button" class="map-dot" data-map-select="${entry.id}"
+    style="left:${left(p.x)}%;top:${top(p.z)}%" ${entry.id === selected ? 'aria-current="true"' : ''}>${entry.name}</button>`;
+  if (active && regionOf(active.p) === mapRegion && !markers.some(({ p }) => d2(p, active.p) < 0.2)) h += `<span class="map-dot" aria-current="true" style="left:${left(active.p.x)}%;top:${top(active.p.z)}%">Pin</span>`;
+  h += '</div>';
+  const shown = mapSelected ? entries.filter(({ entry }) => entry.id === mapSelected) : matches;
+  if (mapSelected) h += '<button type="button" class="projectaction" id="mapall">Show all matches</button>';
+  for (const { entry, area } of shown) {
+    const destination = travelFor(entry);
+    h += `<div class="planrow map-result"><div><b>${entry.name}</b><small>${area === entry.name ? '' : area + ' · '}${entry.details}</small></div>
+      <div class="rowbtns"><button type="button" data-map-select="${entry.id}">Show on map</button><button type="button" data-map-pin="${entry.id}">Pin route</button>
+      ${destination ? `<button type="button" data-map-travel="${entry.id}">Travel to ${destination.name}</button>` : ''}</div></div>`;
+  }
+  if (!shown.length) h += '<p>No discovered locations match.</p>';
+  document.getElementById('mapdirectory').innerHTML = h;
+  const all = document.getElementById('mapall');
+  if (all) all.onclick = () => { mapSelected = ''; renderMapDirectory(); };
+}
+function drawMiniDistricts(ctx, regionName) {
+  ctx.save();
+  ctx.font = '800 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = '#273649'; ctx.lineWidth = 3;
+  ctx.fillStyle = '#fff';
+  const labels = [['Camp', 0, -2], ...(town.built ? [['Town', 0, 27]] : []), ...(ridge.unlocked ? [['Ridge', 45, 0]] : []), ...(mine.built ? [['Mine', 45, -12]] : [])];
+  if (regionName) { ctx.strokeText(regionName, mapCv.width / 2, 13); ctx.fillText(regionName, mapCv.width / 2, 13); }
+  else for (const [label, x, z] of labels) { ctx.strokeText(label, mx(x), mz(z)); ctx.fillText(label, mx(x), mz(z)); }
+  ctx.restore();
+}
+
+// District routes present production choices using the normal build pads and upgrade menu.
+const DISTRICT_ROUTES = [
+  ['Main Camp', () => true, [
+    ['Sell steaks', 'Grill the first loads, then hire a Hunter and buy the starter conveyor.', ['hunter', 'banker'], 'Grill'],
+    ['Sell timber', 'Bring logs to the Sawmill, then hire a Lumberjack to bring more.', ['saw', 'lumber', 'sawup']],
+  ]],
+  ['Ridge Camp', () => ridge.unlocked, [
+    ['Sell lanterns', 'Use ridge crystals and logs. Hire a Crafter or add a conveyor after building the Market Stall.', ['workshop', 'market', 'crafter'], 'Lantern Shop'],
+    ['Raise yaks', 'Turn wool into coats. A Shepherd carries wool from the pen to the Tailor.', ['pen', 'tailor', 'shepherd']],
+  ]],
+  ['Frost Mine', () => mine.built, [
+    ['Sell gold', 'Sell gold straight from the vein. Hire a Gold Digger after the first few loads.', ['smith', 'digger']],
+    ['Make tools', 'Smelt iron and coal into bars. Build the depot to ship them to your Blacksmith, then sell tools at the General Store.', ['smelter', 'smithy', 'store', 'smelterhand'], null, 'minedepot'],
+  ]],
+  ['Market Town', () => town.built, [
+    ['Sell jam', 'Bring berries to the Jam Kitchen. Sell the jars at the General Store and hire a picker or add a conveyor.', ['kitchen', 'store', 'picker'], 'Jam Kitchen'],
+    ['Farm and bake', 'Grow wheat for bread. Hire a Farmer to keep the ovens supplied.', ['farm', 'oven', 'farmer'], 'Bread Oven'],
+  ]],
+  ['Aurora Isle', () => isle.built, [
+    ['Sell shards', 'Gather shards near the ferry and hire a Shard Miner once the exchange is built.', ['exch', 'sharder']],
+    ['Brew potions', 'Mix shards with snowblooms, then buy a Potion Courier to supply the General Store.', ['apoth', 'herbalist', 'store'], 'Potion Courier'],
+  ]],
+  ['Harbor District', () => FAR.harbor.built, [
+    ['Sell fish', 'Start with the Fish Market. Build a local dock so you can land fish beside it.', ['fishmkt'], null, 'harborfishing'],
+    ['Move freight', 'Build the Freight Pier to receive fish and bars from other districts. Use the bars at the Shipyard.', ['shipyard'], null, 'freightpier'],
+  ]],
+  ['Sky Peak', () => FAR.peak.built, [
+    ['Make quilts', 'Combine feathers from the peak with yak wool. Sell quilts by sled or save them for the Ice Castle.', ['downshop', 'depot']],
+    ['Improve timber sales', 'Build the Weather Station to boost income during snowstorms.', ['weather']],
+  ]],
+  ['Frozen Lake', () => FAR.lake.built, [
+    ['Catch fish', 'Sell lake fish at the Fish Market. A Fishing Boat brings river catches to the Freight Pier.', ['fishmkt', 'boat'], null, 'freightpier'],
+    ['Open the rink', 'Visitors pay to skate while you gather supplies.', ['rink']],
+  ]],
+  ['Ember Volcano', () => volc.built, [
+    ['Forge blades', 'Combine obsidian with iron bars. Hire an Obsidian Miner and use Forge Supply to carry bars.', ['forge', 'obsminer'], 'Forge Supply'],
+    ['Open the caves', 'The Steam Tunnel opens a new supply of mushrooms and greenhouse carrots.', ['steamtunnel', 'greenhouse']],
+  ]],
+  ['Steam Caves', () => FAR.steam.built, [
+    ['Supply the kitchen', 'Build the Greenhouse for a steady supply of carrots for stew.', ['greenhouse', 'soup']],
+    ['Sell mushrooms', 'Gather mushrooms and ship them by Reindeer Sled.', ['depot']],
+  ]],
+  ['Shipwreck Cove', () => FAR.cove.built, [
+    ['Sell pearls', 'Gather pearls for the Fish Market.', ['fishmkt']],
+    ['Build the beacon', 'Bring pearls, lanterns, and potions to the Harbor Beacon.', ['harbor']],
+  ]],
+];
+function renderDistricts() {
+  menuBody.innerHTML = '<h4>Districts</h4>' + DISTRICT_ROUTES.filter(([, open]) => open()).map(([name, , paths]) =>
+    `<div class="wh-area">${name}</div>${paths.map(([title, details, ids, automation, short]) => {
+      const next = ids.map(id => PADS.find(p => p.id === id)).find(p => p && !padLevel(p.id) && activePad(p));
+      const progress = ids.filter(id => padLevel(id) > 0).length + Number(!!shortBuilds[short]?.done);
+      const total = ids.length + Number(!!short);
+      return `<div class="planrow map-result"><div><b>${title}</b><small>${details}</small>
+        <small>${progress}/${total} built · ${ids.map(padLabel).concat(short ? shortBuilds[short].name : []).join(' → ')}</small></div>
+        <div class="rowbtns">${next ? `<button type="button" data-plan-pad="${next.id}">Pin ${next.label} · ${dollars(padRemaining(next))}</button>` : ''}
+        ${short && shortBuilds[short].ready() && !shortBuilds[short].done ? shortBuildPinButton(short, 'Pin ' + shortBuilds[short].name) : ''}
+        ${automation ? `<button type="button" data-district-buy="${automation}">Delivery routes</button>` : ''}</div></div>`;
+    }).join('')}`).join('');
 }
 
 // Backup code includes the current camp and its persistent data.
@@ -6245,6 +6613,7 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function campSave() {
   return {
+    shortBuilds: Object.fromEntries(Object.entries(shortBuilds).map(([id, site]) => [id, site.have])),
     cash: W.cash, pads: padState, served, dayT, plan: buildPin, ride: W.ride, tut: tut.step,
     coveDay: FAR.cove.lastDay, up: UP, orders: orders.list, ordersNext: orders.next,
     f1: { fuel: power.fuel }, f4: { buffs },
@@ -6323,6 +6692,14 @@ if (saved && saved.pads) {
   Object.assign(UP, saved.up);
   for (const id in RETIRED_UPGRADES) delete UP[id];
   for (const id in UP) applyUpgrade(id, true);
+  for (const [id, site] of Object.entries(shortBuilds)) {
+    const previous = saved.shortBuilds?.[id];
+    if (!previous || typeof previous !== 'object') continue;
+    for (const [type, count] of Object.entries(site.need)) {
+      site.have[type] = clamp(Number(previous[type]) || 0, 0, count);
+    }
+    if (site.ready() && Object.entries(site.need).every(([type, count]) => site.have[type] >= count)) completeShortBuild(site, true);
+  }
   setTimeout(() => offlineReport(saved), 600);
 }
 if (!saved || !saved.pads) tut.step = 0; else tut.step = saved.tut ?? 99;
@@ -6355,7 +6732,7 @@ function frame() {
   for (const n of coals) n.update(dt);
   for (const n of irons) n.update(dt);
   for (const n of blooms) n.update(dt);
-  updateTown(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateVillagers(dt);
+  updateTown(dt); updateShortBuilds(dt); updateCarts(dt); menuTick(dt); musicTick(dt); updateOrders(dt); updateSeason(dt); updateVolcano(dt); updatePets(dt); updateBelts(dt); updateBench(dt); updateVillagers(dt);
   updateLakeFishing(dt, joy.active || keys.size > 0); updateRink(dt); updateWeather(dt); updateSteamVents(dt); updateCove(dt);
   for (const n of feathers) n.update(dt); for (const n of mushrooms) n.update(dt); for (const n of pearls) n.update(dt);
   updateWeatherVariety(dt); updateHolidays(dt); updateSanct(dt); updateTutorial(dt); updateWildlife(dt); updateCabin(dt); updatePower(dt); updateTrain(dt); updateShip(dt); updateLanterns(dt); updateNewPets(dt); updateCook(dt); updateAquarium(dt); updateAmbience(dt); updateManagers(dt); updateBalloon(dt); updateMill(dt); updateTourists(dt); updateBeacon(dt); updateSummer(dt); updateStatsHist(dt); updateMuseum(dt); updateCastle(dt); updateFestival(dt); updateMount(dt, joy.active || keys.size > 0);
