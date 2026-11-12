@@ -107,17 +107,20 @@
   .planrow small { display: block; color: #536075; font: 700 12px/1.4 var(--font-body); margin-top: 2px; }
   .planrow button, .projectaction { border: 0; border-radius: 8px; padding: 8px 10px; background: #e3e9f0;
     color: var(--ink); font: 800 13px var(--font-body); cursor: pointer; }
+  .planrow .planbuy { background: #264d3b; color: #fff; min-height: 38px; }
+  .planactions { display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
   .planrow button:disabled { opacity: .55; cursor: default; }
   .projectaction { margin: 4px 0 8px; }
   #vendorstatus { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 2;
     max-width: min(270px, calc(100% - 24px)); background: rgba(25, 38, 56, .9); color: var(--white);
     border-radius: 9px; padding: 4px 8px; font: 800 12px/1.3 var(--font-body); text-align: center; }
   body.photo #vendorstatus, body.hudmin #vendorstatus { display: none; }
-  #menubtn {
+  #hudbuild, #menubtn {
     pointer-events: auto; border: 0; border-radius: 12px; padding: 8px 12px;
     background: var(--panel); color: var(--white); font: 15px var(--font-body); font-weight: 800; cursor: pointer;
   }
-  #menubtn:focus-visible { outline: 3px solid var(--white); }
+  #hudbuild { background: #264d3b; }
+  #hudbuild:focus-visible, #menubtn:focus-visible { outline: 3px solid var(--white); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   #map { pointer-events: auto; cursor: pointer; }
   .mgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
@@ -288,7 +291,7 @@
 </head>
 <body>
 <div id="hud">
-  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><div id="boosts"></div><div id="infobox" hidden><div class="itabs"><button type="button" id="orderbtn" aria-controls="orders" aria-expanded="false">Orders</button></div><div id="orders" hidden></div></div></div>
+  <div class="left"><div id="cash"><span class="bill"></span><span id="cashv">0</span></div><div id="clock"><span id="orb"></span><span id="dayn">Day 1</span><span id="bar"><i id="barfill"></i></span></div><button type="button" id="hudbuild">Build</button><div id="boosts"></div><div id="infobox" hidden><div class="itabs"><button type="button" id="orderbtn" aria-controls="orders" aria-expanded="false">Orders</button></div><div id="orders" hidden></div></div></div>
   <div class="right"><button id="menubtn" type="button">Menu</button><button id="hudbtn" type="button" aria-pressed="false">Hide</button><canvas id="map" width="240" height="150" role="button" tabindex="0" aria-label="Open map and travel"></canvas></div>
 </div>
 <aside id="gamealert" hidden><span role="alert" id="alerttext"></span><button type="button" id="alertx">Dismiss</button></aside>
@@ -297,7 +300,7 @@
 <div id="joy" hidden><div id="knob"></div></div>
 <div id="shop" hidden><div class="sheet" role="dialog" aria-label="Town Hall shop"><header><h2>Town Hall</h2><button id="shopx" type="button">Close</button></header><div class="tabs"><button type="button" data-tab="up" class="on">Upgrades</button><button type="button" data-tab="deco">Decor</button><button type="button" data-tab="tiers">Buildings</button><button type="button" data-tab="belts">Belts</button><button type="button" data-tab="garden">Garden</button></div><div id="shoplist"></div></div></div>
 <div id="welcome" hidden><div><h2>Welcome back!</h2><span id="welcometext"></span><div class="amt" id="welcomeamt"></div><button id="collect" type="button">Collect</button></div></div>
-<div id="menu" hidden><div class="sheet" role="dialog" aria-label="Menu"><header><h2>Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
+<div id="menu" hidden><div class="sheet" role="dialog" aria-labelledby="menutitle"><header><h2 id="menutitle">Menu</h2><button id="menux" type="button" class="shopx2">Close</button></header>
 <div class="mgrid"><button id="mute" type="button">Sound on</button><button id="musicbtn" type="button">Music off</button>
 <button id="buildbtn" type="button">Build &amp; Expand</button><button id="travelbtn" type="button">Map &amp; Travel</button><button id="districtbtn" type="button">Districts</button><button id="whbtn" type="button">Warehouse</button>
 <button id="backupbtn" type="button">Backup save</button><button id="updbtn" type="button">Check for update</button>
@@ -2676,8 +2679,10 @@ function applyTier(st, instant) {
   }
 }
 function buyTier(id) {
-  const st = STATIONS.find(x => x.id === id), lvl = U('tier_' + id), cost = tierCost(st, lvl);
-  if (lvl >= 3 || W.cash < cost) return;
+  const st = STATIONS.find(x => x.id === id), lvl = U('tier_' + id);
+  if (!st?.built || lvl >= 3) return;
+  const cost = tierCost(st, lvl);
+  if (W.cash < cost) return;
   W.cash -= cost; UP['tier_' + id] = lvl + 1; setCash(); applyTier(st, false); sfx('buy');
   toast(`${padLabel(id)} upgraded to ${TIER_NAME[lvl + 1]}!`); save(); renderShop();
 }
@@ -4081,13 +4086,16 @@ function refreshPads() {
     if (!show && p.label3d.mesh.parent) scene.remove(p.label3d.mesh);
   }
 }
-function payPad(p) {
-  const st = padState[p.id], cost = p.costs[st.level];
-  if (W.cash <= 0 && st.paid < cost) return;
-  const chunk = Math.min(W.cash, cost - st.paid, Math.max(1, Math.ceil(cost / 30)));
-  W.cash -= chunk; st.paid += chunk; setCash(); sfx('pay');
-  const bill = makeItem('cash');
-  fly(bill, player.g.position.clone().add(new V3(0, 1.2, 0)), () => new V3(p.x, 0.1, p.z), 0.22, () => scene.remove(bill), 0.8);
+function payPad(p, inFull = false) {
+  const st = padState[p.id], cost = p.costs[st.level], remaining = cost - st.paid;
+  if (inFull ? W.cash < remaining : W.cash <= 0 && remaining > 0) return;
+  const payment = inFull ? remaining : Math.min(W.cash, remaining, Math.max(1, Math.ceil(cost / 30)));
+  W.cash -= payment; st.paid += payment; setCash();
+  if (!inFull) {
+    sfx('pay');
+    const bill = makeItem('cash');
+    fly(bill, player.g.position.clone().add(new V3(0, 1.2, 0)), () => new V3(p.x, 0.1, p.z), 0.22, () => scene.remove(bill), 0.8);
+  }
   if (st.paid >= cost) {
     st.level++; st.paid = 0; p.lock = true; sfx('buy');
     p.apply(st.level - 1, false);
@@ -5827,6 +5835,11 @@ function openMenu(view = '') { menuEl.hidden = false; showMenuView(view); }
 function closeMenu() { menuEl.hidden = true; menuView = ''; }
 document.getElementById('menubtn').onclick = () => { audioInit(); menuEl.hidden ? openMenu() : closeMenu(); };
 document.getElementById('menux').onclick = closeMenu;
+document.getElementById('hudbuild').onclick = () => {
+  audioInit();
+  buildQuery = ''; buildFilter = 'all';
+  openMenu('build');
+};
 mapCv.addEventListener('click', () => { audioInit(); openMenu('map'); });
 mapCv.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -5838,6 +5851,9 @@ document.getElementById('districtbtn').onclick = () => showMenuView('districts')
 function showMenuView(v) {
   menuView = v;
   liveMenuMarkup = '';
+  menuEl.querySelector('.mgrid').hidden = v === 'build';
+  document.getElementById('menutitle').textContent = v === 'build' ? 'Build & Expand' : 'Menu';
+  menuEl.querySelector('.sheet').scrollTop = 0;
   const tabs = [['buildbtn', 'build'], ['travelbtn', 'map'], ['districtbtn', 'districts'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
     ['castlebtn', 'castle'], ['peoplebtn', 'people'], ['logbtn', 'log'], ['albumbtn', 'album']];
   for (const [id, key] of tabs) document.getElementById(id).classList.toggle('on', v === key);
@@ -6110,11 +6126,15 @@ function drawPlanMarker(ctx) {
   ctx.restore();
 }
 function openBuildPlanner() {
-  menuBody.innerHTML = `<h4>Build &amp; Expand</h4><div class="buildtools">
+  menuBody.innerHTML = `<div class="rowbtns">
+    <button type="button" data-build-view="castle">Material projects</button>
+    <button type="button" data-build-view="menu">Main menu</button>
+    </div><p id="buildcash"></p><p id="buildstatus" role="status" hidden></p><div class="buildtools">
     <input type="search" id="buildsearch" aria-label="Search builds" placeholder="Search builds">
     <select id="buildfilter" aria-label="Filter builds">
       <option value="all">All available</option><option value="affordable">Can afford</option>
       <option value="expand">Land &amp; districts</option><option value="automation">Automation</option>
+      <option value="upgrades">Upgrades</option>
     </select></div><div id="buildlist"></div>`;
   const search = document.getElementById('buildsearch'), filter = document.getElementById('buildfilter');
   search.value = buildQuery; filter.value = buildFilter;
@@ -6129,10 +6149,16 @@ function renderBuildList() {
   const query = buildQuery.trim().toLowerCase();
   const matches = (...parts) => parts.join(' ').toLowerCase().includes(query);
   const automation = buildFilter === 'automation', expansion = buildFilter === 'expand', affordable = buildFilter === 'affordable';
+  const upgrades = buildFilter === 'upgrades';
   const pinned = buildPin ? '<button class="projectaction" type="button" data-plan-clear>Clear map pin</button>' : '';
+  const balance = document.getElementById('buildcash'), cashText = dollars(W.cash) + ' available';
+  if (balance.textContent !== cashText) balance.textContent = cashText;
+  const costNote = cost => dollars(cost) + (cost > W.cash ? ' · ' + dollars(cost - W.cash) + ' short' : '');
+  const buyButton = (attr, id, label, cost, name) =>
+    `<button class="planbuy" type="button" ${attr}="${id}" aria-label="${label} ${name}"${cost > W.cash ? ' disabled' : ''}>${label}</button>`;
   let h = '';
   const rows = PADS.filter(p => {
-    if (!activePad(p) || (affordable && padRemaining(p) > W.cash)) return false;
+    if (upgrades || !activePad(p) || (affordable && padRemaining(p) > W.cash)) return false;
     if (expansion && !p.plot && !DISTRICT_PADS.has(p.id)) return false;
     if (automation && p.icon !== 'person' && !['banker', 'train', 'balloon', 'depot', 'mill', 'power', 'shed'].includes(p.id)) return false;
     return matches(p.label, AREA_NAME[areaLabelKey(padLocation(p))], buildDescription(p));
@@ -6145,27 +6171,44 @@ function renderBuildList() {
     h += `<div class="planrow"><div><b>${p.label}${p.costs.length > 1 ? ` · Level ${level}` : ''}</b>
       <small>${AREA_NAME[areaLabelKey(padLocation(p))]} · ${dollars(left)}${padState[p.id].paid ? ' remaining' : ''} · ${short > 0 ? dollars(short) + ' short' : 'Can afford'}</small>
       <small>${buildDescription(p)}</small>${followOns.length ? `<small>Builds it leads to: ${followOns.join(', ')}</small>` : ''}</div>
-      <button type="button" data-plan-pad="${p.id}">${isPinned ? 'Show pin' : 'Pin on map'}</button></div>`;
+      <div class="planactions">
+        ${buyButton('data-buy-pad', p.id, p.plot ? 'Buy land' : 'Buy', left, p.label)}
+        <button type="button" data-plan-pad="${p.id}" aria-label="Show site for ${p.label}">${isPinned ? 'Show pin' : 'Show site'}</button>
+      </div></div>`;
   }
   let routes = '';
-  if (!expansion) for (const b of BELTS) {
+  if (!expansion && !upgrades) for (const b of BELTS) {
     if (b.id !== 'grill' && !hall.built) continue;
     const owned = U('belt_' + b.id), cost = beltCost(b), locked = !b.ok();
     if (!matches(b.name, 'conveyor') || (locked && b.id !== 'grill') || (affordable && (owned || locked || W.cash < cost))) continue;
     routes += `<div class="planrow"><div><b>${b.name}</b><small>${owned ? 'Conveyor running' : locked ? 'Serve your first customer to unlock the conveyor' : `Conveyor · ${dollars(cost)}${W.cash < cost ? ' · ' + dollars(cost - W.cash) + ' short' : ''}`}</small></div>
-      ${owned ? '' : `<button type="button" data-plan-belt="${b.id}"${locked || W.cash < cost ? ' disabled' : ''}>Buy</button>`}</div>`;
+      ${owned ? '' : buyButton('data-plan-belt', b.id, 'Buy', locked ? Infinity : cost, b.name)}</div>`;
   }
-  if (!expansion && hall.built) for (const u of UPGRADES) {
-    if (!TRANSPORT_UPGRADES.has(u.id) || (u.req && !u.req()) || !matches(u.name, u.desc)) continue;
-    const cost = upgradeCost(u);
-    if (affordable && (cost === undefined || W.cash < cost)) continue;
-    routes += `<div class="planrow"><div><b>${u.name}</b><small>${u.desc}</small>
-      <small>${cost === undefined ? 'Running' : dollars(cost) + (W.cash < cost ? ' · ' + dollars(cost - W.cash) + ' short' : '')}</small></div>
-      ${cost === undefined ? '' : `<button type="button" data-plan-upgrade="${u.id}"${W.cash < cost ? ' disabled' : ''}>Buy</button>`}</div>`;
+  let upgradeRows = '';
+  if (!expansion && hall.built) {
+    for (const u of UPGRADES) {
+      if ((automation && !TRANSPORT_UPGRADES.has(u.id)) || (u.req && !u.req()) || !matches(u.name, u.desc)) continue;
+      const cost = upgradeCost(u);
+      if (cost === undefined || (affordable && W.cash < cost)) continue;
+      upgradeRows += `<div class="planrow"><div><b>${u.name}</b><small>${u.desc}</small><small>${costNote(cost)}</small></div>
+        ${buyButton('data-plan-upgrade', u.id, 'Buy', cost, u.name)}</div>`;
+    }
+    if (!automation) for (const st of STATIONS) {
+      const level = U('tier_' + st.id), name = padLabel(st.id), next = TIER_NAME[level + 1];
+      if (!st.built || !next || !matches(name, next, 'building upgrade')) continue;
+      const cost = tierCost(st, level);
+      if (affordable && W.cash < cost) continue;
+      upgradeRows += `<div class="planrow"><div><b>${name} · ${next}</b><small>Works faster and holds more goods</small>
+        <small>${costNote(cost)}</small></div>${buyButton('data-plan-tier', st.id, 'Upgrade', cost, name)}</div>`;
+    }
   }
-  if (!rows.length && !routes) h = '<p>No available builds match.</p>';
+  const buildings = h ? '<h4>Buildings, hires &amp; land</h4>' + h : '';
   const routing = routes ? '<h4>Delivery routes</h4>' + routes : '';
-  const content = pinned + (automation ? routing + h : h + routing);
+  const improve = upgradeRows ? '<h4>Upgrades</h4>' + upgradeRows : '';
+  const empty = query || buildFilter !== 'all' ? 'No purchases match this search or filter.'
+    : hall.built ? 'No new cash purchases available. Check Material projects for builds you can finish with goods.'
+      : 'Build Town Hall to unlock more upgrades.';
+  const content = pinned + ((automation ? routing + buildings : buildings + routing) + improve || `<p>${empty}</p>`);
   updateMenuMarkup(list, content);
 }
 
@@ -6284,8 +6327,15 @@ function renderProjects() {
 menuBody.addEventListener('click', e => {
   const button = e.target.closest('button');
   if (!button) return;
-  const { planPad, planBelt, planProject, planUpgrade, shortBuild, mapPin, mapTravel, mapSelect, districtBuy } = button.dataset;
-  if (mapSelect || mapPin || mapTravel) {
+  const { planPad, buyPad, planBelt, planProject, planUpgrade, planTier, buildView, shortBuild, mapPin, mapTravel, mapSelect, districtBuy } = button.dataset;
+  if (buildView) {
+    showMenuView(buildView === 'menu' ? '' : buildView);
+  } else if (buyPad) {
+    const pad = PADS.find(p => p.id === buyPad);
+    if (!pad || !activePad(pad) || W.cash < padRemaining(pad)) return;
+    payPad(pad, true);
+    finishBuildPurchase(pad.label + ' complete.');
+  } else if (mapSelect || mapPin || mapTravel) {
     const entry = mapEntries.get(mapSelect || mapPin || mapTravel);
     if (!entry?.ok() || !entry.at()) return;
     if (mapSelect) {
@@ -6317,16 +6367,25 @@ menuBody.addEventListener('click', e => {
     setBuildPin({ kind: planProject });
     closeMenu();
   } else if (planBelt) {
+    const before = U('belt_' + planBelt);
     buyBelt(planBelt);
-    renderBuildList();
-  } else if (planUpgrade && hall.built && TRANSPORT_UPGRADES.has(planUpgrade)) {
-    buyItem(planUpgrade);
-    renderBuildList();
+    if (U('belt_' + planBelt) > before) finishBuildPurchase('Conveyor installed.');
+  } else if (hall.built && (planUpgrade || planTier)) {
+    const key = planUpgrade || 'tier_' + planTier, before = U(key);
+    if (planUpgrade) buyItem(planUpgrade); else buyTier(planTier);
+    if (U(key) > before) finishBuildPurchase('Upgrade purchased.');
   } else if (button.hasAttribute('data-plan-clear')) {
     setBuildPin(null);
     showMenuView(menuView);
   }
 });
+function finishBuildPurchase(message) {
+  const status = document.getElementById('buildstatus');
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = message;
+  renderBuildList();
+}
 function updateMenuMarkup(el, markup) {
   if (liveMenuMarkup === markup) return;
   liveMenuMarkup = markup;
