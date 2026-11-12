@@ -354,10 +354,18 @@ let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { saved = null; }
 
 // ---------------- renderer ----------------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const mobileGraphics = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+let gfxLow = mobileGraphics;
+try {
+  const savedGraphics = localStorage.getItem(SAVE_KEY + '-gfx');
+  if (savedGraphics === 'low' || savedGraphics === 'high') gfxLow = savedGraphics === 'low';
+} catch (e) {}
+const renderer = new THREE.WebGLRenderer({
+  antialias: !mobileGraphics && !gfxLow,
+  powerPreference: gfxLow ? 'low-power' : 'default',
+});
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !gfxLow;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
@@ -5857,13 +5865,19 @@ document.getElementById('buildbtn').onclick = () => showMenuView('build');
 document.getElementById('logbtn').onclick = () => showMenuView('log');
 document.getElementById('albumbtn').onclick = () => showMenuView('album');
 const gfxBtn = document.getElementById('gfxbtn');
-let gfxLow = false; try { gfxLow = localStorage.getItem(SAVE_KEY + '-gfx') === 'low'; } catch (e) {}
 function applyGfx() {
-  renderer.setPixelRatio(gfxLow ? 1 : Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(innerWidth, innerHeight);
-  sun.castShadow = !gfxLow; snowCount = gfxLow ? 220 : SNOW_N; snowGeo.setDrawRange(0, snowCount);
-  gfxBtn.textContent = gfxLow ? 'Graphics: Low' : 'Graphics: High';
+  renderer.setPixelRatio(gfxLow ? 0.85 : Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = !gfxLow;
+  sun.castShadow = !gfxLow;
+  snowCount = gfxLow ? 110 : SNOW_N;
+  snowGeo.setDrawRange(0, snowCount);
+  gfxBtn.textContent = gfxLow ? 'Graphics: Battery saver' : 'Graphics: High';
 }
-gfxBtn.onclick = () => { gfxLow = !gfxLow; applyGfx(); try { localStorage.setItem(SAVE_KEY + '-gfx', gfxLow ? 'low' : 'high'); } catch (e) {} toast(gfxLow ? 'Low graphics: smoother and easier on the battery.' : 'High graphics: shadows and full snow.'); };
+gfxBtn.onclick = () => {
+  gfxLow = !gfxLow;
+  applyGfx();
+  try { localStorage.setItem(SAVE_KEY + '-gfx', gfxLow ? 'low' : 'high'); } catch (e) {}
+};
 applyGfx();
 
 // info box tabs and the hide button
@@ -6705,15 +6719,28 @@ if (saved && saved.pads) {
 if (!saved || !saved.pads) tut.step = 0; else tut.step = saved.tut ?? 99;
 keepLegacyPlots();
 refreshPads(); PADS.forEach(p => p.label3d.redraw()); setCash();
-setInterval(save, 3000);
+setInterval(() => { if (!document.hidden) save(); }, 3000);
 addEventListener('pagehide', save);
 if (document.fonts) document.fonts.ready.then(() => { PADS.forEach(p => p.label3d.redraw()); maxLabel.redraw(); });
 
 // ---------------- main loop ----------------
-const clock = new THREE.Clock();
 const camTarget = player.g.position.clone();
-function frame() {
-  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+const saverFrameMs = 1000 / 30;
+let frameId = null, lastFrameAt = null, nextSaverFrameAt = null, gameTime = 0;
+function frame(now) {
+  frameId = null;
+  if (document.hidden) return;
+  frameId = requestAnimationFrame(frame);
+  if (gfxLow) {
+    if (nextSaverFrameAt !== null && now + 0.5 < nextSaverFrameAt) return;
+    // Advance from the deadline to avoid drifting to 20 fps on a 60 Hz display.
+    const deadline = nextSaverFrameAt ?? now;
+    nextSaverFrameAt = deadline + saverFrameMs * (1 + Math.max(0, Math.floor((now - deadline) / saverFrameMs)));
+  } else nextSaverFrameAt = null;
+  const dt = lastFrameAt === null ? 0 : Math.min(0.05, (now - lastFrameAt) / 1000);
+  lastFrameAt = now;
+  gameTime += dt;
+  const t = gameTime;
   updatePlayer(dt);
   for (const tr of trees) tr.update(dt);
   boarTimer -= dt;
@@ -6773,14 +6800,36 @@ function frame() {
   renderer.render(scene, camera);
   scene.fog.near /= fogK; scene.fog.far /= fogK; if (swimY) player.g.position.y -= swimY;
   if (cardQ.length) capturePostcard();
-  requestAnimationFrame(frame);
 }
+let resumeAudio = false;
+function syncPageVisibility() {
+  if (document.hidden) {
+    if (frameId !== null) cancelAnimationFrame(frameId);
+    frameId = null;
+    lastFrameAt = nextSaverFrameAt = null;
+    keys.clear();
+    joy.active = false; joy.id = null; joy.dx = joy.dy = 0;
+    joyEl.hidden = true;
+    save();
+    if (actx?.state === 'running') {
+      resumeAudio = true;
+      actx.suspend().catch(() => {});
+    }
+    return;
+  }
+  if (resumeAudio) {
+    resumeAudio = false;
+    actx?.resume().catch(() => {});
+  }
+  if (frameId === null) frameId = requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange', syncPageVisibility);
 window.__game = { toast, showAlert, W, player, grill, counter, sawmill, boars, trees, rocks, cutter,
   bridge, padState, PADS, setCash, workers, setDay: v => { dayT = v; }, dock, smoke, springs, husky,
   depot, UP, ridge, workshop, market, pen, tailor, hall, buyItem, mine, smith, golds, teleport,
   boat, isle, hotel, exch, getRate: () => incomeRate, STATIONS, town, castle, museum, orders, board,
   save, updateDayNight, updateMine, updateVolcano, updateOrders, volc, buyTier, buyBelt };
-requestAnimationFrame(frame);
+syncPageVisibility();
 })();
 </script>
 </body>

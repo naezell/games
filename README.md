@@ -14,4 +14,6 @@ A snowy camp builder. Hunt frost boars for meat, cook steaks, and sell them to c
 
 Open [frostfall-camp/index.html](frostfall-camp/index.html) in a browser. The game loads Three.js from a CDN. Drag anywhere to move on a phone, or use WASD or the arrow keys on a computer. Walk near a resource to gather it. Walk onto a marked square to deliver goods, collect cash, or pay for construction.
 
+Battery saver is the default on touch-first devices. Use **Menu → Graphics** to change it. The game pauses when the page is hidden.
+
 Progress saves in your browser. Use **Menu → Backup save** to copy or restore a backup code.
