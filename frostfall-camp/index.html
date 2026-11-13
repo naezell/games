@@ -102,6 +102,10 @@
   .buildtools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   .buildtools input, .buildtools select { flex: 1; min-width: 120px; border: 1px solid #abb8c9; border-radius: 8px;
     padding: 8px; background: #fff; color: var(--ink); font: 16px var(--font-body); user-select: text; }
+  .buildtools label { flex: 1 1 145px; font: 800 13px var(--font-body); }
+  .buildtools label select { display: block; width: 100%; margin-top: 4px; }
+  #info button[data-open-production] { border: 0; border-radius: 8px; padding: 8px 12px; background: #264d3b;
+    color: #fff; font: 800 13px var(--font-body); cursor: pointer; }
   .planrow { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px 10px;
     border-top: 1px solid #d5dde6; padding: 9px 0; font: 800 14px var(--font-body); }
   .planrow small { display: block; color: #536075; font: 700 12px/1.4 var(--font-body); margin-top: 2px; }
@@ -886,6 +890,7 @@ class CashPile extends Pile {
     this.value += v;
     const bills = Math.max(1, Math.round(v / 5));
     for (let i = 0; i < bills && this.free() > 0; i++) this.receive(makeItem('cash'), from.clone().add(new V3(0, i * 0.1, 0)));
+    return v;
   }
 }
 
@@ -2588,9 +2593,9 @@ document.querySelector('#menu .mgrid').appendChild(rideBtn);
 
 // ================= Crafting stations (generic) =================
 class TypedPile extends Pile {
-  constructor(...a) { super(...a); this.types = []; this.typed = true; }
-  receiveT(m, from, type) { this.types.push(type); this.receive(m, from); }
-  takeT() { const m = this.take(); return m ? [m, this.types.pop()] : null; }
+  constructor(...a) { super(...a); this.typed = true; }
+  receiveT(m, from, type) { m.userData.type = type; this.receive(m, from); }
+  takeT() { const m = this.take(); return m ? [m, m.userData.type] : null; }
 }
 const STATIONS = [];
 class Station {
@@ -2605,12 +2610,15 @@ class Station {
     const g = stationGroup(this.x, this.z); this.g = g; this.build(g, this);
     const [w, d] = this.size || [2.2, 1.6];
     colliders.push({ x0: this.x - w / 2, x1: this.x + w / 2, z0: this.z - d / 2, z1: this.z + d / 2 });
-    for (const i of this.ins) zoneMarker(i.pile.x, i.pile.z, this.accepts ? 'cart' : ICON_OF[i.type] || i.type, '#ffffff');
+    for (const i of this.ins) zoneMarker(i.pile.x, i.pile.z, this.accepts && i.type === '*' ? 'cart' : ICON_OF[i.type] || i.type, '#ffffff');
     if (this.outPile) zoneMarker(this.outPile.x, this.outPile.z, ICON_OF[this.out[0]] || this.out[0], '#ffd23a');
     if (this.cashAt) this.cash = new CashPile(this.cashAt[0], this.cashAt[1]);
     if (storage.lvl) applyTier(this, true);
     if (power.built) power.dirty = true;
     if (!instant) { popIn(g); burst(this.pos, 0xffd23a, 14); if (this.hint) toast(this.hint); }
+  }
+  cycleTime() {
+    return (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul() * (this.worker ? 0.7 : 1);
   }
   update(dt) {
     if (!this.built) return;
@@ -2622,17 +2630,34 @@ class Station {
       if (this.make <= 0) {
         burst(top, this.fx || 0xffd23a, 5); bump(this.stat || (this.out && this.out[0]));
         const golden = Math.random() < goldenChance(this);
+        if (this.id === 'kitchen') jamProduction.current.made++;
         if (this.outPile) { this.outPile.pending--; const it = makeItem(this.out[0]); if (golden) makeGolden(it, this.out[0]); this.outPile.receive(it, top.clone()); }
         else { this.cash.addValue(this.sell() * (golden ? 5 : 1), top); if (golden) { bump('golden'); burst(top, 0xffd23a, 16); toast('A golden piece! 5x the price.'); } }
       }
       return;
     }
     this.t += dt;
-    if (this.t < (this.timeFn ? this.timeFn() : this.time) * TIER_SPEED[U('tier_' + this.id)] * powerMul() * (this.worker ? 0.7 : 1)) return;
+    if (this.t < this.cycleTime()) return;
     if (this.accepts) {
-      const pile = this.ins[0].pile; if (!pile.n) return;
-      this.t = 0; const [m, type] = pile.takeT();
-      fly(m, m.position.clone(), () => top, 0.25, () => { scene.remove(m); this.cash.addValue(this.accepts[type]() * (m.userData.golden ? 5 : 1) * (holidayToday() === 'harvest' && HARVEST.has(type) ? 2 : 1), top); if (m.userData.golden) burst(top, 0xffd23a, 14); });
+      const pile = this.ins[0].pile, batch = this.batch || 1;
+      if (pile.n < batch) return;
+      this.t = 0;
+      for (let i = 0; i < batch; i++) {
+        const [m, type] = pile.takeT();
+        fly(m, m.position.clone(), () => top, 0.25, () => {
+          scene.remove(m);
+          const revenue = this.cash.addValue(this.accepts[type]() * (m.userData.golden ? 5 : 1) * (holidayToday() === 'harvest' && HARVEST.has(type) ? 2 : 1), top);
+          if (type === 'jam' && this === store) {
+            jamProduction.current.store++;
+            jamProduction.current.revenue += revenue;
+          }
+          if (this === jamTerminal) {
+            jamProduction.current.harbor++;
+            jamProduction.current.revenue += revenue;
+          }
+          if (m.userData.golden) burst(top, 0xffd23a, 14);
+        });
+      }
       return;
     }
     if (!this.ins.every(i => i.pile.n >= i.n)) return;
@@ -2749,7 +2774,7 @@ function updateBelts(dt) {
     b.tex.offset.x -= dt * 0.8;
     b.t += dt; if (b.t < 1.4) continue;
     const [src, type] = b.src(), dst = b.dst();
-    if (!src.n || dst.free() <= 0) continue;
+    if (!src.n || dst.free() <= 0 || (b.id === 'jam' && !jamForStore())) continue;
     b.t = 0;
     const m = src.take(), start = src.center.clone().setY(0.25), end = dst.center.clone().setY(0.25);
     dst.pending++;
@@ -2844,6 +2869,45 @@ const store = new Station({ id: 'store', x: 0, z: 30.4, size: [3.2, 1.8], inputs
     quilt: () => 160, glowfish: () => 90, mushroom: () => 22, pearl: () => 70 },
   hint: 'The General Store buys jam, tools, potions, pies, candles, chairs and rings.',
   build: (g) => { hut(g, 0xf2e6c8, 0x2f8a5a, 3.2, 1.8); for (let i = 0; i < 8; i++) mesh(new THREE.BoxGeometry(0.4, 0.08, 0.7), i % 2 ? 0xffffff : 0x2f8a5a, -1.4 + i * 0.4, 1.5, 1.2, g); } });
+const JAM_CRATE = 6, JAM_SHIPMENT = 15;
+const jamTerminal = new Station({ id: 'jamterminal', x: 234, z: -4.8, size: [2.8, 1.6],
+  inputs: [['jam', 234, -2.6]], cashAt: [236.1, -2.6], time: JAM_SHIPMENT, batch: JAM_CRATE,
+  accepts: { jam: () => RS('harbortrade') ? 43 : 36 },
+  hint: 'Stocks six jars per shipment. Bring jars by hand or send them from Production.',
+  build: g => hut(g, 0xece0c6, 0x3f6f9f, 2.8, 1.6) });
+const newJamSample = () => ({ made: 0, store: 0, harbor: 0, revenue: 0 });
+const jamProduction = { berries: 'balanced', reserve: 4, sales: 'store', time: 0, freightTime: 0,
+  current: newJamSample(), last: null, baseline: null };
+const jamStock = pile => pile.n + pile.pending;
+const jamForStore = () => !jamTerminal.built || jamProduction.sales !== 'harbor';
+const hasLocalJamRoute = () => U('belt_jam') || padLevel('clerk');
+function updateJamProduction(dt) {
+  if (!kitchen.built) return;
+  jamProduction.time += dt;
+  if (jamProduction.time >= 60 - 1e-8) {
+    jamProduction.time = Math.max(0, jamProduction.time - 60);
+    jamProduction.last = jamProduction.current;
+    jamProduction.current = newJamSample();
+  }
+  if (!jamTerminal.built || jamProduction.sales === 'store') return;
+  const interval = jamTerminal.cycleTime();
+  jamProduction.freightTime = Math.min(interval, jamProduction.freightTime + dt);
+  if (jamProduction.freightTime < interval - 1e-8) return;
+  const src = kitchen.outPile, dst = jamTerminal.ins[0].pile;
+  const reserve = jamProduction.sales === 'split' && store.built && hasLocalJamRoute() && store.ins[0].pile.free() > 0 ? JAM_CRATE : 0;
+  if (src.n < JAM_CRATE + reserve || dst.free() < JAM_CRATE) return;
+  jamProduction.freightTime = 0;
+  for (let i = 0; i < JAM_CRATE; i++) dst.receiveT(src.take(), dst.center.clone().setY(2), 'jam');
+}
+function restoreJamProduction(previous) {
+  if (!previous || typeof previous !== 'object') return;
+  if (['balanced', 'jam', 'pie'].includes(previous.berries)) jamProduction.berries = previous.berries;
+  if ([0, 4, 8, 12].includes(previous.reserve)) jamProduction.reserve = previous.reserve;
+  if (['store', 'harbor', 'split'].includes(previous.sales)) jamProduction.sales = previous.sales;
+  if (previous.baseline && Object.keys(newJamSample()).every(key => Number.isFinite(previous.baseline[key]) && previous.baseline[key] >= 0)) {
+    jamProduction.baseline = previous.baseline;
+  }
+}
 const apoth = new Station({ id: 'apoth', x: 128, z: 65, inputs: [['bloom', 124.8, 66.0], ['shard', 124.8, 63.6]], out: ['potion', 130.2, 62.6], time: 2.4, fx: 0x5ff0d0,
   hint: 'Snowbloom + aurora shard = potion. Potions sell for the most!',
   build: (g, st) => { hut(g, 0xe8dcf8, 0x6a3ab0); st.flask = new THREE.Mesh(GEO.potion, vcMat); st.flask.scale.setScalar(2.2); st.flask.position.set(0, 2.9, 0); g.add(st.flask); },
@@ -3410,8 +3474,8 @@ function updateTown(dt) {
 let cartT = 0;
 function updateCarts(dt) {
   cartT += dt; if (cartT < 15) return; cartT = 0;
-  const move = (src, dst, type, typed, reserve = 0) => {
-    for (let i = 0; i < 6 && src.n > reserve && dst.free() > 0; i++) {
+  const move = (src, dst, type, typed, reserve = 0, limit = 6) => {
+    for (let i = 0; i < limit && src.n > reserve && dst.free() > 0; i++) {
       const m = src.take(), from = dst.center.clone().add(new V3(0, 3, 0));
       if (typed) dst.receiveT(m, from, type); else dst.receive(m, from);
     }
@@ -3439,7 +3503,9 @@ function updateCarts(dt) {
   if (U('fsupply') && forge.built && smelter.built) move(smelter.outPile, forge.ins[1].pile, 'bar');
   if (U('psupply') && bakery.built) {
     move(grill.input, bakery.ins[0].pile, 'meat');
-    if (kitchen.built) for (let i = 0; i < 4 && kitchen.ins[0].pile.n > 4 && bakery.ins[1].pile.free() > 0; i++) { scene.remove(kitchen.ins[0].pile.take()); bakery.ins[1].pile.receive(makeItem('berry'), bakery.ins[1].pile.center.clone().add(new V3(0, 3, 0))); }
+    const pieBerries = bakery.ins[1].pile;
+    const room = bakery.ins[0].pile.n ? 4 : Math.min(4, 8 - jamStock(pieBerries));
+    if (kitchen.built) move(kitchen.ins[0].pile, pieBerries, 'berry', false, jamProduction.reserve, room);
   }
 }
 // Generic worker jobs for the new chains
@@ -3448,11 +3514,12 @@ const JOBS = {
   picker: { want: () => 'berry', nodes: () => berries, dst: () => {
     const k = kitchen.ins[0].pile, b = bakery.ins[1].pile;
     pickerAlt = !pickerAlt;
-    // the bakery only gets berries while it has room and isn't backed up waiting for meat
-    const bOk = bakery.built && b.free() > 0 && (b.n + b.pending < 8 || bakery.ins[0].pile.n > 0);
-    const kOk = kitchen.built && k.free() > 0;
-    if (bOk && (!kOk || pickerAlt || b.n + b.pending < k.n + k.pending)) return b;
-    return kOk || !bakery.built ? k : b;
+    const bOk = bakery.built && b.free() > 0 && (jamStock(b) < 8 || bakery.ins[0].pile.n > 0);
+    const kOk = k.free() > 0;
+    if (kOk && jamStock(k) < jamProduction.reserve) return k;
+    if (bOk && (!kOk || jamProduction.berries === 'pie' ||
+      (jamProduction.berries === 'balanced' && (pickerAlt || jamStock(b) < jamStock(k))))) return b;
+    return k;
   } },
   smelterhand: { want: () => { const [o, c] = smelter.ins.map(i => i.pile.n + i.pile.pending); return o <= c ? 'ore' : 'coal'; }, nodes: t => t === 'ore' ? irons : coals, dst: t => t === 'ore' ? smelter.ins[0].pile : smelter.ins[1].pile },
   herbalist: { want: () => { const [b, s] = apoth.ins.map(i => i.pile.n + i.pile.pending); return b <= s ? 'bloom' : 'shard'; }, nodes: t => t === 'bloom' ? blooms : isle.shards, dst: t => t === 'bloom' ? apoth.ins[0].pile : apoth.ins[1].pile },
@@ -3462,7 +3529,7 @@ const JOBS = {
   farmer: { want: () => { const w = oven.ins[0].pile, cr = soup.ins[0].pile; if (!soup.built) return 'wheat'; if (!oven.built) return 'carrot'; return w.n + w.pending <= (cr.n + cr.pending) * 2 ? 'wheat' : 'carrot'; },
     nodes: t => crops.filter(n => n.kind === t), dst: t => t === 'wheat' ? oven.ins[0].pile : soup.ins[0].pile },
   milkmaid: { pickup: true, srcs: () => (barn.built && barn.outPile.n > 0 ? [[barn.outPile, 'milk']] : []), dst: () => creamery.ins[0].pile, idle: new V3(44, 0, 10) },
-  clerk: { pickup: true, srcs: () => [[kitchen, 'jam'], [smithy, 'tool'], [chandler, 'candle'], [furniture, 'chair'], [jeweler, 'ring'], [bakery, 'pie'], [creamery, 'cheese'], [toyshop, 'toy'], [glass, 'ornament']].filter(([st]) => st.built && st.outPile.n > 0).map(([st, ty]) => [st.outPile, ty]), dst: () => store.ins[0].pile, idle: new V3(-3.4, 0, 25.4) },
+  clerk: { pickup: true, srcs: () => [[kitchen, 'jam'], [smithy, 'tool'], [chandler, 'candle'], [furniture, 'chair'], [jeweler, 'ring'], [bakery, 'pie'], [creamery, 'cheese'], [toyshop, 'toy'], [glass, 'ornament']].filter(([st]) => st.built && st.outPile.n > 0 && (st !== kitchen || jamForStore())).map(([st, ty]) => [st.outPile, ty]), dst: () => store.ins[0].pile, idle: new V3(-3.4, 0, 25.4) },
 };
 function runJob(w, job, go) {
   const pos = w.g.position;
@@ -3840,6 +3907,7 @@ const PADS = [
   { id: 'balloon', label: 'Cargo Balloon', icon: 'cart', costs: [16000, 30000], x: -17.5, z: 17.2, req: () => ridge.unlocked, apply: (l, i) => buildBalloon(l, i) },
   { id: 'mill', label: 'Water Mill', icon: 'saw', costs: [12000, 24000], x: 24, z: 11.5, req: () => bridge.unlocked, apply: (l, i) => buildMill(l, i) },
   { id: 'harbor', label: 'Harbor District', icon: 'boat', costs: [12000], x: 13, z: 21, req: () => town.built && STATIONS.filter(st => st.built).length >= 3, apply: (l, i) => buildHarbor(i) },
+  { id: 'jamterminal', label: 'Harbor Jam Terminal', icon: 'jam', costs: [180000], x: 234, z: -4.8, req: () => kitchen.built && shortBuilds.freightpier.done, apply: (l, i) => jamTerminal.unlock(i) },
   { id: 'fishmkt', label: 'Fish Market', icon: 'fish', costs: [650], x: 230, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => fishmkt.unlock(i) },
   { id: 'shipyard', label: 'Shipyard', icon: 'boat', costs: [18000], x: 238, z: -8.8, req: () => FAR.harbor.built, apply: (l, i) => shipyard.unlock(i) },
   { id: 'cafe', label: 'Harbor Café', icon: 'milk', costs: [15000], x: 230, z: 8.8, req: () => FAR.harbor.built, apply: (l, i) => cafe.unlock(i) },
@@ -4697,7 +4765,7 @@ for (const st of STATIONS) {
   const made = st.out && itemName(st.out[0]);
   VENDORS.push({ name: padLabel(st.id), pos: st.pos, ok: () => st.built, station: st,
     about: PAD_INFO[st.id] || st.hint || '',
-    needs: st.accepts ? [{ pile: st.ins[0].pile, types: Object.keys(st.accepts), n: 1 }] : st.ins.map(i => ({ pile: i.pile, type: i.type, n: i.n })),
+    needs: st.accepts ? [{ pile: st.ins[0].pile, types: Object.keys(st.accepts), n: st.batch || 1 }] : st.ins.map(i => ({ pile: i.pile, type: i.type, n: i.n })),
     makes: st.out ? { type: st.out[0], pile: st.outPile, name: made } : null,
     pays: st.accepts ? t => st.accepts[t]() : st.sell ? () => st.sell() : null, payWord: st.sell ? 'per sculpture' : '',
     cash: () => st.cash });
@@ -4742,6 +4810,9 @@ function vendorHtml(v) {
   else if (v.makes) h += `<h4>Makes</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span><b>1</b> × ${itemName(v.makes.type)}</span><em>${v.makes.pile.n} ready</em></div>`;
   else if (v.pays && !v.needs[0]?.types) h += `<h4>Pays</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(v.pays())}</b> ${v.payWord || 'each'}</span></div>`;
   if (closed) h += `<p class="warn">The sled is out on a run. It takes goods again when it's back.</p>`;
+  if (kitchen.built && [kitchen, store, jamTerminal].includes(v.station)) {
+    h += `<p>${jamBottleneck()}</p><button type="button" data-open-production>Production</button>`;
+  }
   return h;
 }
 function padHtml(p) {
@@ -4757,7 +4828,12 @@ function closeInfo() { info = null; infoEl.hidden = true; }
 // tap the card to close it (a fresh tap, not the click that follows the tap that opened it; dragging scrolls)
 let cardDown = null;
 infoEl.addEventListener('pointerdown', e => { cardDown = { x: e.clientX, y: e.clientY }; });
-infoEl.addEventListener('pointerup', e => { if (cardDown && Math.hypot(e.clientX - cardDown.x, e.clientY - cardDown.y) < 10) closeInfo(); cardDown = null; });
+infoEl.addEventListener('pointerup', e => { if (cardDown && !e.target.closest('button') && Math.hypot(e.clientX - cardDown.x, e.clientY - cardDown.y) < 10) closeInfo(); cardDown = null; });
+infoEl.addEventListener('click', e => {
+  if (!e.target.closest('[data-open-production]')) return;
+  closeInfo();
+  openMenu('production');
+});
 const toScreen = (x, y, z) => {
   const v = new V3(x, y, z).project(camera);
   return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight, behind: v.z > 1 };
@@ -5851,14 +5927,15 @@ document.getElementById('districtbtn').onclick = () => showMenuView('districts')
 function showMenuView(v) {
   menuView = v;
   liveMenuMarkup = '';
-  menuEl.querySelector('.mgrid').hidden = v === 'build';
-  document.getElementById('menutitle').textContent = v === 'build' ? 'Build & Expand' : 'Menu';
+  menuEl.querySelector('.mgrid').hidden = v === 'build' || v === 'production';
+  document.getElementById('menutitle').textContent = v === 'build' ? 'Build & Expand' : v === 'production' ? 'Production' : 'Menu';
   menuEl.querySelector('.sheet').scrollTop = 0;
   const tabs = [['buildbtn', 'build'], ['travelbtn', 'map'], ['districtbtn', 'districts'], ['whbtn', 'wh'], ['backupbtn', 'backup'], ['recipebtn', 'recipes'],
     ['castlebtn', 'castle'], ['peoplebtn', 'people'], ['logbtn', 'log'], ['albumbtn', 'album']];
   for (const [id, key] of tabs) document.getElementById(id).classList.toggle('on', v === key);
   if (v === 'album') { renderAlbum(); return; }
   if (v === 'build') { openBuildPlanner(); return; }
+  if (v === 'production') { openProduction(); return; }
   if (v === 'map') { openMapDirectory(); return; }
   if (v === 'districts') { renderDistricts(); return; }
   if (v === 'castle') { renderProjects(); return; }
@@ -5954,6 +6031,7 @@ function vendorStatus(v) {
   if (v.open && !v.open()) return ['warn', 'Out on a delivery'];
   if (st?.make > 0 || output?.pending > 0) return ['ok', 'Producing'];
   if (output && output.n >= output.max) return ['warn', 'Output full'];
+  if (st === jamTerminal && st.ins[0].pile.n < JAM_CRATE) return ['warn', 'Waiting for a six-jar shipment'];
   const missing = v.needs.filter(n => n.pile.n < n.n);
   if (missing.length) {
     if (missing.every(n => n.pile.n + n.pile.pending >= n.n)) return ['ok', 'Delivery incoming'];
@@ -6125,11 +6203,100 @@ function drawPlanMarker(ctx) {
   ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
   ctx.restore();
 }
+function jamBottleneck() {
+  if (!kitchen.built) return 'Build the Jam Kitchen to start making jam.';
+  const berriesIn = kitchen.ins[0].pile, jars = kitchen.outPile;
+  const local = jamForStore() && store.built;
+  const harbor = jamTerminal.built && jamProduction.sales !== 'store';
+  if (kitchen.snowed) return 'Snow is blocking the Jam Kitchen.';
+  if (!local && !harbor) return 'Build the General Store to give your jam a buyer.';
+  if (jars.n > 0 && local && store.ins[0].pile.free() <= 0 &&
+    (!harbor || jamTerminal.ins[0].pile.free() < JAM_CRATE)) {
+    return 'Jam is backing up. The sales queue is full.';
+  }
+  if (jars.n >= JAM_CRATE && local && !hasLocalJamRoute() && !harbor) {
+    return 'Jars are waiting for pickup. Carry them to the General Store or buy the jam conveyor.';
+  }
+  if (jars.free() <= 0) return 'The Jam Kitchen output is full. Move jars to a buyer.';
+  if (jamStock(berriesIn) < 2 && kitchen.make <= 0) return 'The Jam Kitchen is waiting for berries.';
+  if (harbor && jamTerminal.ins[0].pile.n < JAM_CRATE) return 'Harbor needs six jars to fill its next shipment.';
+  return 'Jam production has berries and room for more jars.';
+}
+function openProduction() {
+  const option = (value, label, current, disabled = false) =>
+    `<option value="${value}"${value === current ? ' selected' : ''}${disabled ? ' disabled' : ''}>${label}</option>`;
+  menuBody.innerHTML = `<div class="rowbtns"><button type="button" data-build-view="build">Build &amp; Expand</button></div>
+    <h4>Jam supply chain</h4><p>Berries → Jam Kitchen → General Store or Harbor</p>
+    <div id="productionstock"></div>
+    ${!jamTerminal.built && kitchen.built ? '<div class="rowbtns"><button type="button" data-jam-terminal>Find the Harbor Jam Terminal</button></div>' : ''}
+    ${kitchen.built ? `<div class="buildtools">
+      <label>Berry picker priority<select id="jampriority" data-jam-setting="berries">
+        ${option('balanced', 'Balance jam and pies', jamProduction.berries)}
+        ${option('jam', 'Jam Kitchen first', jamProduction.berries)}
+        ${option('pie', 'Pie Bakery first', jamProduction.berries)}
+      </select></label>
+      <label>Keep berries for jam<select id="jamreserve" data-jam-setting="reserve">
+        ${[0, 4, 8, 12].map(n => option(n, n + ' berries', jamProduction.reserve)).join('')}
+      </select></label>
+      <label>Send jam to<select id="jamsales" data-jam-setting="sales">
+        ${option('store', 'General Store', jamProduction.sales)}
+        ${option('split', 'Store first, export surplus', jamProduction.sales, !jamTerminal.built)}
+        ${option('harbor', 'Harbor only', jamProduction.sales, !jamTerminal.built)}
+      </select></label>
+    </div>
+    <p>Berry priority applies to hired pickers. The reserve also keeps Pie Supply from taking the last berries at the Jam Kitchen. The store route uses a conveyor or clerk.</p>
+    ${store.built && !hasLocalJamRoute() ? '<div class="rowbtns"><button type="button" data-jam-route="conveyor">Find the jam conveyor</button></div>' : ''}
+    <h4>Compare production</h4><div id="productionrates"></div>
+    <button type="button" class="projectaction" data-jam-baseline>Save current results as baseline</button>` : ''}`;
+  for (const select of menuBody.querySelectorAll('[data-jam-setting]')) {
+    select.onchange = () => {
+      const key = select.dataset.jamSetting;
+      jamProduction[key] = key === 'reserve' ? Number(select.value) : select.value;
+      if (key === 'sales') jamProduction.freightTime = 0;
+      jamProduction.time = 0;
+      jamProduction.current = newJamSample();
+      save();
+      renderProduction();
+    };
+  }
+  renderProduction();
+}
+function renderProduction() {
+  const stock = document.getElementById('productionstock');
+  if (!stock) return;
+  const level = pile => `${pile.n}/${pile.max}${pile.pending ? ` (+${pile.pending} incoming)` : ''}`;
+  const terminalPad = PADS.find(p => p.id === 'jamterminal');
+  const terminalText = jamTerminal.built ? `${level(jamTerminal.ins[0].pile)} jars · ${dollars(jamTerminal.accepts.jam())} per jar · six per shipment`
+    : activePad(terminalPad) ? `Available for ${dollars(padRemaining(terminalPad))} in Build &amp; Expand`
+      : 'Build the Jam Kitchen and complete the Harbor Freight Pier to unlock.';
+  const lines = kitchen.built ? `<p><b>Jam Kitchen:</b> ${level(kitchen.ins[0].pile)} berries in · ${level(kitchen.outPile)} jars out</p>
+    ${bakery.built ? `<p><b>Pie Bakery:</b> ${level(bakery.ins[1].pile)} berries · ${level(bakery.ins[0].pile)} raw meat</p>` : ''}
+    <p><b>General Store:</b> ${store.built ? level(store.ins[0].pile) + ' goods waiting' : 'Build to sell jars locally'}</p>
+    <p><b>Harbor Jam Terminal:</b> ${terminalText}</p>` : '';
+  const markup = `<p><strong>${jamBottleneck()}</strong></p>${lines}`;
+  if (stock.dataset.markup !== markup) { stock.dataset.markup = markup; stock.innerHTML = markup; }
+  const rates = document.getElementById('productionrates');
+  if (!rates) return;
+  const { last, baseline, time } = jamProduction;
+  const summarize = sample => `${sample.made} made · ${sample.store + sample.harbor} sold (${sample.store} store, ${sample.harbor} Harbor) · ${dollars(sample.revenue)} sales`;
+  const compare = last && baseline ? `<p><b>Change per minute:</b> ${signed(last.store + last.harbor - baseline.store - baseline.harbor)} jars sold · ${signed(last.revenue - baseline.revenue, true)} in sales</p>` : '';
+  const results = `<p><b>Last complete minute:</b> ${last ? summarize(last) : 'Collecting your first sample'}</p>
+    ${baseline ? `<p><b>Baseline:</b> ${summarize(baseline)}</p>` : ''}
+    ${compare}<p>Next sample in ${Math.max(1, Math.ceil(60 - time))} seconds of play.</p>`;
+  if (rates.dataset.markup !== results) { rates.dataset.markup = results; rates.innerHTML = results; }
+  menuBody.querySelector('[data-jam-baseline]').disabled = !last;
+}
+function signed(value, money = false) {
+  const prefix = value < 0 ? '−' : value > 0 ? '+' : '';
+  return prefix + (money ? dollars(Math.abs(value)) : Math.abs(value));
+}
+
 function openBuildPlanner() {
   menuBody.innerHTML = `<div class="rowbtns">
+    <button type="button" data-build-view="production">Production</button>
     <button type="button" data-build-view="castle">Material projects</button>
     <button type="button" data-build-view="menu">Main menu</button>
-    </div><p id="buildcash"></p><p id="buildstatus" role="status" hidden></p><div class="buildtools">
+    </div><p id="buildcash"></p><p id="buildbottleneck" hidden></p><p id="buildstatus" role="status" hidden></p><div class="buildtools">
     <input type="search" id="buildsearch" aria-label="Search builds" placeholder="Search builds">
     <select id="buildfilter" aria-label="Filter builds">
       <option value="all">All available</option><option value="affordable">Can afford</option>
@@ -6153,6 +6320,10 @@ function renderBuildList() {
   const pinned = buildPin ? '<button class="projectaction" type="button" data-plan-clear>Clear map pin</button>' : '';
   const balance = document.getElementById('buildcash'), cashText = dollars(W.cash) + ' available';
   if (balance.textContent !== cashText) balance.textContent = cashText;
+  const bottleneck = document.getElementById('buildbottleneck');
+  bottleneck.hidden = !kitchen.built;
+  const note = kitchen.built ? jamBottleneck() : '';
+  if (bottleneck.textContent !== note) bottleneck.textContent = note;
   const costNote = cost => dollars(cost) + (cost > W.cash ? ' · ' + dollars(cost - W.cash) + ' short' : '');
   const buyButton = (attr, id, label, cost, name) =>
     `<button class="planbuy" type="button" ${attr}="${id}" aria-label="${label} ${name}"${cost > W.cash ? ' disabled' : ''}>${label}</button>`;
@@ -6328,7 +6499,19 @@ menuBody.addEventListener('click', e => {
   const button = e.target.closest('button');
   if (!button) return;
   const { planPad, buyPad, planBelt, planProject, planUpgrade, planTier, buildView, shortBuild, mapPin, mapTravel, mapSelect, districtBuy } = button.dataset;
-  if (buildView) {
+  if (button.hasAttribute('data-jam-baseline') && jamProduction.last) {
+    jamProduction.baseline = { ...jamProduction.last };
+    save();
+    renderProduction();
+  } else if (button.hasAttribute('data-jam-route')) {
+    buildQuery = 'Jam Kitchen → General Store'; buildFilter = 'automation';
+    showMenuView('build');
+  } else if (button.hasAttribute('data-jam-terminal')) {
+    if (shortBuilds.freightpier.done) {
+      buildQuery = 'Harbor Jam Terminal'; buildFilter = 'all';
+      showMenuView('build');
+    } else showMenuView('castle');
+  } else if (buildView) {
     showMenuView(buildView === 'menu' ? '' : buildView);
   } else if (buyPad) {
     const pad = PADS.find(p => p.id === buyPad);
@@ -6391,7 +6574,7 @@ function updateMenuMarkup(el, markup) {
   liveMenuMarkup = markup;
   el.innerHTML = markup;
 }
-const LIVE_MENU = { wh: renderWarehouse, build: renderBuildList, castle: renderProjects };
+const LIVE_MENU = { wh: renderWarehouse, build: renderBuildList, castle: renderProjects, production: renderProduction };
 function menuTick(dt) {
   const render = LIVE_MENU[menuView];
   if (menuEl.hidden || !render) return;
@@ -6564,6 +6747,7 @@ const DISTRICT_ROUTES = [
   ['Harbor District', () => FAR.harbor.built, [
     ['Sell fish', 'Start with the Fish Market. Build a local dock so you can land fish beside it.', ['fishmkt'], null, 'harborfishing'],
     ['Move freight', 'Build the Freight Pier to receive fish and bars from other districts. Use the bars at the Shipyard.', ['shipyard'], null, 'freightpier'],
+    ['Export jam', 'Build the Jam Kitchen and Freight Pier, then buy the Harbor Jam Terminal to sell shipments of six jars.', ['jamterminal'], null, 'freightpier'],
   ]],
   ['Sky Peak', () => FAR.peak.built, [
     ['Make quilts', 'Combine feathers from the peak with yak wool. Sell quilts by sled or save them for the Ice Castle.', ['downshop', 'depot']],
@@ -6689,6 +6873,7 @@ function campSave() {
     shortBuilds: Object.fromEntries(Object.entries(shortBuilds).map(([id, site]) => [id, site.have])),
     cash: W.cash, pads: padState, served, dayT, plan: buildPin, ride: W.ride, tut: tut.step,
     coveDay: FAR.cove.lastDay, up: UP, orders: orders.list, ordersNext: orders.next,
+    jamProduction: { berries: jamProduction.berries, reserve: jamProduction.reserve, sales: jamProduction.sales, baseline: jamProduction.baseline },
     f1: { fuel: power.fuel }, f4: { buffs },
     i: { museum: [null, museum.done], castle: [castle.stage, castle.have] },
     h: { hist: incomeHist },
@@ -6714,6 +6899,7 @@ function save() {
 if (saved && saved.pads) {
   let merchantRefund = 0;
   buildPin = saved.plan || null;
+  restoreJamProduction(saved.jamProduction);
   if (saved.ride === false) W.ride = false;
   if (saved.research?.done) {
     for (const upgrade of UPGRADES) {
@@ -6826,7 +7012,7 @@ function frame(now) {
   if (UP.beacon) { beaconT += dt; if (beaconT > 5) { beaconT = 0; W.cash += 10; setCash(); } }
   updateCustomers(dt);
   for (const w of workers) w.update(dt);
-  updateFlyers(dt); updatePuffs(dt);
+  updateFlyers(dt); updateJamProduction(dt); updatePuffs(dt);
   for (let i = popping.length - 1; i >= 0; i--) {
     const g = popping[i]; g.userData.pop = Math.min(1, g.userData.pop + dt * 2.2); g.scale.setScalar(Math.max(0.01, easeOutBack(g.userData.pop)));
     if (g.userData.pop >= 1) popping.splice(i, 1);
