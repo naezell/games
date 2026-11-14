@@ -128,7 +128,17 @@
   #menu .mgrid button:not(#mute):not(#gfxbtn):not(#backupbtn):not(#reset):not(#buildbtn):not(#whbtn) { display: none; }
   #hud .left { gap: 5px; }
   #hudbuild, #campbtn { min-height: 39px; }
-  #menubody label[for="woodreserve"] { font-weight: 800; }
+  .camp-sites { display:grid;gap:6px;margin-top:8px; }
+  .camp-site { display:grid;grid-template-columns:minmax(120px,1fr) auto;gap:3px 7px;text-align:left;
+    font:800 14px var(--font-body);color:var(--ink);background:#f5f7fa;border:1px solid #d4dce1;
+    border-left:5px solid var(--camp-color);border-radius:7px;padding:8px;cursor:pointer;min-height:43px; }
+  .camp-site small { grid-column:1/-1; }
+  .camp-site span,.camp-site small,.camp-controls small { color:#536075;font-size:12px; }
+  .camp-controls { display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,1fr);gap:8px;align-items:center; }
+  .camp-controls label { font-weight:800;font-size:13px; }
+  .camp-controls select { width:100%;min-width:0;border:1px solid #abb8c9;border-radius:7px;
+    padding:8px 3px;background:white;color:var(--ink);font:16px var(--font-body); }
+  .camp-controls small { grid-column:1/-1; }
   #hudbuild:focus-visible, #menubtn:focus-visible { outline: 3px solid var(--white); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   #map { pointer-events: auto; cursor: pointer; }
@@ -1324,25 +1334,11 @@ function updateGrill(dt) {
   grill.fire.visible = grill.fire2.visible = fueled;
   grill.cooking.visible = fueled && grill.input.n > 0;
   const rate = 1.0 / (1 + padLevel('grill') * 0.8);
-  if (fueled && grill.t > rate && grill.input.n > 0 && grill.output.free() > 0) {
-    if (!kitchenCamp.charges) {
-      scene.remove(kitchenCamp.fuel.take());
-      kitchenCamp.charges = mealsPerLog();
-    }
-    kitchenCamp.charges--;
-    grill.t = 0;
-    const m = grill.input.take();
-    grill.output.pending++;
-    fly(m, m.position.clone(), () => grill.top, 0.25, () => {
-      scene.remove(m); grill.output.pending--;
-      const s = makeItem('steak'); burst(grill.top, 0xffa23a, 3);
-      grill.output.receive(s, grill.top.clone());
-    });
-  }
+  updateKitchenRecipes(dt,fueled,rate);
 }
 
 // Counter + customers
-const counter = { pos: new V3(4, 0, 5), input: new Pile(4, 3.3, 3, 3, 45, 0.62, 0.62, 0.14), cash: null, t: 0 };
+const counter = { pos: new V3(4, 0, 5), input: new Pile(4, 3.3, 3, 3, 45, 0.62, 0.62, 0.14), cash: null, t: 0, pies:new Pile(4.7,3.3,3,3,30,.55,.55,.16) };
 {
   const g = stationGroup(4, 5);
   mesh(new THREE.BoxGeometry(3, 1, 0.9), 0xb8733d, 0, 0.5, 0, g);
@@ -1362,11 +1358,11 @@ const PARKAS = [0xe0a43a, 0x8e5bd0, 0xd65a8f, 0x4fb0a8, 0xe3713d, 0x6c7fd8, 0x9c
 function spawnCustomer() {
   const p = makePerson(PARKAS[randi(0, PARKAS.length - 1)], null, 0.9);
   p.group.position.set(4 + rand(-0.5, 0.5), 0, 12.8); p.group.rotation.y = PI;
-  const c = { p, want: randi(1, 2), got: 0, incoming: 0, state: 'queue', slot: customers.filter(c => c.state === 'queue').length };
+  const c = { p, want: randi(1, 2), got: 0, incoming: 0, good: null, state: 'queue', slot: customers.filter(c => c.state === 'queue').length };
   const bubble = groundLabel(1.0, (x, n) => {
     x.fillStyle = '#ffffff'; roundRect(x, 18, 30, 220, 150, 40); x.fill();
     x.beginPath(); x.moveTo(110, 178); x.lineTo(128, 220); x.lineTo(146, 178); x.fill();
-    drawIcon(x, 'steak', 92, 105, 0.8); x.fillStyle = '#1d2a3a'; x.font = 'bold 64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    drawIcon(x, c.good || 'steak', 92, 105, 0.8); x.fillStyle = '#1d2a3a'; x.font = 'bold 64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText(String(n ?? c.want), 182, 108);
   });
   bubble.mesh.rotation.set(0, 0, 0); bubble.mesh.position.set(0, 2.35, 0); p.group.add(bubble.mesh);
@@ -1386,15 +1382,24 @@ function updateCustomers(dt) {
       const target = QUEUE(c.slot), arrived = stepToward(g, target, 3.2, dt, 0.05);
       animPerson(c.p, !arrived, dt);
       if (arrived) g.rotation.y = lerpAng(g.rotation.y, PI, 0.2);
-      if (arrived && c.slot === 0 && counter.t > 0.3 && c.got + c.incoming < c.want && counter.input.n > 0) {
+      if (arrived && c.slot === 0 && !c.good) {
+        if (counter.pies.n>=c.want) c.good='pie';
+        else if (counter.input.n) { c.good='steak'; c.want=Math.min(c.want,counter.input.n); }
+        else if (counter.pies.n) { c.good='pie'; c.want=1; }
+        if (c.good) c.bubble.redraw(c.want);
+      }
+      const stock=c.good==='pie'?counter.pies:counter.input;
+      if (arrived && c.slot === 0 && counter.t > 0.3 && c.good && c.got + c.incoming < c.want && stock.n > 0) {
         counter.t = 0;
-        const m = counter.input.take(); c.incoming++;
+        const m = stock.take(); c.incoming++;
         fly(m, m.position.clone(), () => g.position.clone().add(new V3(0, 1.0, 0)), 0.3, () => {
           scene.remove(m); c.incoming--; c.got++; c.bag.visible = true;
+          if (c.good==='pie') { c.bag.geometry=GEO.pie; c.bag.material=vcMat; }
           c.bubble.redraw(c.want - c.got);
           if (c.got >= c.want) {
-            const revenue = counter.cash.addValue(c.want * (STEAK_PRICE + (kitchenCamp.covered ? 3 : 0)), g.position.clone().add(new V3(0, 1, 0)));
-            recordCampSale('steaks', c.want, revenue);
+            const price=c.good==='pie'?PIE_PRICE:STEAK_PRICE+(kitchenCamp.covered?3:0);
+            const revenue=counter.cash.addValue(c.want*price,g.position.clone().add(new V3(0,1,0)));
+            recordCampSale(c.good==='pie'?'pies':'steaks',c.want,revenue);
             served++; c.state = 'leave'; c.bubble.mesh.visible = false;
             for (const o of customers) if (o.state === 'queue' && o.slot > 0) o.slot--;
           }
@@ -1456,7 +1461,162 @@ function campMarker(pos, icon, label, tint) {
 campMarker(grill.input.center, 'meat', 'Drop meat', '#ff9aa0');
 campMarker(grill.output.center, 'steak', 'Pick up steaks', '#ffc08a');
 campMarker(kitchenCamp.fuel.center, 'log', 'Add fuel', '#ffc585');
-campMarker(counter.input.center, 'steak', 'Sell steaks', '#ffc08a');
+campMarker(counter.input.center, 'steak', 'Sell food', '#ffc08a');
+const PIE_PRICE = 17, PIE_FUEL = 2;
+const pieOven = {
+  pos:new V3(-1.15,0,-5.8), berries:new Pile(.7,-5.8,3,3,24,.46,.46,.24),
+  output:new Pile(-1.05,-8.1,3,3,24,.48,.48,.16), t:0,
+};
+const bulk = {
+  at:new V3(6.2,0,6.5), zone:new V3(6.4,0,8.25),
+  pies:0, planks:0, shipped:0, crates:[],
+  pieNeed:6, plankNeed:3, price:156,
+};
+const campExpansion = { heat:'balanced', lastCook:'pie', plankReserve:12 };
+const piePatch = new V3(1.3,0,-10.4);
+for (const [x,z] of [[-.1,-10.4],[2,-10.3],[3.2,-11.5],[.3,-12.2]]) berries.push(new Tree(x,z,'berry'));
+
+function buildPieOven(instant) {
+  const g=stationGroup(pieOven.pos.x,pieOven.pos.z);
+  mesh(new THREE.BoxGeometry(1.85,1.35,1.45),0x9e6655,0,.675,0,g);
+  mesh(new THREE.BoxGeometry(1.95,.12,1.55),0xefd9c1,0,1.37,0,g);
+  mesh(new THREE.BoxGeometry(.92,.63,.06),0x312524,0,.61,.75,g);
+  mesh(new THREE.BoxGeometry(.59,.17,.09),0xd97f43,0,.43,.785,g);
+  mesh(new THREE.BoxGeometry(.35,.75,.38),0x895347,.54,1.73,-.35,g);
+  colliders.push({x0:-2.08,x1:-.22,z0:-6.52,z1:-5.08});
+  campMarker(pieOven.berries.center,'berry','Drop berries','#efd89a');
+  campMarker(pieOven.output.center,'pie','Pick up pies','#efd89a');
+  if (!instant) popIn(g);
+}
+function buildPlankRack(instant) {
+  kitchenCamp.planks.max=48;
+  const g=stationGroup(-3.4,5.85);
+  for (const x of [-.8,.8]) for(const z of [-.35,.35])
+    mesh(new THREE.BoxGeometry(.11,1.16,.11),0x74512b,x,.58,z,g);
+  for(const y of [.2,.95]) mesh(new THREE.BoxGeometry(1.8,.11,.88),0x9f784f,0,y,0,g);
+  if (!instant) popIn(g);
+}
+function buildBulkBuyer(instant) {
+  const g=stationGroup(bulk.at.x,bulk.at.z);
+  mesh(new THREE.BoxGeometry(1.4,.11,.85),0xa57247,0,.75,0,g);
+  for(const x of [-.55,.55]) for(const z of [-.3,.3])
+    mesh(new THREE.BoxGeometry(.11,.74,.11),0x775033,x,.37,z,g);
+  for(const x of [-.46,0,.46]) {
+    const crate=new THREE.Group();crate.position.set(x,.82,0);g.add(crate);bulk.crates.push(crate);
+    mesh(new THREE.BoxGeometry(.4,.27,.46),0xb48549,0,.13,0,crate);
+    mesh(new THREE.BoxGeometry(.42,.05,.49),0x825b33,0,.28,0,crate);
+    mesh(new THREE.BoxGeometry(.06,.29,.47),0xddb681,0,.14,0,crate);
+  }
+  updateBulkCrates();
+  const buyer=makePerson(0x9a6550,null,.92);
+  buyer.group.position.set(bulk.at.x+.9,0,bulk.at.z+.5);
+  buyer.group.rotation.y=-PI/2;
+  campMarker(bulk.zone,'pie','Bulk pies + wood','#efd89a');
+  if (!instant) popIn(g);
+}
+function updateKitchenRecipes(dt,fueled,steakRate) {
+  if (padLevel('pieoven')) pieOven.t=Math.min(2,pieOven.t+dt);
+  const heat=kitchenCamp.charges+(kitchenCamp.fuel.n ? mealsPerLog() : 0);
+  const steak=grill.input.n>0 && grill.output.free()>0 && heat>=1;
+  const pie=padLevel('pieoven') && pieOven.berries.n>=2 && pieOven.output.free()>0 && heat>=PIE_FUEL;
+  if (!fueled || (!steak && !pie)) return;
+  // Hold heat for the preferred recipe once its inputs are ready.
+  const preferPie=pie && (!steak || campExpansion.heat==='pies' ||
+    (campExpansion.heat==='balanced' && campExpansion.lastCook==='steak'));
+  if (preferPie) {
+    if (pieOven.t<2) return;
+    pieOven.t=0;
+    consumeCampHeat(PIE_FUEL);
+    cookCampBatch('pie',pieOven.berries,2,pieOven.output,pieOven.pos.clone().setY(1));
+  } else if (grill.t>steakRate) {
+    grill.t=0;
+    consumeCampHeat(1);
+    cookCampBatch('steak',grill.input,1,grill.output,grill.top);
+  }
+}
+function consumeCampHeat(units) {
+  if (kitchenCamp.charges<units) {
+    scene.remove(kitchenCamp.fuel.take());
+    kitchenCamp.charges+=mealsPerLog();
+  }
+  kitchenCamp.charges-=units;
+}
+function cookCampBatch(type,input,quantity,output,top) {
+  campExpansion.lastCook=type;
+  for(let i=0;i<quantity;i++){
+    const ingredient=input.take();
+    fly(ingredient,ingredient.position.clone(),()=>top,.25,()=>scene.remove(ingredient));
+  }
+  output.receive(makeItem(type),top);
+  burst(top,0xffa23a,3);
+}
+function sellCampPlank() {
+  const revenue=sawmill.cash.addValue(PLANK_PRICE,kitchenCamp.market.clone().setY(.8));
+  recordCampSale('planks',1,revenue);
+}
+function updateBulkCrates() {
+  const packed=Math.min(bulk.planks,Math.floor(bulk.pies/2));
+  bulk.crates.forEach((crate,i)=>{crate.visible=i<packed;});
+}
+function deliverBulk(pos,carrier) {
+  if (!padLevel('bulkbuyer') || !inZone(pos,bulk.zone.x,bulk.zone.z)) return false;
+  const type=bulk.pies<bulk.pieNeed && carrier.count('pie') ? 'pie' :
+    bulk.planks<bulk.plankNeed && carrier.count('plank') ? 'plank' : '';
+  if (!type) return false;
+  const item=carrier.take(type);
+  if (type==='pie') bulk.pies++; else bulk.planks++;
+  fly(item.m,item.pos,()=>bulk.at.clone().setY(.8),.25,()=>scene.remove(item.m));
+  if (bulk.pies===bulk.pieNeed && bulk.planks===bulk.plankNeed) {
+    const revenue=counter.cash.addValue(bulk.price,bulk.at.clone().setY(.85));
+    recordCampSale('shipments',1,revenue);
+    bulk.shipped++;bulk.pies=0;bulk.planks=0;
+    sfx('coin');
+  } else sfx('drop');
+  updateBulkCrates();save();
+  return true;
+}
+function updateFoodServer(worker,go) {
+  const pieReserve=padLevel('bulkbuyer')?bulk.pieNeed:0;
+  const jobs=[[grill.output,'steak',counter.input,0],[pieOven.output,'pie',counter.pies,pieReserve]];
+  if (worker.c.load) {
+    const job=jobs.find(([,type])=>worker.c.count(type));
+    if (!job) return;
+    const [,type,target]=job;
+    if (go(target.center,.65) && worker.t>.18 && target.free()>0) {
+      const item=worker.c.take(type);worker.t=0;target.receive(item.m,item.pos);
+    }
+    return;
+  }
+  const job=jobs.filter(([pile,,target,reserve])=>pile.n>reserve && target.free()>0)
+    .sort((a,b)=>d2(worker.g.position,a[0].center)-d2(worker.g.position,b[0].center))[0];
+  if (!job) { go(new V3(-1.2,0,1.2),.45); return; }
+  const [pile,type,target,reserve]=job;
+  if (!go(pile.center,.58) || worker.t<.18) return;
+  worker.t=0;
+  for(let count=Math.min(worker.c.cap,pile.n-reserve,target.free());count>0;count--)
+    worker.c.receive(type,pile.take(),pile.slot(pile.n));
+}
+function updatePlankSeller(worker,go) {
+  if (worker.c.load>0) {
+    if (!go(kitchenCamp.market,.65) || worker.t<.18) return;
+    const item=worker.c.take('plank');
+    if (!item) return;
+    worker.t=0;
+    sellCampPlank();
+    const top=kitchenCamp.market.clone().setY(.8);
+    fly(item.m,item.pos,()=>top,.23,()=>scene.remove(item.m));
+    return;
+  }
+  const planks=kitchenCamp.planks;
+  if (planks.n<=campExpansion.plankReserve) {
+    go(new V3(-4.15,0,6.25),.45); return;
+  }
+  if (!go(planks.center,.6) || worker.t<.18) return;
+  worker.t=0;
+  for(let count=Math.min(worker.c.cap,planks.n-campExpansion.plankReserve);count>0;count--)
+    worker.c.receive('plank',planks.take(),planks.slot(planks.n));
+}
+
 function recordCampSale(kind, quantity, revenue) {
   kitchenCamp.sales.push({ time: kitchenCamp.seconds, kind, quantity, revenue });
 }
@@ -1504,8 +1664,7 @@ function campPlankInteraction(pos, carrier) {
     const item = carrier.take('plank');
     if (item) {
       const top = market.clone().setY(.8);
-      const revenue = sawmill.cash.addValue(PLANK_PRICE, top);
-      recordCampSale('planks', 1, revenue);
+      sellCampPlank();
       fly(item.m, item.pos, () => top, .25, () => scene.remove(item.m));
       sfx('coin'); return true;
     }
@@ -1982,8 +2141,13 @@ function drawMap(dt) {
   c.strokeStyle = '#ffffff'; c.lineWidth = 2; dot(pp.x, pp.z, 5, '#2f78d6'); c.beginPath(); c.arc(mx(pp.x), mz(pp.z), 5, 0, 2 * PI); c.stroke();
   c.fillStyle = nightK > .5 ? '#ffffff' : '#1b3045';
   c.font = 'bold 13px sans-serif'; c.textAlign = 'center';
-  for (const [name,x,z] of [['Hunt',3,-12],['Forest',-13.6,-6],['Kitchen',-4,-1],['Counter',4,5.7],['Sawmill',-9,10]])
-    c.fillText(name,mx(x),mz(z));
+  for (const [id,x,z] of [['forest',-13.6,-6],['kitchen',-4,-1],['counter',4,5.7],['mill',-9,10]]) {
+    const site=campSites[id];
+    c.strokeStyle=site.color;c.lineWidth=3;
+    c.strokeText(site.name,mx(x),mz(z));c.fillText(site.name,mx(x),mz(z));
+  }
+  c.fillText('Hunt',mx(4.5),mz(-13.1));
+  if (padLevel('pieoven')) { c.font='bold 11px sans-serif';c.fillText('Berry patch',mx(3.4),mz(-10.4)); }
   drawPlanMarker(c);
 }
 
@@ -3873,7 +4037,7 @@ function offlineReport(sv) {
 
 // ---------------- workers ----------------
 const workers = [];
-const WCOL = { obsminer: 0x2a1a3a, farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
+const WCOL = { plankseller:0x748fa8, obsminer: 0x2a1a3a, farmer: 0x6a9a3a, milkmaid: 0xf6f6f6, carpenter: 0x8f582e, beekeeper: 0xf0b030, picker: 0xd04a7a, smelterhand: 0x555c68, herbalist: 0x6ac08a, clerk: 0x3f6f9f, digger: 0x8a5a36, sharder: 0xc06ad8,  lumber: 0xd2463c, hunter: 0x3f8f4a, server: 0xf09a2a, miner: 0x7a5bd0, fisher: 0x2aa0b8, banker: 0xe0b030, crafter: 0xc0602a, shepherd: 0x9a7a4a, runner: 0x3fb0e0 };
 const PICKUP = { server: () => [grill.output, 'steak'], shepherd: () => [pen.out, 'wool'], runner: () => [workshop.out, 'lantern'] };
 const cashPiles = () => [counter.cash, sawmill.cash, cutter.cash, smoke.cash, springs.cash, market.cash, tailor.cash, train.cash, aquarium.cash, museum.cash, balloon.cash, ...STATIONS.filter(st => st.x < 90).map(st => st.cash)].filter(Boolean);
 class Worker {
@@ -3890,7 +4054,9 @@ class Worker {
     const rush = boost.work > 0 || wx.kind === 'sunny' ? 1.7 : 1;
     this.t += dt * rush;
     const go = (target, stop) => { const arr = navStep(this.g, target, 3.6 * rush * (1 + 0.15 * U('wspeed')) * (1 - 0.2 * stormK), dt, stop); moving = !arr; return arr; };
-    if (JOBS[this.kind]) runJob(this, JOBS[this.kind], go);
+    if (this.kind==='plankseller') updatePlankSeller(this,go);
+    else if (this.kind==='server') updateFoodServer(this,go);
+    else if (JOBS[this.kind]) runJob(this, JOBS[this.kind], go);
     else if (this.state === 'deliver') {
       if (this.kind === 'lumber') {
         if (!this.dst || this.dst.free() <= 0 || (this.dst === kitchenCamp.fuel && sawmill.input.free() > 0 && this.dst.n + this.dst.pending >= kitchenCamp.reserve)) {
@@ -3968,6 +4134,10 @@ const PADS = [
   { id:'grill', label:'Efficient Grill', icon:'fire', costs:[110,280], x:-5,z:-.4, req:()=>true, apply:()=>{} },
   { id:'sawup', label:'Sharper Saw', icon:'saw', costs:[90,230], x:-9.3,z:1.45, req:()=>sawmill.unlocked, apply:()=>{} },
   { id:'bag', label:'Bigger Pack', icon:'pack', costs:[55,150,320], x:1.6,z:-.8, req:()=>true, apply:l=>{ W.cap=[12,18,26][l];player.c.cap=W.cap; } },
+  { id:'pieoven', label:'Pie Oven', icon:'pie', costs:[220], x:-2.7,z:-6.5, req:()=>kitchenCamp.covered, apply:(l,instant)=>buildPieOven(instant) },
+  { id:'plankrack', label:'Plank Rack', icon:'bar', costs:[135], x:-2.65,z:6.9, req:()=>sawmill.unlocked, apply:(l,instant)=>buildPlankRack(instant) },
+  { id:'plankseller', label:'Hire Plank Seller', icon:'person', costs:[125], x:-4.1,z:6.7, req:()=>padLevel('plankrack'), apply:()=>new Worker('plankseller',-4.15,6.25) },
+  { id:'bulkbuyer', label:'Bulk Buyer', icon:'pie', costs:[300], x:8.4,z:8.25, req:()=>kitchenCamp.covered && padLevel('pieoven'), apply:(l,instant)=>buildBulkBuyer(instant) },
   { id:'banker', label:'Hire Cash Collector', icon:'cash', costs:[175], x:7.45,z:6.9, req:()=>kitchenCamp.covered, apply:()=>new Worker('banker',7.45,6.9) },
 ];
 // ---------------- land plots ----------------
@@ -4263,20 +4433,24 @@ const inZone = (pos, x, z, half = 1.05) => Math.abs(pos.x - x) < half && Math.ab
 function playerInteract() {
   const pos = player.g.position, c = player.c;
   // drop-offs
-  const drops = [[grill.input, 'meat'], [counter.input, 'steak'], [kitchenCamp.fuel, 'log']];
+  const drops = [[grill.input, 'meat'], [counter.input, 'steak'], [counter.pies,'pie'], [kitchenCamp.fuel, 'log']];
+  if (padLevel('pieoven')) drops.push([pieOven.berries,'berry']);
   if (sawmill.unlocked) drops.push([sawmill.input, 'log']);
   if (cutter.unlocked) drops.push([cutter.input, 'gem']);
   if (smoke.unlocked) drops.push([smoke.input, 'fish']);
   if (springs.unlocked) drops.push([springs.input, 'log']);
   if (power.built) drops.push([power.input, 'log']);
   for (const [pile, type] of drops) {
-    if (inZone(pos, pile.x, pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
+    if (inZone(pos,pile===counter.pies?counter.input.x:pile.x,pile.z) && pile.free() > 0) { const it = c.take(type); if (it) { pile.receive(it.m, it.pos); sfx('drop'); return; } }
   }
   // pick-up
   if (inZone(pos, grill.output.x, grill.output.z) && grill.output.n > 0 && !c.full()) {
     c.receive('steak', grill.output.take(), grill.output.slot(grill.output.n)); return;
   }
-  if (campPlankInteraction(pos, c)) return;
+  if (padLevel('pieoven') && inZone(pos,pieOven.output.x,pieOven.output.z) && pieOven.output.n && !c.full()) {
+    c.receive('pie',pieOven.output.take(),pieOven.output.slot(pieOven.output.n));return;
+  }
+  if (deliverBulk(pos,c) || campPlankInteraction(pos,c)) return;
   // cash
   for (const cp of cashPiles().concat([sanct.cash, smith.cash, hotel.cash, exch.cash, ...STATIONS.filter(st => st.x >= 90).map(st => st.cash)].filter(Boolean))) {
     if (!cp || !inZone(pos, cp.x, cp.z) || cp.value <= 0) continue;
@@ -4721,7 +4895,7 @@ const PAD_INFO = {
 const padLabel = id => (PADS.find(p => p.id === id) || {}).label || id;
 const VENDORS = [
   { name: 'Grill', pos: grill.pos, ok: () => true, about: 'Drop meat and fuel logs on their marked pads. Pick up steaks on the other side.', needs: [{ pile: grill.input, type: 'meat', n: 1 }, { pile:kitchenCamp.fuel,type:'log',n:1 }], makes: { type: 'steak', pile: grill.output } },
-  { name: 'Steak Counter', pos: counter.pos, ok: () => true, about: 'Villagers line up here to buy steaks.', needs: [{ pile: counter.input, type: 'steak', n: 1 }], pays: () => STEAK_PRICE + (kitchenCamp.covered ? 3 : 0), cash: () => counter.cash },
+  { name: 'Food Counter', pos: counter.pos, ok: () => true, about: 'Villagers buy steaks and pies at the same Sell food pad.', needs: [{ pile: counter.input, type: 'steak', n: 1 }], pays: () => STEAK_PRICE + (kitchenCamp.covered ? 3 : 0), cash: () => counter.cash },
   { id:'saw', name:'Sawmill', pos:sawmill.pos, ok:()=>sawmill.unlocked, about:'One log makes one plank. Sell planks or build the covered counter.', needs:[{pile:sawmill.input,type:'log',n:1}], makes:{type:'plank',pile:kitchenCamp.planks}, cash:()=>sawmill.cash },
   { id: 'cutter', name: 'Gem Cutter', pos: cutter.pos, ok: () => cutter.unlocked, about: PAD_INFO.cutter, needs: [{ pile: cutter.input, type: 'gem', n: 1 }], pays: () => GEM_PRICE + 2 * U('gem'), cash: () => cutter.cash },
   { id: 'smoke', name: 'Smokehouse', pos: smoke.pos, ok: () => smoke.unlocked, about: PAD_INFO.smoke, needs: [{ pile: smoke.input, type: 'fish', n: 1 }], pays: () => FISH_PRICE + 2 * U('fish'), cash: () => smoke.cash },
@@ -4750,6 +4924,8 @@ const takesType = (need, t) => (need.types ? need.types.includes(t) : need.type 
 
 // Plain spots on the ground that aren't shops.
 const SPOTS = [
+  { name:'Pie Oven', at:()=>pieOven.pos, ok:()=>padLevel('pieoven'), icon:'pie', text:()=> 'Two berries and two units of shared fuel make a pie. Sell pies at the counter or save them for bulk.' },
+  { name:'Bulk Buyer', at:()=>bulk.zone, ok:()=>padLevel('bulkbuyer'), icon:'pie', text:()=> bulk.pies+'/6 pies · '+bulk.planks+'/3 planks. Each completed shipment pays $156.' },
   { name:'Plank Buyer', at:()=>kitchenCamp.market, ok:()=>sawmill.unlocked, icon:'bar', text:()=> 'Walk onto this pad with planks to sell them for $'+PLANK_PRICE+' each.' },
   { name:'Covered Counter', at:()=>kitchenCamp.project, ok:()=>sawmill.unlocked && !kitchenCamp.covered, icon:'house', text:()=> kitchenCamp.delivered+'/'+kitchenCamp.needed+' planks delivered. Finish for $'+kitchenCamp.price+' from Build.' },
   { name: 'Town Hall', at: () => hall.zone, ok: () => hall.built, icon: 'board', text: () => 'Stand here to open the shop: upgrades and decorations.' },
@@ -4782,7 +4958,7 @@ function vendorHtml(v) {
     const sold = v.needs[0].types;
     h += `<h4>${sold ? 'Buys (each)' : v.makes ? `Bring for each ${v.makes.name || itemName(v.makes.type)}` : 'Bring'}</h4>`;
     for (const n of v.needs) {
-      if (n.pile === kitchenCamp.fuel) h += `<p>1 fuel log cooks ${mealsPerLog()} steaks.</p>`;
+      if (n.pile === kitchenCamp.fuel) h += `<p>One log provides ${mealsPerLog()} heat. A steak uses one heat and a pie uses two.</p>`;
       else h += needRow(sold ? Object.assign({ pay:v.pays },n) : n,c);
     }
     if (v.needs.some(n => n.pile.free() <= 0)) h += `<p class="warn">Full right now. Wait for it to use some up.</p>`;
@@ -4790,6 +4966,7 @@ function vendorHtml(v) {
   if (v.makes && !v.needs.length) h += `<h4>Pick up</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span>${capFirst(itemName(v.makes.type, 2))}</span><em>${v.makes.pile.n} ready</em></div>`;
   else if (v.makes) h += `<h4>Makes</h4><div class="row">${iconImg(iconOfItem(v.makes.type))}<span><b>1</b> × ${itemName(v.makes.type)}</span><em>${v.makes.pile.n} ready</em></div>`;
   else if (v.pays && !v.needs[0]?.types) h += `<h4>Pays</h4><div class="row">${iconImg('cash')}<span><b>$${fmt(v.pays())}</b> ${v.payWord || 'each'}</span></div>`;
+  if (v.pos===counter.pos && padLevel('pieoven')) h += `<p>${counter.pies.n} pies waiting · $${PIE_PRICE} each.</p>`;
   if (closed) h += `<p class="warn">The sled is out on a run. It takes goods again when it's back.</p>`;
   if (kitchen.built && [kitchen, store, jamTerminal].includes(v.station)) {
     h += `<p>${jamBottleneck()}</p><button type="button" data-open-production>Production</button>`;
@@ -4871,6 +5048,8 @@ function findDelivery() {
   const c = player.c, pos = player.g.position, here = regionOf(pos);
   const have = [...new Set(c.items.map(it => it.type))];
   if (!have.length) return null;
+  if (have.includes('berry') && padLevel('pieoven') && pieOven.berries.free()>0) return {p:pieOven.berries.center,label:'Berries → Pie Oven'};
+  if (have.includes('pie') && counter.pies.free()>0) return {p:counter.input.center,label:'Pies → Food Counter'};
   if (have.includes('plank') && sawmill.unlocked) {
     return !kitchenCamp.covered && kitchenCamp.delivered < kitchenCamp.needed
       ? {p:kitchenCamp.project,label:'Planks → Covered Counter'}
@@ -6120,6 +6299,10 @@ function setBuildPin(pin) {
 }
 function planTarget() {
   if (!buildPin) return null;
+  if (buildPin.kind==='camp') {
+    const site=campSites[buildPin.id];
+    return site ? {p:site.at(),label:site.name,summary:site.name} : null;
+  }
   if (buildPin.kind === 'map') {
     const entry = mapEntries.get(buildPin.id), p = entry?.ok() && entry.at();
     return p ? { p, label: entry.name, summary: entry.name + ' · ' + mapAreaName(entry, p) } : null;
@@ -6556,8 +6739,12 @@ const campBuildNotes = {
   saw: 'Turn one log into one plank. Sell planks for $6 each or use them for construction.',
   lumber: 'Chops trees. Fills the grill’s fuel reserve, then brings logs to the mill.',
   hunter: 'Hunts in the clearing and drops raw meat at the grill.',
-  server: 'Carries steaks from the grill to the food counter.',
-  grill: 'Cooks faster and gets two more steaks from each log.',
+  server: 'Carries cooked food to the counter. Once you build the bulk buyer, it leaves six pies for shipments.',
+  pieoven:'Bake two berries into a $17 pie. Each pie uses twice the fuel of a steak.',
+  plankrack:'Doubles the Sawmill output storage to 48 planks and unlocks a plank seller.',
+  plankseller:'Sells well-stocked planks and leaves your chosen reserve for projects and crates.',
+  bulkbuyer:'Deliver six pies and three planks for a $156 shipment. Repeat as often as you can supply it.',
+  grill: 'Cooks steaks faster and adds two units of heat per log for the grill and oven.',
   sawup: 'Cuts planks faster.',
   bag: 'Carry more food and wood each trip.',
   banker: 'Collects cash from the food counter and plank buyer.',
@@ -6584,41 +6771,78 @@ function renderKitchenBuild() {
   }).join('');
   updateMenuMarkup(list,`<p>${dollars(W.cash)} available</p><h4>Build a covered counter</h4>${project}<h4>Camp upgrades and hires</h4>${rows || '<p>All camp upgrades are built.</p>'}`);
 }
+const campSites = {
+  forest:{name:'Forest', color:'#66aa91', at:()=>new V3(-12.35,0,-.6)},
+  berries:{name:'Berry patch', color:'#d57f9b', at:()=>piePatch},
+  kitchen:{name:'Kitchen', color:'#edaa67', at:()=>grill.input.center},
+  mill:{name:'Sawmill', color:'#c18b57', at:()=>sawmill.unlocked?sawmill.input.center:sawmill.pos},
+  counter:{name:'Food counter', color:'#f0c980', at:()=>counter.input.center},
+  bulk:{name:'Bulk buyer', color:'#d8a77f', at:()=>bulk.zone},
+};
 function openKitchenCamp() {
-  menuBody.innerHTML = `<div class="rowbtns"><button type="button" data-kitchen-view="build">Build</button>
-    <button type="button" data-kitchen-view="">Settings</button></div>
+  const reserveOptions=(values,current,unit,zero)=>values.map(n=>
+    `<option value="${n}"${n===current?' selected':''}>${n===0?zero:n+' '+unit}</option>`).join('');
+  const priorityOptions=[['balanced','Alternate when both are ready'],['steaks','Steaks first'],['pies','Pies first']]
+    .map(([value,label])=>`<option value="${value}"${value===campExpansion.heat?' selected':''}>${label}</option>`).join('');
+  menuBody.innerHTML=`<div class="rowbtns"><button type="button" data-kitchen-view="build">Build</button>
+    <button type="button" data-kitchen-view="">Settings</button>
+    ${buildPin?`<button type="button" data-plan-clear>Clear pin</button>`:''}</div>
+    <p>Tap a place to point your character there.</p>
     <div id="kitchenstock"></div>
-    <label for="woodreserve">Lumberjack fuel reserve</label>
-    <div class="buildtools"><select id="woodreserve">
-      ${[0,2,4,6,8].map(n=>`<option value="${n}"${n===kitchenCamp.reserve?' selected':''}>${n===0?'Mill first':n+' logs for the grill'}</option>`).join('')}
-    </select></div><p>The crew stocks this many logs at the grill first. Then it brings the next loads to the sawmill.</p>`;
-  document.getElementById('woodreserve').onchange = e => {
-    const reserve = Number(e.target.value);
-    if (![0,2,4,6,8].includes(reserve)) return;
-    kitchenCamp.reserve=reserve;
-    for (const worker of workers) if (worker.kind==='lumber') worker.dst=null;
-    save(); renderKitchenCamp();
+    <h4>Production settings</h4>
+    <div class="camp-controls">
+      <label for="woodreserve">Fuel logs to keep for the kitchen</label>
+      <select id="woodreserve">${reserveOptions([0,2,4,6,8],kitchenCamp.reserve,'logs','Mill first')}</select>
+      ${padLevel('pieoven')?`<label for="heatpriority">Shared fuel priority</label>
+      <select id="heatpriority">${priorityOptions}</select>`:''}
+      ${padLevel('plankrack')?`<label for="plankreserve">Planks to keep in the rack</label>
+      <select id="plankreserve">${reserveOptions([0,3,6,12,18,24],campExpansion.plankReserve,'planks','Sell all')}</select>
+      <small>The plank seller takes surplus only. You can always pick up reserved planks yourself.</small>`:''}
+    </div>`;
+  document.getElementById('woodreserve').onchange=e=>{
+    kitchenCamp.reserve=Number(e.target.value);
+    for(const worker of workers) if(worker.kind==='lumber') worker.dst=null;
+    save();renderKitchenCamp();
   };
+  const heat=document.getElementById('heatpriority');
+  if(heat) heat.onchange=()=>{campExpansion.heat=heat.value;save();renderKitchenCamp();};
+  const planks=document.getElementById('plankreserve');
+  if(planks) planks.onchange=()=>{campExpansion.plankReserve=Number(planks.value);save();renderKitchenCamp();};
   renderKitchenCamp();
 }
 function renderKitchenCamp() {
   const target=document.getElementById('kitchenstock');
   if (!target) return;
-  const k=kitchenCamp, grillStatus=grill.input.n && !k.fuel.n && !k.charges ? 'Waiting for fuel' :
-    grill.output.free()<=0 ? 'Pick up cooked steaks' : grill.input.n ? 'Cooking steaks' : 'Waiting for raw meat';
-  const millStatus=!sawmill.unlocked ? 'Build the Sawmill' : k.planks.free()<=0 ? 'Pick up planks' :
-    sawmill.input.n ? 'Cutting planks' : 'Waiting for logs';
-  const sales=k.sales.reduce((tot,sale)=>{tot[sale.kind]+=sale.quantity;tot.revenue+=sale.revenue;return tot;},
-    {steaks:0,planks:0,revenue:0});
-  updateMenuMarkup(target,`<h4>Kitchen</h4><p><b>${grillStatus}</b> · ${grill.input.n} raw meat · ${grill.output.n} steaks ready</p>
-    <p>${k.fuel.n} fuel logs · ${mealsPerLog()} steaks per log · ${k.charges} cooks left on the current log</p>
-    <h4>Sawmill</h4><p><b>${millStatus}</b> · ${sawmill.input.n} logs · ${k.planks.n} planks ready</p>
-    <h4>Last minute of sales</h4><p>${sales.steaks} steaks · ${sales.planks} planks · ${dollars(sales.revenue)} earned</p>`);
+  const k=kitchenCamp, hasHeat=k.fuel.n||k.charges;
+  const grillStatus=grill.output.free()<=0?'Steak output full':grill.input.n?(hasHeat?'Steaks ready to cook':'Waiting for fuel'):'Waiting for raw meat';
+  const pieStatus=pieOven.output.free()<=0?'Pie output full':pieOven.berries.n<2?'Waiting for berries':
+    (k.fuel.n||k.charges>=PIE_FUEL)?'Pies ready to bake':'Waiting for fuel';
+  const millStatus=!sawmill.unlocked?'Build the sawmill':k.planks.free()<=0?'Output full':
+    sawmill.input.n?'Cutting planks':'Waiting for logs';
+  const sales=k.sales.reduce((total,sale)=>{total[sale.kind]+=sale.quantity;total.revenue+=sale.revenue;return total;},
+    {steaks:0,pies:0,planks:0,shipments:0,revenue:0});
+  const row=(id,status,stock)=>{
+    const site=campSites[id];
+    return `<button type="button" class="camp-site" data-camp-site="${id}" style="--camp-color:${site.color}">
+      <b>${site.name}</b><span>${status}</span><small>${stock}</small></button>`;
+  };
+  const pieInfo=padLevel('pieoven')?`<br>Oven · ${pieStatus} · ${pieOven.berries.n} berries · ${pieOven.output.n} pies ready`:'';
+  updateMenuMarkup(target,`<div class="camp-sites">
+    ${row('kitchen',grillStatus,`${grill.input.n} meat · ${grill.output.n} steaks ready · ${k.fuel.n} logs · ${k.charges} heat left${pieInfo}`)}
+    ${row('mill',millStatus,`${sawmill.input.n} logs · ${k.planks.n}/${k.planks.max} planks`)}
+    ${row('counter',counter.input.n||counter.pies.n?'Selling food':'Waiting for cooked food',`${counter.input.n} steaks · ${counter.pies.n} pies · ${dollars(counter.cash.value)} to collect`)}
+    ${row('forest','Chop fuel or mill logs',`${trees.filter(t=>!t.down).length} trees ready`)}
+    ${padLevel('pieoven')?row('berries','Gather berries for pies','Along the hunting path'):''}
+    ${padLevel('bulkbuyer')?row('bulk','Pack pies into three wooden crates',`${bulk.pies}/6 pies · ${bulk.planks}/3 planks · $156 per shipment`):''}
+    </div>
+    <h4>Sales in the last minute</h4><p>${sales.steaks} steaks · ${sales.pies} pies · ${sales.planks} planks · ${sales.shipments} shipments · ${dollars(sales.revenue)} earned</p>`);
 }
 menuBody.addEventListener('click', e => {
   const button=e.target.closest('button');
   if (!button) return;
-  if (button.hasAttribute('data-kitchen-view')) showMenuView(button.dataset.kitchenView);
+  if (button.dataset.campSite && campSites[button.dataset.campSite]) {
+    setBuildPin({kind:'camp',id:button.dataset.campSite});closeMenu();
+  } else if (button.hasAttribute('data-kitchen-view')) showMenuView(button.dataset.kitchenView);
   else if (button.hasAttribute('data-kitchen-fund')) { fundCoveredCounter(); renderKitchenBuild(); }
   else if (button.dataset.kitchenBuy) {
     const pad=PADS.find(p=>p.id===button.dataset.kitchenBuy);
@@ -6937,13 +7161,19 @@ function musicTick(dt) {
 // ---------------- save / load ----------------
 function saveKitchenCamp() {
   const stock = pile => pile.n+pile.pending;
+  const reserved = type => customers.reduce((n,c)=>n+(c.state==='queue'&&c.good===type ? c.got+c.incoming : 0),0);
+  const crewByKind={};
+  for(const w of workers) (crewByKind[w.kind] ||= []).push(w.c.items.map(i=>i.type).concat(w.c.incoming));
   return {
     charges:kitchenCamp.charges, reserve:kitchenCamp.reserve, delivered:kitchenCamp.delivered, covered:kitchenCamp.covered,
     fuel:stock(kitchenCamp.fuel), meat:stock(grill.input), steaks:stock(grill.output),
-    counter:stock(counter.input) + customers.reduce((n,c)=>n+(c.state==='queue' ? c.got+c.incoming : 0),0),
+    counter:stock(counter.input)+reserved('steak'), counterPies:stock(counter.pies)+reserved('pie'),
+    berries:stock(pieOven.berries), pies:stock(pieOven.output),
+    heat:campExpansion.heat, lastCook:campExpansion.lastCook, plankReserve:campExpansion.plankReserve,
+    bulkPies:bulk.pies, bulkPlanks:bulk.planks, shipments:bulk.shipped,
     logs:stock(sawmill.input), planks:stock(kitchenCamp.planks), foodCash:counter.cash.value, woodCash:sawmill.cash?.value||0,
     pack:player.c.items.map(i=>i.type).concat(player.c.incoming), at:[player.g.position.x,player.g.position.z],
-    crew:workers.map(w=>w.c.items.map(i=>i.type).concat(w.c.incoming)),
+    crewByKind,
   };
 }
 function restoreKitchenCamp(data) {
@@ -6958,9 +7188,17 @@ function restoreKitchenCamp(data) {
   k.reserve=[0,2,4,6,8].includes(data.reserve)?data.reserve:4;
   k.delivered=safeCount(data.delivered,k.needed);
   k.charges=safeCount(data.charges,mealsPerLog());
+  campExpansion.heat=['balanced','steaks','pies'].includes(data.heat)?data.heat:'balanced';
+  campExpansion.lastCook=data.lastCook==='steak'?'steak':'pie';
+  campExpansion.plankReserve=[0,3,6,12,18,24].includes(data.plankReserve)?data.plankReserve:12;
+  if(padLevel('bulkbuyer')) {
+    bulk.pies=safeCount(data.bulkPies,bulk.pieNeed);bulk.planks=safeCount(data.bulkPlanks,bulk.plankNeed);
+    bulk.shipped=safeCount(data.shipments,Number.MAX_SAFE_INTEGER);updateBulkCrates();
+  }
   if (data.covered && sawmill.unlocked) buildCoveredCounter(true);
   put(k.fuel,'fuel','log'); put(grill.input,'meat','meat'); put(grill.output,'steaks','steak'); put(counter.input,'counter','steak');
   if (sawmill.unlocked) { put(sawmill.input,'logs','log'); put(k.planks,'planks','plank'); }
+  if (padLevel('pieoven')) { put(pieOven.berries,'berries','berry'); put(pieOven.output,'pies','pie'); put(counter.pies,'counterPies','pie'); }
   for (const [cp,value] of [[counter.cash,data.foodCash],[sawmill.cash,data.woodCash]]) {
     if (!cp || !(value>0)) continue;
     cp.value=safeCount(value,Number.MAX_SAFE_INTEGER);
@@ -6974,13 +7212,25 @@ function restoreKitchenCamp(data) {
   const refill=(carrier,types)=>{
     if (!Array.isArray(types)) return;
     for(const type of types.slice(0,carrier.cap)) {
-      if (!['log','meat','steak','plank'].includes(type)) continue;
+      if (!['log','meat','steak','plank','berry','pie'].includes(type)) continue;
       const item=makeItem(type);carrier.stack.add(item);carrier.items.push({type,m:item});
     }
     carrier.restack();
   };
   refill(player.c,data.pack);
-  workers.forEach((w,index)=>{refill(w.c,data.crew?.[index]); if(w.c.load && w.kind!=='banker') w.state='deliver';});
+  const legacyCrew={};
+  for(const load of Array.isArray(data.crew)?data.crew:[]) {
+    if(!Array.isArray(load)||!load.length) continue;
+    const kind={log:'lumber',meat:'hunter',steak:'server'}[load[0]];
+    if(kind) (legacyCrew[kind] ||= []).push(load);
+  }
+  const crewIndex={};
+  for(const w of workers) {
+    const index=crewIndex[w.kind]||0;
+    refill(w.c,(data.crewByKind||legacyCrew)[w.kind]?.[index]);
+    crewIndex[w.kind]=index+1;
+    if(w.c.load && w.kind!=='banker') w.state='deliver';
+  }
   refreshPads();
 }
 
@@ -7104,6 +7354,7 @@ function frame(now) {
   const t = gameTime;
   updatePlayer(dt);
   for (const tr of trees) tr.update(dt);
+  for (const bush of berries) bush.update(dt);
   boarTimer -= dt;
   if (boarTimer <= 0 && boars.filter(b => !b.home).length < maxBoars()) { new Boar(rand(FIELD.x0, FIELD.x1), rand(FIELD.z0, FIELD.z1)); boarTimer = 2.5; }
   for (const b of boars.slice()) b.update(dt);
