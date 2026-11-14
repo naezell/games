@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Build a snowy timber supply chain, spot the bottleneck, and put the profits back to work.">
+<meta name="theme-color" content="#171f28">
+<title>Frostfall Logistics</title>
+<style>
+:root{color-scheme:dark;--bg:#171f28;--panel:#212c36;--line:#3a4b56;--text:#f2f6f0;--muted:#b6c7cf;--mint:#bce7b8;--orange:#ffc585;--snow:#d9e6e6;--forest:#306456;--water:#538295;font-family:"Instrument Sans",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
+main{max-width:1120px;margin:auto;padding:24px clamp(12px,3vw,36px) 42px}
+header,.section-head,.actions,.stats,.legend{display:flex;align-items:center;gap:10px}
+header,.section-head{justify-content:space-between}
+header{margin-bottom:18px;align-items:flex-end}
+h1,h2,h3,p{margin:0}
+h1{font-size:clamp(27px,5vw,49px);line-height:1;letter-spacing:-.055em}
+h2{font-size:19px;letter-spacing:-.02em}
+h3{font-size:16px}
+p{line-height:1.45}
+small,.muted{color:var(--muted)}
+.money{text-align:right;flex:none}
+.money strong{display:block;font-size:clamp(22px,4vw,32px);line-height:1;color:var(--mint);font-variant-numeric:tabular-nums}
+.money small{font-size:11px}
+.layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(270px,1fr);gap:16px;align-items:start}
+.panel,.brief{border:1px solid var(--line);border-radius:15px;background:var(--panel)}
+.panel{padding:14px}
+.brief{margin-bottom:14px;padding:12px 14px;display:flex;align-items:baseline;gap:12px}
+.brief strong{color:var(--orange);flex:none}
+.brief p{font-size:14px}
+.map-shell{margin-top:12px;position:relative}
+.map{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;background:#12202a;border:3px solid #12202a;border-radius:10px;overflow:hidden}
+.tile{position:relative;aspect-ratio:1.13;min-width:0;border:0;padding:2px;border-radius:3px;color:#172831;background:var(--snow);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:clamp(8px,1.25vw,12px);font-weight:800;line-height:1.05}
+.tile.snow:empty::after{content:"";width:3px;height:3px;position:absolute;top:19%;left:22%;background:#a2c0c0;border-radius:50%;box-shadow:14px 13px #c0d2d0}
+.tile.forest{background:#adcbbd}.tile.water{background:repeating-linear-gradient(160deg,#54889e 0 12px,#5a8fa2 12px 14px)}
+.tile.locked{background:#364751;color:#f1f5ee}.tile.buildable{box-shadow:inset 0 0 0 2px #4e8e71;background:#e6efcb}
+.tile.selected{box-shadow:inset 0 0 0 3px #ea9744}
+.tile-name{position:relative;z-index:2;max-width:100%;overflow-wrap:anywhere}
+.mark{position:relative;width:48%;height:42%;margin-bottom:3px;display:block;z-index:2}
+.mark.forest{background:var(--forest);clip-path:polygon(18% 4%,34% 36%,46% 16%,59% 40%,72% 0,100% 77%,85% 77%,85% 100%,13% 100%,13% 77%,0 77%)}
+.mark.mill,.mark.shop,.mark.dock,.mark.yard{background:#48586d;clip-path:polygon(0 40%,48% 0,100% 36%,92% 38%,92% 100%,8% 100%,8% 40%)}
+.mark.shop{background:#865035}.mark.dock{background:#265d72}.mark.yard{background:#665d53}
+.mark.mill::after,.mark.shop::after,.mark.dock::after,.mark.yard::after{content:"";position:absolute;bottom:0;left:42%;width:25%;height:43%;background:#f5ce94}
+.mark.locked{width:21%;height:21%;border:2px solid #c8d7d8;border-radius:3px;margin-top:5px}
+.mark.locked::after{content:"";width:75%;height:80%;border:2px solid #c8d7d8;border-radius:5px 5px 0 0;position:absolute;bottom:90%;left:12%}
+.route{position:absolute;pointer-events:none;z-index:1;border-radius:6px;opacity:.85}
+.route.logs{background:#81a456}.route.planks{background:#b66c35}.route.goods{background:#775aaa}
+.route.horizontal{height:3px;width:100%;left:0;top:calc(50% + var(--offset))}
+.route.vertical{width:3px;height:100%;top:0;left:calc(50% + var(--offset))}
+.route.node{height:7px;width:7px;left:calc(50% - 2px + var(--offset));top:calc(50% - 2px + var(--offset))}
+.legend{margin-top:9px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.swatch{display:inline-block;width:13px;height:3px;background:var(--color);margin-right:4px;vertical-align:middle}
+.controls{margin-top:12px}
+.actions{flex-wrap:wrap;gap:6px;margin-top:8px}
+button,select{font:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible{outline:3px solid #e6ab6b;outline-offset:2px}
+.action,select{min-height:40px;padding:8px 11px;background:#30424e;color:var(--text);border:1px solid #4b606a;border-radius:7px;font-weight:700;font-size:13px}
+.action.primary{background:var(--mint);color:#1b3527;border-color:var(--mint)}
+.action[aria-pressed="true"]{background:var(--orange);color:#392417}
+.action:disabled{opacity:.48;cursor:default}
+#hint,#notice{margin-top:7px;font-size:13px}
+#notice{color:var(--mint)}
+#detail{min-height:74px;margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:13px}
+#detail p{margin-top:4px}
+#detail.closed{display:none}
+.sidebar{display:grid;gap:12px}
+.stats{flex-wrap:wrap;align-items:stretch;margin:10px 0}
+.stats div{flex:1;min-width:74px;padding:8px;border-radius:7px;background:#19252e}
+.stats strong,.stats small{display:block}.stats strong{font-size:17px;font-variant-numeric:tabular-nums}
+.stats small{font-size:11px;margin-top:3px}
+.diagnosis{color:var(--orange);font-size:13px;margin-top:8px}
+.routes{margin-top:10px;display:grid;gap:8px}
+.route-card{border:1px solid var(--line);border-radius:8px;padding:8px}
+.route-card label{display:block;margin-top:6px;font-size:12px;color:var(--muted)}
+.route-card select{width:100%;margin-top:3px}
+.route-card p,.measure{font-size:12px}
+#comparison{min-height:36px}
+details{margin-top:12px;font-size:12px;color:var(--muted)}
+summary{cursor:pointer}
+details p{margin-top:6px}
+@media(max-width:700px){
+  main{padding-top:16px}.layout{grid-template-columns:1fr;gap:12px}.panel{padding:11px}
+  .tile{aspect-ratio:1.05;font-size:8px}
+  .brief{gap:6px;display:block}.brief p{margin-top:2px}
+  .map{gap:2px;border-width:2px}
+}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Frostfall Logistics</h1><div class="money"><strong id="cash"></strong><small>Available cash</small></div></header>
+<section class="brief" aria-label="Current objective"><strong>Next move</strong><p id="objective"></p></section>
+<div class="layout">
+<section class="panel" aria-label="Camp map">
+  <div class="section-head"><h2>Timber Valley</h2><small id="map-mode">Tap a site</small></div>
+  <div class="map-shell"><div id="map" class="map" aria-label="Timber Valley map"></div></div>
+  <div class="legend"><span><i class="swatch" style="--color:#81a456"></i>Logs</span><span><i class="swatch" style="--color:#b66c35"></i>Planks</span><span><i class="swatch" style="--color:#775aaa"></i>Furniture</span></div>
+  <div class="controls"><h3>Build &amp; gather</h3><div class="actions" id="build-actions"></div><p class="muted" id="hint"></p><p id="notice" role="status" hidden></p></div>
+  <div id="detail" class="closed" aria-label="Selected site"></div>
+</section>
+<div class="sidebar">
+<section class="panel"><div class="section-head"><h2>Production</h2><small>Last 60 seconds</small></div>
+<div class="stats"><div><strong id="units">0</strong><small>Units sold</small></div><div><strong id="net">$0</strong><small>Sales minus hauling</small></div></div><p id="diagnosis" class="diagnosis"></p>
+<div class="actions"><button class="action" id="baseline">Save baseline</button></div><p id="comparison" class="measure muted"></p></section>
+<section class="panel"><div class="section-head"><h2>Cart routes</h2><small id="fleet"></small></div><div id="routes" class="routes"></div>
+<details><summary>How hauling works</summary><p>Carts take two seconds per tile each way, plus four seconds to load and unload. Trips cost $1 per leg of distance, charged as a round trip. Building closer saves both time and cash. Carts wait for a full load. When a cart supplies the furniture shop, the mill reserves its next six planks if the shop is low on stock.</p></details></section>
+</div>
+</div>
+</main>
+<script>
+(() => {
+'use strict';
+const WIDTH = 8, HEIGHT = 6;
+const SAVE = 'frostfall-logistics-v1';
+const forest = {x:1,y:1}, depot = {x:6,y:4}, timber = {x:0,y:4}, river = {x:6,y:1};
+const stages = {
+  mill:{name:'Sawmill',price:75,input:'logs',output:'planks',time:4},
+  shop:{name:'Furniture shop',price:950,input:'planks',output:'furniture',time:10},
+  yard:{name:'Storage yard',price:180},
+};
+const marketPrices = {depot:{planks:9,furniture:28},river:{planks:12,furniture:38}};
+const initial = () => ({
+  cash:175, buildings:{}, forestLogs:12, timberLogs:0, timber:false, river:false, cutting:false,
+  carts:[{route:'logs',load:0,remaining:0,target:null},{route:'planks',load:0,remaining:0,target:null}],
+  sold:0, firstExpansion:null, market:null, baseline:null, handRest:0,
+});
+let state = initial();
+try {
+  const saved = JSON.parse(localStorage.getItem(SAVE));
+  if (saved && saved.buildings && Array.isArray(saved.carts) && saved.carts.length >= 2) state = {...state,...saved};
+} catch {}
+let selected = null, placing = null, time = 0;
+let events = [], cutTime = 0, savedTime = 0;
+const $ = id => document.getElementById(id);
+const cash = n => '$' + Math.round(n).toLocaleString('en-US');
+const same = (a,b) => a && b && a.x === b.x && a.y === b.y;
+const distance = (a,b) => Math.abs(a.x-b.x) + Math.abs(a.y-b.y);
+const order = ['logs','planks','supply','furniture'];
+const names = {logs:'Logs to sawmill',planks:'Planks to buyer',supply:'Planks to furniture shop',furniture:'Furniture to buyer'};
+const cap = () => state.buildings.yard ? 36 : 16;
+const cartPrice = () => 230 + Math.max(0,state.carts.length-2)*160;
+const market = () => state.market || 'depot';
+const sellPoint = () => market() === 'river' ? river : depot;
+const legTime = (from,to) => 2*distance(from,to)+2;
+function save() {
+  try { localStorage.setItem(SAVE,JSON.stringify(state)); }
+  catch { notify('This browser could not save your progress.'); }
+}
+function notify(message) { $('notice').textContent = message; $('notice').hidden = !message; }
+function route(id) {
+  const mill = state.buildings.mill, shop = state.buildings.shop;
+  if (!mill) return null;
+  if (id === 'logs') {
+    const useTimber = state.timber && state.timberLogs >= 6 &&
+      (state.forestLogs < 6 || distance(timber,mill) < distance(forest,mill));
+    return {from:useTimber ? timber : forest,to:mill,source:useTimber ? 'timberLogs' : 'forestLogs',target:'mill',capacity:cap()};
+  }
+  if (id === 'planks') return {from:mill,to:sellPoint(),source:'mill',target:market()};
+  if (!shop) return null;
+  if (id === 'supply') return {from:mill,to:shop,source:'mill',target:'shop',capacity:cap()};
+  if (id === 'furniture') return {from:shop,to:sellPoint(),source:'shop',target:market()};
+  return null;
+}
+function isBusy(cart) { return cart.remaining > 0; }
+function inbound(target) { return state.carts.reduce((sum,c) => sum + (c.target === target ? c.load : 0),0); }
+function stock(key) { return state.buildings[key]?.output ?? state[key] ?? 0; }
+function removeStock(key,n) {
+  if (state.buildings[key]) state.buildings[key].output -= n;
+  else state[key] -= n;
+}
+function logEvent(change, sold = 0) {
+  if (change || sold) events.push({time,change,sold});
+}
+function operate(cart) {
+  const job = route(cart.route);
+  if (!job || stock(job.source) < 6) return;
+  const shop = state.buildings.shop;
+  if (cart.route === 'planks' && shop && shop.input + inbound('shop') < 6 &&
+    state.carts.some(c => c.route === 'supply') && stock(job.source) < 12) return;
+  const building = state.buildings[job.target];
+  if (building && building.input + inbound(job.target) + 6 > job.capacity) return;
+  const tiles = distance(job.from,job.to), cost = tiles * 2;
+  if (state.cash < cost) return;
+  state.cash -= cost;
+  logEvent(-cost);
+  removeStock(job.source,6);
+  cart.load = 6; cart.target = job.target; cart.remaining = legTime(job.from,job.to); cart.returnTime = cart.remaining;
+  cart.good = cart.route === 'furniture' ? 'furniture' : cart.route === 'logs' ? 'logs' : 'planks';
+}
+function tick(dt) {
+  time += dt;
+  state.handRest = Math.max(0,state.handRest-dt);
+  cutTime += dt;
+  if (cutTime >= 2) {
+    cutTime -= 2;
+    if (state.cutting) state.forestLogs = Math.min(30,state.forestLogs+2);
+    if (state.timber) state.timberLogs = Math.min(36,state.timberLogs+4);
+  }
+  for (const [id,b] of Object.entries(state.buildings)) {
+    const recipe = stages[id];
+    if (!recipe.input || b.input <= 0 || b.output >= cap()) { b.time = 0; continue; }
+    b.time += dt;
+    if (b.time >= recipe.time) { b.time -= recipe.time; b.input--; b.output++; }
+  }
+  for (const cart of state.carts) {
+    if (!isBusy(cart)) { operate(cart); continue; }
+    cart.remaining = Math.max(0,cart.remaining - dt);
+    if (cart.remaining || !cart.target) continue;
+    if (state.buildings[cart.target]) state.buildings[cart.target].input += cart.load;
+    else {
+      const revenue = marketPrices[cart.target][cart.good] * cart.load;
+      state.cash += revenue;
+      state.sold += cart.load;
+      logEvent(revenue,cart.load);
+    }
+    cart.remaining = cart.returnTime;
+    cart.load = 0; cart.target = null;
+  }
+  events = events.filter(e => time-e.time < 60);
+  savedTime += dt;
+  if (savedTime >= 5) { savedTime = 0; save(); }
+}
+function terrain(pos) {
+  if (same(pos,forest)) return 'forest';
+  if (same(pos,depot)) return 'depot';
+  if (same(pos,timber)) return 'timber';
+  if (same(pos,river)) return 'river';
+  if ((pos.x === 7) || (pos.x >= 6 && pos.y === 0)) return 'water';
+  return 'snow';
+}
+function tileInfo(pos) {
+  const building = Object.entries(state.buildings).find(([,b]) => same(b,pos));
+  if (building) return {id:building[0],name:stages[building[0]].name,mark:building[0]};
+  const land = terrain(pos);
+  if (land === 'forest') return {id:land,name:'Forest',mark:'forest'};
+  if (land === 'depot') return {id:land,name:'Depot',mark:'dock'};
+  if (land === 'timber') return {id:land,name:'Timber lot',mark:state.timber?'forest':'locked'};
+  if (land === 'river') return {id:land,name:'River dock',mark:state.river?'dock':'locked'};
+  return {id:land,name:'',mark:''};
+}
+const map = $('map'), tiles = [];
+for (let y=0;y<HEIGHT;y++) for (let x=0;x<WIDTH;x++) {
+  const tile = document.createElement('button');
+  tile.type = 'button'; tile.className = 'tile'; map.append(tile);
+  tile.onclick = () => selectTile({x,y});
+  tiles.push({x,y,tile});
+}
+function routeMarks(pos) {
+  return order.map((id,i) => {
+    const plan = route(id);
+    if (!plan || !state.carts.some(c=>c.route === id)) return '';
+    const {from,to} = plan;
+    const inRange = (v,a,b) => v >= Math.min(a,b) && v <= Math.max(a,b);
+    const classes = [pos.y===from.y && from.x!==to.x && inRange(pos.x,from.x,to.x) ? 'horizontal' : '',
+      pos.x===to.x && from.y!==to.y && inRange(pos.y,from.y,to.y) ? 'vertical' : '',
+      same(pos,from)||same(pos,to) ? 'node' : ''];
+    const color = id==='logs'?'logs':id==='furniture'?'goods':'planks';
+    return classes.filter(Boolean).map(c => '<i class="route '+color+' '+c+'" style="--offset:'+(i*3-5)+'px"></i>').join('');
+  }).join('');
+}
+let drawn = '';
+function renderMap() {
+  const mapKey = JSON.stringify([state.buildings.mill?.x,state.buildings.mill?.y,state.buildings.shop?.x,
+    state.buildings.shop?.y,state.buildings.yard?.x,state.buildings.yard?.y,state.timber,state.river,state.market,
+    state.carts.map(c=>c.route),route('logs')?.source,selected,placing]);
+  if (mapKey === drawn) return;
+  drawn = mapKey;
+  for (const pos of tiles) {
+    const {tile,x,y} = pos, info = tileInfo(pos);
+    tile.className = 'tile '+(info.mark==='locked'?'locked':info.id==='water'?'water':info.mark==='forest'?'forest':info.id==='snow'?'snow':'');
+    tile.classList.toggle('buildable',!!placing && info.id==='snow');
+    tile.classList.toggle('selected',same(selected,pos));
+    tile.setAttribute('aria-label',info.name || (info.id==='water'?'River':'Snow tile')+' '+(x+1)+', '+(y+1));
+    tile.innerHTML = routeMarks(pos) + (info.mark ? '<span class="mark '+info.mark+'"></span><span class="tile-name">'+info.name+'</span>' : '');
+  }
+}
+function selectTile(pos) {
+  if (placing) {
+    if (tileInfo(pos).id !== 'snow') { notify('Choose a highlighted snow tile.'); return; }
+    const {id,move} = placing, cost = move ? 45 : stages[id].price;
+    if (state.cash < cost) { notify('You need '+cash(cost)+' for this site.'); return; }
+    state.cash -= cost;
+    state.buildings[id] = {...(move ? state.buildings[id] : {input:0,output:0,time:0}),...pos};
+    placing = null; selected = pos;
+    notify(stages[id].name+(move?' moved.':' built.'));
+    save(); render(); return;
+  }
+  selected = pos;
+  notify('');
+  render();
+}
+function purchase(cost,apply,message) {
+  if (state.cash < cost) return;
+  state.cash -= cost; apply(); notify(message); save(); render();
+}
+function buyLand(id) {
+  if (state[id] || !state.sold) return;
+  const price = id==='river' ? 570 : 430;
+  purchase(price,() => { state[id] = true; state.firstExpansion ||= id;
+    if (id==='timber') state.timberLogs = 12; else state.market = 'river'; },id==='river'?'River dock is open. Future sales carts will use it.':'Timber lot opened. It gathers extra logs automatically.');
+}
+function chooseMarket(id) {
+  if (!state.river) return;
+  state.market = id;
+  notify('New trips will use the '+(id==='river'?'River dock.':'Depot.'));
+  save(); render();
+}
+function action(label,fn,{disabled=false,primary=false,pressed}={}) {
+  const b=document.createElement('button');
+  b.type='button'; b.className='action'+(primary?' primary':''); b.textContent=label;
+  b.disabled=disabled; if (pressed!==undefined) b.setAttribute('aria-pressed',String(pressed)); b.onclick=fn; return b;
+}
+function place(id,move=false) {
+  const cost = move ? 45 : stages[id].price;
+  if (state.cash < cost) return;
+  placing = placing?.id===id && placing.move===move ? null : {id,move};
+  notify(''); render();
+}
+let actionsKey = '', detailKey = '';
+function renderActions() {
+  const key=JSON.stringify([Object.keys(state.buildings),state.cutting,placing,
+    !state.buildings.mill && state.cash>=75,!state.cutting && state.cash>=65,
+    !state.buildings.shop && state.cash>=950,!state.buildings.yard && state.cash>=180,state.cash>=cartPrice(),cartPrice()]);
+  if(key===actionsKey) return;
+  actionsKey=key;
+  const a=$('build-actions'); a.replaceChildren();
+  if (!state.buildings.mill) a.append(action('Sawmill · $75',()=>place('mill'),{disabled:state.cash<75,primary:true,pressed:placing?.id==='mill'}));
+  a.append(action(state.cutting?'Logging crew hired':'Hire logging crew · $65',()=>{
+    purchase(65,()=>{state.cutting=true;},'The logging crew gathers two logs every two seconds.');
+  },{disabled:state.cutting||state.cash<65}));
+  if (state.buildings.mill) {
+    a.append(action('Cart · '+cash(cartPrice()),()=>purchase(cartPrice(),()=>{
+      state.carts.push({route:'planks',load:0,remaining:0,target:null});
+    },'Cart added to the plank route.'),{disabled:state.cash<cartPrice()}));
+    for (const id of ['yard','shop']) if (!state.buildings[id]) {
+      a.append(action(stages[id].name+' · '+cash(stages[id].price),()=>place(id),
+        {disabled:state.cash<stages[id].price,pressed:placing?.id===id}));
+    }
+  }
+  if (placing) a.append(action('Cancel',()=>{placing=null;notify('');render();}));
+}
+function renderDetail() {
+  const d=$('detail');
+  if (!selected) {d.classList.add('closed');return;}
+  d.classList.remove('closed');
+  const info=tileInfo(selected), b=state.buildings[info.id];
+  let copy='', label='', fn=null, disabled=false, extra=null;
+  if (info.id==='forest') {
+    copy=state.forestLogs+'/30 logs ready. Gather a load here or hire a crew for a steady supply.';
+    label='Gather 6 logs'; disabled=state.forestLogs>=30;
+    fn=()=>{state.forestLogs=Math.min(30,state.forestLogs+6);notify('Gathered logs.');save();render();};
+    const mill=state.buildings.mill;
+    if (mill) extra=['Carry 6 to sawmill',()=>{
+      if (state.handRest || state.forestLogs<6 || mill.input+inbound('mill')+6>cap()) return;
+      state.forestLogs-=6;mill.input+=6;state.handRest=16;notify('Delivered six logs.');save();render();
+    },!!state.handRest || state.forestLogs<6 || mill.input+inbound('mill')+6>cap()];
+  } else if (info.id==='timber' || info.id==='river') {
+    const isRiver=info.id==='river', price=isRiver?570:430, bought=state[info.id];
+    copy=isRiver?'Sell planks for $12 each and furniture for $38. Compare haul costs with the Depot.':
+      'Gather four extra logs every two seconds. Log carts use the closer forest when there is a full load.';
+    if (bought && !isRiver) copy += ' '+state.timberLogs+'/36 logs ready.';
+    if (!bought) {label='Open · '+cash(price); disabled=!state.sold||state.cash<price; fn=()=>buyLand(info.id);}
+    else if (isRiver) {label=market()==='river'?'Active buyer':'Send sales here'; disabled=market()==='river'; fn=()=>chooseMarket('river');}
+  } else if (info.id==='depot') {
+    copy='Buys planks for $9 and furniture for $28.';
+    if (state.river) {label=market()==='depot'?'Active buyer':'Send sales here'; disabled=market()==='depot'; fn=()=>chooseMarket('depot');}
+  } else if (info.id==='yard') copy='Raises each workshop’s input and output capacity from 16 to 36.';
+  else if (b) {
+    const recipe=stages[info.id];
+    copy=b.input+'/'+cap()+' '+recipe.input+' in · '+b.output+'/'+cap()+' '+recipe.output+' out. One every '+recipe.time+' seconds.';
+    label='Move · $45'; disabled=state.cash<45; fn=()=>place(info.id,true);
+    extra=['Sell 3 '+recipe.output+' by hand',()=>{
+      if (state.handRest || b.output<3) return;
+      const revenue=marketPrices[market()][recipe.output]*3;
+      b.output-=3;state.handRest=16;state.cash+=revenue;state.sold+=3;logEvent(revenue,3);notify('Sold three '+recipe.output+'.');save();render();
+    },!!state.handRest || b.output<3];
+  } else copy=info.id==='water'?'River':'Empty land. Choose a building, then tap a snow tile.';
+  if (extra && state.handRest) copy += ' · Hand hauling ready in '+Math.ceil(state.handRest)+'s.';
+  const key=JSON.stringify([info.name,label,disabled,extra?.[2]]);
+  if(key===detailKey) {d.querySelector('p').textContent=copy;return;}
+  detailKey=key;
+  d.innerHTML='<h3>'+(info.name||'Map tile')+'</h3><p class="muted">'+copy+'</p>';
+  if(fn) {
+    const area=document.createElement('div');area.className='actions';area.append(action(label,fn,{disabled,primary:true}));
+    if(extra) area.append(action(extra[0],extra[1],{disabled:extra[2]}));
+    d.append(area);
+  }
+}
+const routeCards = [];
+function renderRoutes() {
+  $('fleet').textContent=state.carts.length+' carts';
+  for (const [i,c] of state.carts.entries()) {
+    if (!routeCards[i]) {
+      const card=document.createElement('div');card.className='route-card';
+      const h=document.createElement('h3');h.textContent='Cart '+(i+1);
+      const p=document.createElement('p');p.className='muted';
+      const label=document.createElement('label');label.textContent='Assignment';
+      const select=document.createElement('select');select.setAttribute('aria-label','Cart '+(i+1)+' assignment');
+      for (const id of order) {const o=document.createElement('option');o.value=id;o.textContent=names[id];select.append(o);}
+      select.onchange=()=>{c.route=select.value;save();render();};
+      label.append(select);card.append(h,p,label);$('routes').append(card);routeCards.push({p,select});
+    }
+    const {p,select}=routeCards[i], r=route(c.route);
+    select.value=c.route;
+    for (const option of select.options) option.disabled=(option.value==='supply'||option.value==='furniture')&&!state.buildings.shop;
+    p.textContent=r ? 6+' per trip · '+(2*legTime(r.from,r.to))+'s round trip · '+cash(2*distance(r.from,r.to))+' haul cost'+(c.target?' · Delivering':isBusy(c)?' · Returning':' · Waiting'):'Build a sawmill to start.';
+  }
+}
+function bottleneck() {
+  const mill=state.buildings.mill;
+  if(!mill)return 'Choose a sawmill location to start measuring production.';
+  const sales = route(state.buildings.shop ? 'furniture' : 'planks');
+  if (sales && state.cash < 2*distance(sales.from,sales.to) && !state.carts.some(c=>c.load && marketPrices[c.target])) {
+    return 'Cash is tight. Sell a few planks by hand to fund the next cart trip.';
+  }
+  if (mill.output>=cap()-1) return 'Sawmill output is backed up. Add a cart, shorten the sales route, or feed a furniture shop.';
+  if (!state.carts.some(c=>c.route==='logs')) return 'No cart is assigned to haul logs.';
+  if (mill.input===0 && state.cash<2*distance(route('logs').from,mill) && !inbound('mill')) return 'Hauling cash is low. Carry logs from the forest to the sawmill.';
+  if (mill.input===0 && state.forestLogs<6 && state.timberLogs<6 && !inbound('mill')) return 'The forest needs more logs. Gather a load or hire a logging crew.';
+  if (mill.input===0 && inbound('mill')) return 'A load of logs is on the way to the sawmill.';
+  if (mill.input===0) return 'The sawmill is waiting for logs. Shorten the logging route or reassign a cart.';
+  if (state.buildings.shop?.output>=cap()-1) return 'Furniture is piling up. Assign a cart to sell it.';
+  const logs=route('logs'), planks=route('planks'), capacity=(r,id)=>state.carts.filter(c=>c.route===id).length*360/(2*legTime(r.from,r.to));
+  if (capacity(logs,'logs')<15 && mill.input<6) return 'The sawmill can use 15 logs a minute. Log carts are slower than that.';
+  if (capacity(planks,'planks')<15 && mill.output>=6 && !state.carts.some(c=>c.route==='supply')) return 'The plank route is slower than the sawmill. More cart capacity or a shorter trip could help.';
+  return 'The sawmill has work and room for output.';
+}
+function metrics() {return events.reduce((t,e)=>({net:t.net+e.change,sold:t.sold+e.sold}),{net:0,sold:0});}
+function render() {
+  $('cash').textContent=cash(state.cash);
+  $('objective').textContent=!state.buildings.mill?'Buy a sawmill and tap a snow tile to place it.':
+    !state.sold?'Use your starting logs to make a first sale. Two carts are already assigned.':
+    !state.cutting?'Hire a logging crew or gather more logs at the forest.':
+    !state.firstExpansion?'Improve the route, then open the Timber lot or River dock. Tap either site for costs.':
+    !state.buildings.shop?'Try a furniture shop, or use extra carts to improve your plank sales.':
+    'Set one cart to supply furniture and another to sell it. Compare the results against your baseline.';
+  $('map-mode').textContent=placing?'Choose a snow tile':'Tap a site';
+  $('hint').textContent=placing?'Highlighted tiles are available. Route length depends on placement.':'Tap the forest to gather logs. Tap buildings to inspect stock or move them.';
+  renderMap();renderActions();renderDetail();renderRoutes();
+  const m=metrics(), sign=n=>n<0?'−':n>0?'+':'';
+  $('units').textContent=m.sold;
+  $('net').textContent=sign(m.net)+cash(Math.abs(m.net));
+  $('diagnosis').textContent=bottleneck();
+  $('baseline').disabled=time<60;
+  const b=state.baseline;
+  $('comparison').textContent=b ? 'Baseline: '+b.sold+' sold · '+sign(b.net)+cash(Math.abs(b.net))+' after hauling. Change: '+sign(m.sold-b.sold)+Math.abs(m.sold-b.sold)+' units, '+sign(m.net-b.net)+cash(Math.abs(m.net-b.net))+'.':
+    time<60?'Baseline available after '+Math.ceil(60-time)+' seconds of play.':'Save these results, change one thing, and check back in a minute.';
+}
+$('baseline').onclick=()=>{if(time<60)return;state.baseline=metrics();save();render();};
+let last=performance.now();
+setInterval(()=>{
+  const now=performance.now(), dt=Math.min(1,(now-last)/1000); last=now;
+  if (!document.hidden) {tick(dt);render();}
+},250);
+document.addEventListener('visibilitychange',()=>{last=performance.now();if(document.hidden)save();});
+addEventListener('pagehide',save);
+render();
+})();
+</script>
+</body>
+</html>
