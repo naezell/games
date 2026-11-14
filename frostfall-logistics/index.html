@@ -30,6 +30,32 @@ small,.muted{color:var(--muted)}
 .brief strong{color:var(--orange);flex:none}
 .brief p{font-size:14px}
 .map-shell{margin-top:12px;position:relative}
+.figures{position:absolute;inset:3px;pointer-events:none;z-index:3}
+.figure{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%)}
+.crew{width:15px;height:22px;--coat:#2b6656;--hat:#e2aa55}
+.crew.miller{--coat:#4d617d;--hat:#507caa}
+.crew.maker{--coat:#704b70;--hat:#a35d74}
+.crew.buyer{--coat:#225d75;--hat:#c76142}
+.person{position:relative;display:block;width:15px;height:21px;filter:drop-shadow(0 1px 1px #17283155)}
+.person::before,.person::after{content:"";position:absolute}
+.person::before{inset:1px 3px auto;height:9px;background:#efba91;border-radius:5px;box-shadow:inset 0 3px var(--hat),0 -1px 0 1px #263947}
+.person::after{inset:10px 1px auto;height:8px;background:var(--coat);border-radius:4px 4px 2px 2px;box-shadow:0 1px 0 1px #263947}
+.person i{position:absolute;left:3px;bottom:0;width:9px;height:5px;background:linear-gradient(90deg,#263947 38%,transparent 38% 62%,#263947 62%);border-radius:1px}
+.crew .tool{position:absolute;width:2px;height:10px;background:#694a32;right:-2px;top:7px;transform-origin:bottom center;transform:rotate(-24deg)}
+.crew .tool::before{content:"";position:absolute;width:6px;height:3px;right:0;top:0;background:#f0e6c9;border:1px solid #45525f;border-radius:1px}
+.crew.active .tool{animation:work 1s steps(3,end) infinite alternate}
+@keyframes work{to{transform:rotate(38deg)}}
+.cart{width:29px;height:25px;transition:left .24s linear,top .24s linear}
+.cart-frame{position:absolute;inset:0;transform:scaleX(var(--direction,1))}
+.cart .person{position:absolute;bottom:3px;right:0;--hat:#d69058;--coat:#454f66;scale:.82;transform-origin:right bottom}
+.cart-bed{position:absolute;left:0;bottom:5px;width:17px;height:9px;background:#76523a;border:1px solid #42352e;border-radius:2px;box-shadow:0 0 0 1px #f4e9cf}
+.cart-bed::after{content:"";position:absolute;left:1px;bottom:-4px;width:5px;height:5px;border-radius:50%;background:#243644;box-shadow:9px 0 #243644}
+.cargo{display:none;position:absolute;left:2px;bottom:11px;width:13px;height:7px;border:1px solid #4a332d;border-radius:2px;background:#b98048}
+.cart[data-cargo="logs"] .cargo{display:block;background:repeating-linear-gradient(#cb9c63 0 2px,#7b4e32 2px 3px)}
+.cart[data-cargo="planks"] .cargo{display:block;background:repeating-linear-gradient(90deg,#e3ad62 0 3px,#92613c 3px 4px)}
+.cart[data-cargo="furniture"] .cargo{display:block;background:#bd96e5}
+.cart-number{position:absolute;z-index:1;left:3px;top:-7px;display:grid;place-items:center;min-width:14px;height:14px;border-radius:8px;padding:0 2px;background:#172831;color:#fff;border:1px solid #f2f6f0;font:800 9px/1 system-ui,sans-serif}
+@media(prefers-reduced-motion:reduce){.cart{transition:none}.crew.active .tool{animation:none}}
 .map{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;background:#12202a;border:3px solid #12202a;border-radius:10px;overflow:hidden}
 .tile{position:relative;aspect-ratio:1.13;min-width:0;border:0;padding:2px;border-radius:3px;color:#172831;background:var(--snow);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:clamp(8px,1.25vw,12px);font-weight:800;line-height:1.05}
 .tile.snow:empty::after{content:"";width:3px;height:3px;position:absolute;top:19%;left:22%;background:#a2c0c0;border-radius:50%;box-shadow:14px 13px #c0d2d0}
@@ -95,8 +121,11 @@ details p{margin-top:6px}
 <div class="layout">
 <section class="panel" aria-label="Camp map">
   <div class="section-head"><h2>Timber Valley</h2><small id="map-mode">Tap a site</small></div>
-  <div class="map-shell"><div id="map" class="map" aria-label="Timber Valley map"></div></div>
-  <div class="legend"><span><i class="swatch" style="--color:#81a456"></i>Logs</span><span><i class="swatch" style="--color:#b66c35"></i>Planks</span><span><i class="swatch" style="--color:#775aaa"></i>Furniture</span></div>
+  <div class="map-shell">
+    <div id="map" class="map" aria-label="Timber Valley map"></div>
+    <div id="figures" class="figures" aria-hidden="true"></div>
+  </div>
+  <div class="legend"><span><b>1, 2…</b> Cart numbers</span><span><i class="swatch" style="--color:#81a456"></i>Logs</span><span><i class="swatch" style="--color:#b66c35"></i>Planks</span><span><i class="swatch" style="--color:#775aaa"></i>Furniture</span></div>
   <div class="controls"><h3>Build &amp; gather</h3><div class="actions" id="build-actions"></div><p class="muted" id="hint"></p><p id="notice" role="status" hidden></p></div>
   <div id="detail" class="closed" aria-label="Selected site"></div>
 </section>
@@ -188,6 +217,7 @@ function operate(cart) {
   removeStock(job.source,6);
   cart.load = 6; cart.target = job.target; cart.remaining = legTime(job.from,job.to); cart.returnTime = cart.remaining;
   cart.good = cart.route === 'furniture' ? 'furniture' : cart.route === 'logs' ? 'logs' : 'planks';
+  cart.trip = {from:{x:job.from.x,y:job.from.y},to:{x:job.to.x,y:job.to.y}};
 }
 function tick(dt) {
   time += dt;
@@ -276,6 +306,65 @@ function renderMap() {
     tile.innerHTML = routeMarks(pos) + (info.mark ? '<span class="mark '+info.mark+'"></span><span class="tile-name">'+info.name+'</span>' : '');
   }
 }
+const figures = $('figures');
+const crewSprites = new Map();
+const cartSprites = [];
+const personSprite = '<span class="person"><i></i></span>';
+function positionFigure(node,x,y) {
+  node.style.setProperty('--x', (x+.5)*100/WIDTH+'%');
+  node.style.setProperty('--y', (y+.5)*100/HEIGHT+'%');
+}
+function drawCrew(id,role,site,working,offset=.35) {
+  let sprite=crewSprites.get(id);
+  if (!site) { if (sprite) sprite.hidden=true; return; }
+  if (!sprite) {
+    sprite=document.createElement('span');
+    sprite.className='figure crew '+role;
+    sprite.innerHTML=personSprite+'<span class="tool"></span>';
+    figures.append(sprite);crewSprites.set(id,sprite);
+  }
+  sprite.hidden=false;
+  sprite.classList.toggle('active',working);
+  positionFigure(sprite,site.x+offset,site.y-.21);
+}
+function cartPosition(cart,index,plan) {
+  const travel = isBusy(cart) && (cart.trip || plan);
+  if (!travel) {
+    const parking = plan?.from || (cart.route === 'logs' ? forest : depot);
+    return {x:parking.x+(index%3-1)*.23,y:parking.y+.34+Math.floor(index%6/3)*.12,direction:1};
+  }
+  const {from,to}=travel;
+  const going = !!cart.target;
+  const progress=Math.max(0,Math.min(1,(cart.returnTime-cart.remaining-1)/Math.max(1,cart.returnTime-2)));
+  const tiles=(going ? progress : 1-progress)*distance(from,to);
+  const xDistance=Math.abs(from.x-to.x);
+  const dx=Math.sign(to.x-from.x),dy=Math.sign(to.y-from.y);
+  const offset=(index%4-1.5)*.105;
+  return {x:from.x+dx*Math.min(xDistance,tiles)+offset,
+    y:from.y+dy*Math.max(0,tiles-xDistance)+offset+.14,
+    direction:(dx||dy||1)*(going?1:-1)};
+}
+function renderFigures() {
+  const {mill,shop}=state.buildings;
+  drawCrew('forest','logger',forest,state.cutting && state.forestLogs<30);
+  drawCrew('timber','logger',state.timber ? timber : null,state.timberLogs<36);
+  drawCrew('mill','miller',mill,!!mill && mill.input>0 && mill.output<cap());
+  drawCrew('shop','maker',shop,!!shop && shop.input>0 && shop.output<cap());
+  drawCrew('depot','buyer',depot,state.carts.some(c=>c.target==='depot'));
+  drawCrew('river','buyer',state.river ? river : null,state.carts.some(c=>c.target==='river'),-.32);
+  for (const [index,cart] of state.carts.entries()) {
+    let sprite=cartSprites[index];
+    if (!sprite) {
+      sprite=document.createElement('span');sprite.className='figure cart';
+      sprite.innerHTML='<span class="cart-frame">'+personSprite+'<span class="cart-bed"></span><span class="cargo"></span></span><span class="cart-number">'+(index+1)+'</span>';
+      figures.append(sprite);cartSprites.push(sprite);
+    }
+    const pos=cartPosition(cart,index,route(cart.route));
+    positionFigure(sprite,pos.x,pos.y);
+    sprite.style.setProperty('--direction',pos.direction);
+    sprite.dataset.cargo=cart.load ? cart.good : '';
+  }
+}
 function selectTile(pos) {
   if (placing) {
     if (tileInfo(pos).id !== 'snow') { notify('Choose a highlighted snow tile.'); return; }
@@ -348,7 +437,8 @@ function renderDetail() {
   const info=tileInfo(selected), b=state.buildings[info.id];
   let copy='', label='', fn=null, disabled=false, extra=null;
   if (info.id==='forest') {
-    copy=state.forestLogs+'/30 logs ready. Gather a load here or hire a crew for a steady supply.';
+    copy=state.forestLogs+'/30 logs ready. '+(state.cutting ?
+      (state.forestLogs>=30?'Crew is waiting for a pickup.':'Crew is cutting logs.') : 'Gather a load here or hire a crew.');
     label='Gather 6 logs'; disabled=state.forestLogs>=30;
     fn=()=>{state.forestLogs=Math.min(30,state.forestLogs+6);notify('Gathered logs.');save();render();};
     const mill=state.buildings.mill;
@@ -369,7 +459,8 @@ function renderDetail() {
   } else if (info.id==='yard') copy='Raises each workshop’s input and output capacity from 16 to 36.';
   else if (b) {
     const recipe=stages[info.id];
-    copy=b.input+'/'+cap()+' '+recipe.input+' in · '+b.output+'/'+cap()+' '+recipe.output+' out. One every '+recipe.time+' seconds.';
+    const activity=b.output>=cap() ? 'Output full' : b.input ? 'Making '+recipe.output : 'Waiting for '+recipe.input;
+    copy=activity+' · '+b.input+'/'+cap()+' '+recipe.input+' in · '+b.output+'/'+cap()+' '+recipe.output+' out. One every '+recipe.time+' seconds.';
     label='Move · $45'; disabled=state.cash<45; fn=()=>place(info.id,true);
     extra=['Sell 3 '+recipe.output+' by hand',()=>{
       if (state.handRest || b.output<3) return;
@@ -405,7 +496,9 @@ function renderRoutes() {
     const {p,select}=routeCards[i], r=route(c.route);
     select.value=c.route;
     for (const option of select.options) option.disabled=(option.value==='supply'||option.value==='furniture')&&!state.buildings.shop;
-    p.textContent=r ? 6+' per trip · '+(2*legTime(r.from,r.to))+'s round trip · '+cash(2*distance(r.from,r.to))+' haul cost'+(c.target?' · Delivering':isBusy(c)?' · Returning':' · Waiting'):'Build a sawmill to start.';
+    const destination=stages[c.target]?.name || (c.target==='river'?'River dock':'Depot');
+    const activity=c.load ? 'Carrying '+c.load+' '+c.good+' to '+destination : isBusy(c) ? 'Returning empty' : 'Waiting for a load';
+    p.textContent=r ? activity+' · '+(2*legTime(r.from,r.to))+'s round trip · '+cash(2*distance(r.from,r.to))+' haul cost':'Build a sawmill to start.';
   }
 }
 function bottleneck() {
@@ -438,7 +531,7 @@ function render() {
     'Set one cart to supply furniture and another to sell it. Compare the results against your baseline.';
   $('map-mode').textContent=placing?'Choose a snow tile':'Tap a site';
   $('hint').textContent=placing?'Highlighted tiles are available. Route length depends on placement.':'Tap the forest to gather logs. Tap buildings to inspect stock or move them.';
-  renderMap();renderActions();renderDetail();renderRoutes();
+  renderMap();renderFigures();renderActions();renderDetail();renderRoutes();
   const m=metrics(), sign=n=>n<0?'−':n>0?'+':'';
   $('units').textContent=m.sold;
   $('net').textContent=sign(m.net)+cash(Math.abs(m.net));
