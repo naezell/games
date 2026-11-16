@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#293b38">
   <title>Frostfall Kitchen &amp; Mill</title>
   <link rel="stylesheet" href="styles.css">
-  <script defer src="vendor/three.min.js"></script>
   <script type="module" src="main.mjs"></script>
 </head>
 <body>
@@ -19,10 +18,10 @@
     </dl>
   </header>
   <main class="dashboard">
-    <section class="settlement" aria-label="Settlement map">
+    <section class="settlement" aria-label="Factory floor">
       <div class="map">
-        <canvas id="settlement" aria-label="3D settlement with selectable buildings and workers"></canvas>
-        <p id="map-error" role="status" hidden>3D is unavailable in this browser. Use the site and crew lists to run the settlement.</p>
+        <canvas id="settlement" aria-label="Isometric factory floor with selectable workstations and workers"></canvas>
+        <p id="map-error" role="status" hidden>The factory view is unavailable in this browser. Use the site and crew lists to run the settlement.</p>
         <div class="map-status">
           <span id="map-time"></span>
           <div class="speed" role="group" aria-label="Game speed">
@@ -31,17 +30,24 @@
             <button type="button" data-speed="3" aria-label="Triple speed" aria-pressed="false">3×</button>
           </div>
         </div>
+        <div class="zoom" role="group" aria-label="Factory view zoom">
+          <button type="button" data-action="zoom" data-id="-1" aria-label="Zoom out">−</button>
+          <button type="button" data-action="zoom" data-id="1" aria-label="Zoom in">+</button>
+        </div>
       </div>
       <div id="situation" class="situation"></div>
     </section>
     <section class="management" aria-label="Settlement management">
       <nav aria-label="Management panels">
-        <button type="button" data-view="operations" aria-current="page">Operations</button>
-        <button type="button" data-view="crew">Crew</button>
-        <button type="button" data-view="projects">Projects</button>
-        <button type="button" data-view="saves">Saves</button>
+        <button type="button" data-view="operations" aria-expanded="false" aria-controls="drawer">Operations</button>
+        <button type="button" data-view="crew" aria-expanded="false" aria-controls="drawer">Crew</button>
+        <button type="button" data-view="projects" aria-expanded="false" aria-controls="drawer">Projects</button>
+        <button type="button" data-view="saves" aria-expanded="false" aria-controls="drawer">Saves</button>
       </nav>
-      <div id="panel"></div>
+      <div id="drawer" hidden>
+        <div class="drawer-top"><button type="button" class="action secondary" data-action="close-drawer">Back to floor</button></div>
+        <div id="panel"></div>
+      </div>
     </section>
   </main>
 </body>

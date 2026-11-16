@@ -9,6 +9,7 @@ import { SAVE_KEY, exportSave, parseSave, loadGame, writeSave, previousSave, has
 const $ = id => document.getElementById(id);
 const panel = $('panel');
 const canvas = $('settlement');
+const drawer = $('drawer');
 const storage = {
   getItem: key => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
@@ -219,6 +220,7 @@ function setText(id, text) {
   if (e.textContent !== text) e.textContent = text;
 }
 function renderPanel(force = false) {
+  if (drawer.hidden) return;
   if (!force && (view === 'saves' || panel.contains(document.activeElement) && document.activeElement.tagName === 'SELECT')) return;
   const markup = panels[view]();
   if (currentMarkup === markup && panel.firstElementChild) return;
@@ -247,15 +249,22 @@ function hud(force = false) {
   renderPanel(force);
 }
 function changeView(next) {
+  drawer.hidden = false;
   view = next;
   currentMarkup = '';
   confirmAction = '';
   for (const tab of document.querySelectorAll('nav [data-view]')) {
-    if (tab.dataset.view === next) tab.setAttribute('aria-current', 'page');
-    else tab.removeAttribute('aria-current');
+    tab.setAttribute('aria-expanded', String(tab.dataset.view === next));
   }
   hud(true);
   panel.scrollTop = 0;
+}
+function dismissDrawer() {
+  drawer.hidden = true;
+  for (const tab of document.querySelectorAll('nav [data-view]')) tab.setAttribute('aria-expanded', 'false');
+  selected = null;
+  world?.select(null);
+  drawStill();
 }
 function select(target) {
   selected = target;
@@ -300,6 +309,17 @@ function replaceState(next, text) {
   drawStill();
 }
 function handleAction(action, id) {
+  if (action === 'close-drawer') {
+    dismissDrawer();
+    document.querySelector('nav [data-view="' + view + '"]')?.focus();
+    return;
+  }
+  if (action === 'zoom') {
+    const zoom = world?.zoom(Number(id));
+    if (zoom) canvas.classList.toggle('zoomed', zoom > 1);
+    drawStill();
+    return;
+  }
   if (action === 'close-inspect') { select(null); return; }
   if (action === 'save') { save(true); hud(); return; }
   if (action === 'restore' || action === 'classic') {
@@ -349,7 +369,10 @@ document.addEventListener('click', event => {
   if (!target) return;
   const { action, id, speed: playback, view: next, site, worker } = target.dataset;
   if (playback !== undefined) setSpeed(Number(playback));
-  if (next) changeView(next);
+  if (next) {
+    if (target.closest('nav') && !drawer.hidden && view === next) dismissDrawer();
+    else changeView(next);
+  }
   if (site) select({ type: 'site', id: site });
   if (worker) select({ type: 'worker', id: worker });
   if (action) handleAction(action, id);
@@ -433,6 +456,9 @@ function setSpeed(value) {
   start();
 }
 
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !drawer.hidden) handleAction('close-drawer');
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { stop(); save(); }
   else { start(); drawStill(); }
@@ -440,9 +466,10 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', () => { stop(); save(); });
 window.addEventListener('pageshow', () => { start(); drawStill(); });
 try {
-  world = createWorld(canvas, { onSelect: select, lowPower, locations: LOCATIONS });
+  world = createWorld(canvas, { onSelect: select, onCamera: drawStill, lowPower, locations: LOCATIONS });
   new ResizeObserver(() => {
     world.resize();
+    canvas.classList.toggle('zoomed', world.stats().zoom > 1);
     if (!document.hidden) world.render(state, 1, 0);
   }).observe(canvas);
 } catch (error) {
