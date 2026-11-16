@@ -17,3 +17,16 @@ Open [frostfall-camp/index.html](frostfall-camp/index.html) in a browser. The ga
 Battery saver is the default on touch-first devices. Use **Menu → Graphics** to change it. The game pauses when the page is hidden.
 
 Progress saves in your browser. Use **Menu → Backup save** to copy or restore a backup code.
+
+## Frostfall Kitchen & Mill
+
+A compact winter settlement with two linked production chains. Send the crew to harvest, haul, cook, mill, service machinery and build improvements. The kitchen burns logs that the mill can use for planks. Planks pay for construction, repairs and export orders. Meal shortages slow work, and overproduction risks spoilage.
+
+- **Operations** shows site inventories, incoming loads, and the current bottleneck. Select a workshop to inspect equipment and change its shift. Adjust how dispatch divides labor between food and timber, when a cart leaves, and which logs the kitchen holds in reserve.
+- **Crew** shows each worker’s current job and specialty. An assignment controls the worker's next task.
+- **Projects** spends warehouse planks, cash, and service time on carts, paths, storage, or additional workstations. Timber and food exports can fund the next improvement.
+- **Saves** controls graphics and backups. The [Classic Kitchen & Mill source](frostfall-kitchen/index.html) also ships on the same origin at `/classic/`, where existing browser saves still work. An optional import copies some Classic starter cash and materials into a new operations save.
+
+See [build and release instructions](frostfall-kitchen/DEPLOYMENT.md) to play locally with Node.js 20 or later.
+
+Remaining work includes choosing warehouse locations within camp, rerouting around crowded paths, longer operational scenarios after the initial projects, and profiling sustained gameplay on an iPhone.

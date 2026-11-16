@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#293b38">
+  <title>Frostfall Kitchen &amp; Mill</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="vendor/three.min.js"></script>
+  <script type="module" src="main.mjs"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="title"><h1>Frostfall <span>Kitchen &amp; Mill</span></h1><p id="season"></p></div>
+    <dl class="balances" aria-label="Settlement stock">
+      <div><dt>Hall meals</dt><dd id="meal-stock">–</dd></div>
+      <div><dt>Stored planks</dt><dd id="plank-stock">–</dd></div>
+      <div><dt>Treasury</dt><dd id="cash">–</dd></div>
+    </dl>
+  </header>
+  <main class="dashboard">
+    <section class="settlement" aria-label="Settlement map">
+      <div class="map">
+        <canvas id="settlement" aria-label="3D settlement with selectable buildings and workers"></canvas>
+        <p id="map-error" role="status" hidden>3D is unavailable in this browser. Use the site and crew lists to run the settlement.</p>
+        <div class="map-status">
+          <span id="map-time"></span>
+          <div class="speed" role="group" aria-label="Game speed">
+            <button type="button" data-speed="0" aria-label="Pause" aria-pressed="true">Pause</button>
+            <button type="button" data-speed="1" aria-label="Normal speed" aria-pressed="false">1×</button>
+            <button type="button" data-speed="3" aria-label="Triple speed" aria-pressed="false">3×</button>
+          </div>
+        </div>
+      </div>
+      <div id="situation" class="situation"></div>
+    </section>
+    <section class="management" aria-label="Settlement management">
+      <nav aria-label="Management panels">
+        <button type="button" data-view="operations" aria-current="page">Operations</button>
+        <button type="button" data-view="crew">Crew</button>
+        <button type="button" data-view="projects">Projects</button>
+        <button type="button" data-view="saves">Saves</button>
+      </nav>
+      <div id="panel"></div>
+    </section>
+  </main>
+</body>
+</html>
