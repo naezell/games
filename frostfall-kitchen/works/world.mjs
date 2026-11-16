@@ -1,683 +1,392 @@
-// A fixed, batched view of the original camp's low-poly winter settlement.
-const COLORS = {
-  snow: 0xeaf0f7, ice: 0xb6cedf, shale: 0x6c879a, soil: 0x405c6e,
-  path: 0xc1b4a6, wood: 0xaa6645, darkWood: 0x553b37, timber: 0xd69a62,
-  metal: 0x547082, glass: 0x8dc7d3, lit: 0xf9cd83, crop: 0xdead64,
-  blue: 0x435e78, green: 0x366e6d, red: 0x9c4f49, shadow: 0xa5a7a6,
-  wall: 0xcc8554, wallLight: 0xdca06a, wallTrim: 0x8c513e, machine: 0x577f83,
-  rail: 0x43717a, field: 0xc4cfca, tile: 0x988b86,
-};
-const SITE_ACCENT = {
-  forest: '#a2d8ba', farm: '#f5cc78', kitchen: '#f8ad8e',
-  mill: '#e5bca0', depot: '#9cd3ed', hall: '#c2c6ff',
-};
-const COATS = [0xba513c, 0x19656c, 0x426aa8, 0x9e5737, 0x655393, 0x378158, 0xaa3f6f, 0x718035];
-const SKIN = [0xe8a785, 0xaa704d, 0xf1c3a0, 0xbe875f];
-const WORKSHOPS = { kitchen: [4.55, 4.15], mill: [4.6, 4.1], depot: [4.7, 4.27] };
-const NODE_LIMIT = 160;
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const seededFraction = n => ((Math.imul(n + 515, 1664525) ^ Math.imul(n * n + 47, 1013904223)) >>> 0) / 4294967296;
+// A dimetric factory floor. The simulation supplies all worker and stock positions.
+const LABELS = { forest: 'Timber intake', farm: 'Grow room', kitchen: 'Kitchen', mill: 'Sawmill', depot: 'Dispatch', hall: 'Dining hall' };
+const COLORS = { forest: '#bc8553', farm: '#799360', kitchen: '#cf7658', mill: '#728b93', depot: '#a083aa', hall: '#b2a16d' };
+const CARGO = { logs: '#a97450', crops: '#95aa57', meals: '#e0a849', planks: '#d3a071' };
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const mix = (a, b, t) => a + (b - a) * t;
+const project = (x, z, y = 0) => [24 * (x - z), 12 * (x + z) - 27 * y];
+const coats = ['#d66e47', '#537f75', '#d26956', '#628ca0', '#c7a045', '#668b76', '#946e9e', '#d19250'];
+const tones = ['#efbe9c', '#ba8267', '#e5ae84', '#9f6e59'];
+const metal = ['#839da4', '#557680', '#3e5b68'];
+const dark = ['#5b7480', '#3e5e69', '#324c56'];
+const orange = ['#efb17a', '#cd8954', '#a7684e'];
+const timber = ['#d4a276', '#ad7856', '#895e4d'];
 
-export function createWorld(canvas, { onSelect, lowPower = true, locations }) {
-  const THREE = globalThis.THREE;
-  if (!THREE) throw new Error('Frostfall’s 3D library could not be loaded.');
-  const renderer = new THREE.WebGLRenderer({
-    canvas, antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'default',
-  });
-  renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, lowPower ? 1 : 1.5));
-  renderer.outputEncoding = THREE.sRGBEncoding;
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x8ea5af);
-  scene.add(new THREE.HemisphereLight(0xf5f8fb, 0xa78b7a, 0.92));
-  const key = new THREE.DirectionalLight(0xffecd6, 1.03);
-  key.position.set(-6, 16, -4);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc1def2, 0.38);
-  fill.position.set(8, 8, 12);
-  scene.add(fill);
-
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-  const bounds = Object.values(locations).reduce((box, point) => ({
-    xmin: Math.min(box.xmin, point.x - 3.65),
-    xmax: Math.max(box.xmax, point.x + 3.25),
-    zmin: Math.min(box.zmin, point.z - 3.85),
-    zmax: Math.max(box.zmax, point.z + 3.05),
-  }), { xmin: -10, xmax: 10, zmin: -9, zmax: 8 });
-  const midX = (bounds.xmax + bounds.xmin) / 2;
-  const midZ = (bounds.zmax + bounds.zmin) / 2;
-  camera.position.set(midX + 15, 26, midZ + 23);
-  camera.lookAt(midX, 0.25, midZ);
-  camera.updateMatrixWorld();
-  const vector = new THREE.Vector3();
-  const extent = { x: 0, y: 0 };
-  for (const x of [bounds.xmin, bounds.xmax]) {
-    for (const z of [bounds.zmin, bounds.zmax]) {
-      for (const y of [-1.45, 1.7]) {
-        vector.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
-        extent.x = Math.max(extent.x, Math.abs(vector.x));
-        extent.y = Math.max(extent.y, Math.abs(vector.y));
-      }
-    }
+function polygon(c, points, color, stroke) {
+  c.beginPath();
+  c.moveTo(...points[0]);
+  for (let i = 1; i < points.length; i++) c.lineTo(...points[i]);
+  c.closePath();
+  c.fillStyle = color;
+  c.fill();
+  if (stroke) { c.strokeStyle = stroke; c.lineWidth = .65; c.stroke(); }
+}
+function quadrilateral(c, x, z, w, d, y, color, stroke) {
+  polygon(c, [project(x, z, y), project(x+w, z, y), project(x+w, z+d, y), project(x, z+d, y)], color, stroke);
+}
+function block(c, x, z, w, d, h, color, y = 0) {
+  const [a,b,e,f] = [project(x,z,y+h), project(x+w,z,y+h), project(x+w,z+d,y+h), project(x,z+d,y+h)];
+  const bb = project(x+w,z,y), ee = project(x+w,z+d,y), ff = project(x,z+d,y);
+  polygon(c,[b,bb,ee,e],color[2]);
+  polygon(c,[f,e,ee,ff],color[1]);
+  polygon(c,[a,b,e,f],color[0],'#493a3227');
+}
+function oval(c,x,y,rx,ry,color) {
+  c.beginPath();
+  c.ellipse(x,y,rx,ry,0,0,Math.PI*2);
+  c.fillStyle=color;
+  c.fill();
+}
+function line(c, points, color, width) {
+  c.beginPath();
+  c.moveTo(...points[0]);
+  for (let i=1;i<points.length;i++) c.lineTo(...points[i]);
+  c.strokeStyle=color;
+  c.lineCap='round';
+  c.lineWidth=width;
+  c.stroke();
+}
+function path(c,x,z,length) {
+  for(let i=0;i<length;i++) quadrilateral(c,x+i*.53,z,.28,.29,.025,'#dfc8a2');
+}
+function stripe(c,x,z,w,d) {
+  quadrilateral(c,x,z,w,d,.015,'#6e7377');
+  for(let i=.1;i<w-.12;i+=.42) quadrilateral(c,x+i,z+.07,.14,d-.14,.02,'#d6ba87');
+}
+function wall(c,x,z,length,alongX) {
+  const w=alongX?length:.18;
+  const d=alongX?.18:length;
+  block(c,x,z,w,d,2.85,orange);
+  block(c,x,z,w,d,.27,['#e8bd90','#a5735a','#8f6558']);
+  block(c,x-.045,z-.045,w+.09,d+.09,.12,['#ffe0a5','#e5a87d','#c98a65'],2.85);
+  for(let a=.68;a<length-.25;a+=1.13) {
+    block(c,x+(alongX?a:0),z+(alongX?0:a),alongX?.045:.24,alongX?.24:.045,2.48,['#e3a671','#c17f54','#a16852'],.24);
   }
-
-  const geometries = {
-    box: new THREE.BoxGeometry(1, 1, 1),
-    cone: new THREE.ConeGeometry(0.5, 1, 7),
-    trunk: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
-    coat: new THREE.CylinderGeometry(0.38, 0.5, 1, 8),
-    orb: new THREE.SphereGeometry(0.5, 8, 6),
-    stone: new THREE.DodecahedronGeometry(0.5, 0),
-  };
-  const solid = new THREE.MeshLambertMaterial();
-  const transform = new THREE.Object3D();
-  const color = new THREE.Color();
-  const staticParts = new Map();
-  const dynamicParts = new Map();
-  const labelAssets = [];
-  const siteLabels = new Map();
-  const roadMarks = [];
-  const clickTargets = [];
-  const rotations = new Map();
-  const part = (type, tint, x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) => (
-    { type, tint, x, y, z, sx, sy, sz, ry, rx, rz }
-  );
-  const add = (...args) => {
-    const p = part(...args);
-    const parts = staticParts.get(p.type) || [];
-    parts.push(p);
-    staticParts.set(p.type, parts);
-  };
-
-  function setInstance(mesh, index, p) {
-    transform.position.set(p.x, p.y, p.z);
-    transform.rotation.set(p.rx, p.ry, p.rz, 'YXZ');
-    transform.scale.set(p.sx, p.sy, p.sz);
-    transform.updateMatrix();
-    mesh.setMatrixAt(index, transform.matrix);
-    mesh.setColorAt(index, color.set(p.tint));
+}
+function windowBand(c,x,z,alongX) {
+  const w=alongX?1.35:.25, d=alongX?.25:1.35;
+  block(c,x,z,w,d,.84,timber,1.27);
+  block(c,x+(alongX?.13:.02),z+(alongX?.015:.13),alongX?1.09:.27,alongX?.27:1.09,.59,['#b7d4cf','#75aaa7','#6c969b'],1.39);
+  block(c,x+(alongX?.64:.015),z+(alongX?.015:.64),alongX?.07:.28,alongX?.28:.07,.61,timber,1.39);
+}
+function crate(c,x,z,resource,y=0,size=.62) {
+  const color = CARGO[resource] ?? '#c59161';
+  block(c,x,z,size,size,size*.72,[color,'#ad8053','#8e674f'],y);
+  quadrilateral(c,x+.1,z+.12,size-.2,size-.24,y+size*.72+.006,'#ecce98','#765a4b5c');
+  quadrilateral(c,x+.18,z+.19,size-.36,size-.38,y+size*.72+.02,color);
+}
+function pallet(c,x,z,resource,count) {
+  block(c,x-.08,z-.08,1.55,1.34,.12,timber);
+  for(let i=0;i<Math.min(6,Math.ceil(count/2));i++){
+    crate(c,x+i%2*.71,z+Math.floor(i%4/2)*.61,resource,.13+Math.floor(i/4)*.45);
   }
-
-  function assembleStaticMeshes() {
-    for (const [type, parts] of staticParts) {
-      const mesh = new THREE.InstancedMesh(geometries[type], solid, parts.length);
-      mesh.frustumCulled = false;
-      for (let index = 0; index < parts.length; index++) setInstance(mesh, index, parts[index]);
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.instanceColor.needsUpdate = true;
-      scene.add(mesh);
-    }
-    staticParts.clear();
+}
+function conveyor(c,x,z,length,phase,active) {
+  block(c,x,z,length,.94,.55,metal);
+  block(c,x+.06,z+.09,length-.12,.76,.045,['#526679','#657a83','#364c5d'],.55);
+  for(let t=.18;t<length-.09;t+=.28) block(c,x+t,z+.13,.06,.68,.046,['#abc1bf','#729196','#56787e'],.597);
+  block(c,x,z,length,.085,.14,dark,.59);
+  block(c,x,z+.86,length,.085,.14,dark,.59);
+  for(let i=0;i<2;i++){
+    const position = active ? (phase*.3+i*length*.54)%(length-.58) : .18+i*(length-.84)*.75;
+    crate(c,x+position,z+.2,i?'planks':'meals',.65,.46);
   }
-
-  function addMoving(...args) {
-    const p = part(...args);
-    let batch = dynamicParts.get(p.type);
-    if (!batch) {
-      const mesh = new THREE.InstancedMesh(geometries[p.type], solid, NODE_LIMIT);
-      mesh.frustumCulled = false;
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      batch = { mesh, count: 0 };
-      dynamicParts.set(p.type, batch);
-      scene.add(mesh);
-    }
-    if (batch.count < NODE_LIMIT) setInstance(batch.mesh, batch.count++, p);
+}
+function machine(c,x,z,type,active=false,phase=0) {
+  const kitchen=type==='oven';
+  block(c,x-.12,z-.12,1.78,1.48,.04,['#6c6664','#665856','#685553']);
+  block(c,x,z,1.55,1.15,.68,metal);
+  if(kitchen){
+    block(c,x+.04,z+.05,1.34,.81,.61,['#cbd0c4','#a2a99d','#6c7d83'],.68);
+    block(c,x+.14,z+.86,1.13,.13,.42,['#886b60','#564947','#5f5451'],.77);
+    block(c,x+.31,z+.996,.72,.034,.23,active?['#ffd483','#c97d49','#b45a39']:['#aea69a','#61615f','#5d615f'],.87);
+    block(c,x+.98,z+.12,.25,.24,.49,dark,1.27);
+  }else{
+    block(c,x+.14,z+.17,1.27,.87,.12,dark,.68);
+    block(c,x+.13,z+.23,.23,.64,.65,metal,.79);
+    block(c,x+1.2,z+.23,.23,.64,.65,metal,.79);
+    block(c,x+.28,z+.23,.99,.33,.17,['#dfad72','#bb7c4e','#8e5b4b'],1.33);
+    const [sx,sy]=project(x+.84,z+.48,1.06);
+    oval(c,sx,sy,9,12,'#bdced0');
+    for(let i=0;i<4;i++){const a=i*Math.PI/2+(active?phase*7:0);oval(c,sx+Math.cos(a)*6,sy+Math.sin(a)*8,1.5,1.5,'#526779');}
+    oval(c,sx,sy,2.5,3,'#526779');
   }
-
-  function box(tint, x, y, z, w, h, d, ry = 0, rx = 0, rz = 0) {
-    add('box', tint, x, y, z, w, h, d, ry, rx, rz);
+  block(c,x+1.33,z+.83,.15,.19,.17,[active?'#bbd884':'#f3ad74','#825f4e','#664e4a'],.69);
+}
+function growBed(c,x,z,ready,index){
+  block(c,x,z,1.5,.94,.36,['#695c56','#ac825f','#866c56']);
+  for(let i=0;i<5;i++){
+    const [sx,sy]=project(x+.22+i*.26,z+.44,.44);
+    const height=ready>i+index?10:5;
+    oval(c,sx-2,sy-4,3,height*.57,'#6f884e');
+    oval(c,sx+3,sy-5,3,height*.62,'#9caa61');
+    if(height>5) oval(c,sx,sy-9,2.9,3.1,'#cfbf6e');
   }
-
-  function greenhouse(x, z) {
-    box(0xdcd3b6, x, 0.03, z, 4.2, .12, 3.65);
-    for (const [i, hz] of [-1.2, -.38, .44, 1.26].entries()) {
-      box(i % 2 ? 0x74544e : 0x876555, x, .12, z + hz, 3.8, .14, .58);
-      for (let j = 0; j < 6; j++) {
-        const fx = x - 1.45 + .58 * j;
-        const h = .23 + seededFraction(21 + i * 7 + j) * .28;
-        add('trunk', 0xaa824e, fx, .17 + h / 2, z + hz, .055, h, .055);
-        add('cone', j % 2 ? 0xc59352 : COLORS.crop, fx, .17 + h, z + hz, .28, .42, .28, j);
-      }
-    }
-    for (const fx of [-2.12, 2.12]) {
-      box(COLORS.darkWood, x + fx, .38, z, .095, .12, 3.75);
-      for (const fz of [-1.8, 0, 1.8]) {
-        box(COLORS.timber, x + fx, .34, z + fz, .14, .68, .14);
-        box(COLORS.snow, x + fx, .71, z + fz, .16, .08, .16);
-      }
-    }
-    cabin(x + 1.25, z - 2.13, 1.85, 1.12, 1.07, COLORS.green);
+}
+function worker(c,x,z,w,i,phase,cart,moving) {
+  const [sx,sy] = project(x,z);
+  const swing=moving?Math.sin(phase*11+i)*3:0;
+  const coat=coats[i%coats.length], skin=tones[i%tones.length];
+  oval(c,sx+4,sy+1,12,5,'#493e3a48');
+  if(w.task?.stage==='deliver'&&w.task.resource){
+    if(cart){
+      block(c,x+.26,z+.08,.83,.77,.22,timber);
+      oval(c,sx+14,sy+9,3,4,'#54515a');
+      crate(c,x+.35,z+.17,w.task.resource,.23,.62);
+    } else crate(c,x+.24,z+.22,w.task.resource,.54,.46);
   }
+  line(c,[[sx-3,sy-10],[sx-4+swing,sy-1]],'#464652',5);
+  line(c,[[sx+3,sy-10],[sx+4-swing,sy-1]],'#52535a',5);
+  oval(c,sx,sy-15,7.7,9.4,coat);
+  line(c,[[sx+5,sy-17],[sx+8,sy-12+swing]],coat,4);
+  oval(c,sx,sy-24,6,6.2,skin);
+  const hat=w.role==='kitchen'?'#efe5cd':w.role==='haul'?'#e8be53':coat;
+  oval(c,sx-1,sy-28,6.8,5.3,hat);
+  oval(c,sx+2,sy-26,7.4,2,hat);
+  oval(c,sx+3,sy-24,1,1,'#554347');
+}
 
-  function tree(x, z, size, palette) {
-    add('trunk', COLORS.darkWood, x, size * .45, z, .29 * size, .9 * size, .29 * size);
-    for (let i = 0; i < 3; i++) {
-      const width = size * (1.32 - .25 * i);
-      const height = size * (1.07 - .12 * i);
-      const y = size * (.84 + i * .44);
-      add('cone', palette[i], x, y, z, width, height, width, i * .64);
-      add('cone', COLORS.snow, x, y + height * .16, z + .01, width * .74, height * .75, width * .74, i * .64);
-    }
+function shelf(c,x,z,resource,count) {
+  block(c,x-.16,z-.12,1.72,.69,.12,dark);
+  for(const dx of [0,1.38]) for(const dz of [0,.54]) block(c,x+dx,z+dz,.11,.11,1.54,orange);
+  for(const h of [.22,.83,1.45]) block(c,x-.05,z-.035,1.57,.63,.1,metal,h);
+  for(let i=0;i<Math.min(6,Math.ceil(count/2));i++) crate(c,x+.12+(i%3)*.45,z+.045,resource,.33+Math.floor(i/3)*.61,.4);
+}
+function plant(c,x,z) {
+  block(c,x,z,.55,.64,.51,['#d5beb0','#b58f80','#896f69']);
+  const [sx,sy]=project(x+.26,z+.29,.55);
+  line(c,[[sx,sy],[sx-1,sy-18]],'#577a5c',2);
+  for(const [dx,dy,rx,ry] of [[-5,-8,8,4],[5,-12,7,3],[-6,-18,5,4],[5,-21,7,4],[0,-25,3,5]]){
+    oval(c,sx+dx,sy+dy,rx,ry,dx<0?'#789567':'#a1ae68');
   }
+}
+function bench(c,x,z,type) {
+  block(c,x,z,1.65,.64,.72,metal);
+  block(c,x-.07,z-.04,1.78,.74,.085,['#dcd0b8','#b2998b','#8a7a77'],.72);
+  if(type==='cook'){
+    block(c,x+.17,z+.18,.58,.31,.045,orange,.82);
+    const [bx,by]=project(x+1.13,z+.25,.83);
+    oval(c,bx,by,9,5,'#60727b');
+    oval(c,bx,by-2,7,3,'#c39672');
+  }else{
+    block(c,x+.19,z+.08,.88,.4,.19,timber,.82);
+    block(c,x+1.13,z+.19,.24,.16,.09,dark,.82);
+  }
+}
+function stationShadow(c,x,z){
+  polygon(c,[project(x-1.6,z-1.34),project(x+2.04,z-1.34),project(x+2.44,z+.56),project(x-1.87,z+.78)],'#3f394c29');
+}
 
-  function forest(x, z) {
-    const pines = [[-2.3, -1.6, 1.2], [-.9, -2.05, 1.5], [.45, -2.2, 1.25], [1.8, -1.85, 1.1],
-      [-2.8, -.17, 1.08], [2.3, -.55, .98], [-1.3, -.74, 1.05], [.55, -.82, 1.14]];
-    for (const [i, [tx, tz, size]] of pines.entries()) {
-      tree(x + tx, z + tz, size, i % 2 ? [0x335d5f, 0x487674, 0x608782] : [0x365a53, 0x4e7464, 0x6f9078]);
-    }
-    add('trunk', COLORS.wood, x - 1.5, .19, z + .65, .63, .38, .61);
-    add('trunk', COLORS.timber, x - 1.5, .391, z + .65, .63, .035, .61);
-    timberStack(x + .87, z + .41, 1.1);
+function drawShell(c) {
+  const x=-11.7,z=-9.2,right=11.4,front=9.3;
+  quadrilateral(c,-14,-12,28,25,-.3,'#888184');
+  quadrilateral(c,-14,-12,28,2.35,-.29,'#696b70');
+  quadrilateral(c,-14,-9.57,28,.73,-.28,'#b7a29b');
+  for(let i=-13.7;i<14;i+=.57) quadrilateral(c,i,-11.66,.19,1.55,-.27,'#c3bbb0');
+  block(c,x-.27,z-.25,right-x+.5,front-z+.51,.4,['#b7a59c','#806b64','#6d5d60'],-.41);
+  quadrilateral(c,x,z,right-x,front-z,0,'#a79b99');
+  for(let ix=0;ix<23;ix++) for(let iz=0;iz<18;iz++){
+    const tint = ['#a69b98','#958c8c','#a59a96','#9f9393','#ad9f9a'][(ix*17+iz*3+Math.floor(iz/3))%5];
+    quadrilateral(c,x+ix,z+iz,1,1,.004,tint,'#6b5f5e27');
   }
+  wall(c,x,z,right-x,true);
+  wall(c,x,z,front-z,false);
+  for(const a of [-8.3,-3.7,3.3,7.9]) windowBand(c,a,z,true);
+  for(const a of [-6.3,-1.9,3.2]) windowBand(c,x,a,false);
+  for(const a of [-10.65,2.22,9.79]) {
+    block(c,a,z+.34,.38,.36,2.38,metal);
+    block(c,a-.26,z+.24,.87,.41,.12,['#f2dcaf','#cda887','#a6826d'],2.37);
+    quadrilateral(c,a-.35,z+.62,1.02,1.8,.014,'#f5d79f36');
+  }
+  // Set the floor edge in a small loading yard, with painted bay lines.
+  for(let i=-10;i<10;i+=2.55) quadrilateral(c,i,front+.56,.065,2.03,-.26,'#d7c4a4');
+  plant(c,-10.82,6.86);
+  plant(c,9.65,7.36);
+  // Only the near walls are cut down to curb height.
+  block(c,x,front-.12,right-x,.22,.23,orange);
+  block(c,right-.1,z,.22,front-z,.23,orange);
+  block(c,-1.95,z+.02,3.72,.19,2.38,['#d7bf9c','#a99b86','#9b7863']);
+  for(let i=0;i<8;i++) block(c,-1.8,z+.23,3.42,.055,.026,['#ada094','#827c78','#685c59'],.27+i*.24);
+  for(let i=0;i<4;i++) block(c,-1.55+i*.79,z+.28,.55,.07,.31,['#adc7c7','#769a9f','#6c838e'],1.57);
+  stripe(c,-1.95,z+.44,3.72,.57);
+}
 
-  function timberStack(x, z, length) {
-    for (const [dx, height] of [[-.25, .17], [.09, .17], [.43, .17], [-.08, .41], [.26, .41]]) {
-      add('trunk', COLORS.wood, x + dx, height, z, .33, length, .33, 0, Math.PI / 2);
-      add('trunk', COLORS.timber, x + dx, height, z + length / 2, .28, .035, .28, 0, Math.PI / 2);
-    }
+function drawZone(c,id,x,z) {
+  const accent=COLORS[id];
+  quadrilateral(c,x-2.19,z-1.97,4.38,3.57,.011,accent+'5c',accent);
+  stripe(c,x-1.72,z+1.12,3.44,.44);
+  const cp=project(x-1.75,z-1.74,.02);
+  oval(c,cp[0],cp[1],4,2,'#f1d5a2');
+}
+function drawEquipment(c,id,x,z,state) {
+  const stock=state.stock;
+  stationShadow(c,x,z);
+  if(id==='forest'){
+    pallet(c,x-1.65,z-.95,'logs',stock.logs);
+    conveyor(c,x-.46,z-1.36,2.52,0,false);
+    shelf(c,x-2.15,z-2.48,'logs',Math.floor(stock.logs/2));
+    for(let i=0;i<4;i++) block(c,x-1.48+i*.54,z+.15,.46,.29,.28,timber,.06);
+  } else if(id==='farm'){
+    growBed(c,x-1.75,z-1.23,state.ready,0);
+    growBed(c,x-.03,z-1.23,state.ready,5);
+    pallet(c,x+.38,z-.01,'crops',stock.crops);
+    growBed(c,x-1.75,z-2.35,state.ready,10);
+    growBed(c,x-.03,z-2.35,state.ready,13);
+  } else if(id==='kitchen'){
+    machine(c,x-1.58,z-1.24,'oven',state.active,state.phase);
+    if(state.level>1) machine(c,x+.18,z-1.24,'oven',state.active,state.phase);
+    else conveyor(c,x+.03,z-1.19,1.76,state.phase,state.active);
+    pallet(c,x+.63,z+.02,'meals',stock.meals);
+    bench(c,x-1.55,z-2.33,'cook');
+    shelf(c,x+.51,z-2.25,'crops',stock.crops);
+  } else if(id==='mill'){
+    machine(c,x-1.52,z-1.19,'saw',state.active,state.phase);
+    if(state.level>1) machine(c,x+.16,z-1.19,'saw',state.active,state.phase);
+    else conveyor(c,x+.03,z-1.19,1.77,state.phase,state.active);
+    pallet(c,x+.52,z+.01,'planks',stock.planks);
+    bench(c,x-1.52,z-2.27,'mill');
+    shelf(c,x+.48,z-2.23,'logs',stock.logs);
+  } else if(id==='depot'){
+    pallet(c,x-1.9,z-.73,'logs',stock.logs);
+    pallet(c,x-.24,z-.73,'planks',stock.planks);
+    pallet(c,x+.87,z-1.64,'meals',stock.meals);
+    shelf(c,x-2.19,z-2.04,'logs',Math.floor(stock.logs/2));
+    shelf(c,x-.36,z-2.04,'planks',Math.floor(stock.planks/2));
+    if(state.level>1) shelf(c,x+1.47,z-2.65,'meals',stock.meals);
+  } else if(id==='hall'){
+    block(c,x-1.65,z-1.25,3.38,.84,.75,orange);
+    block(c,x-1.7,z-1.32,3.48,1,.11,metal,.75);
+    for(let i=0;i<Math.min(stock.meals,6);i++) crate(c,x-1.54+i*.48,z-1.12,'meals',.87,.38);
+    for(let i=0;i<3;i++) block(c,x-1.35+i*1.24,z+.26,.61,.42,.29,timber);
+    plant(c,x+1.72,z-1.45);
   }
+}
 
-  function windowAt(x, y, z, width) {
-    box(COLORS.darkWood, x, y, z, width + .13, .72, .045);
-    box(COLORS.lit, x, y, z + .027, width, .54, .03);
-    box(COLORS.darkWood, x, y, z + .05, .055, .57, .025);
-    box(COLORS.darkWood, x, y, z + .05, width, .046, .025);
+export function createWorld(canvas,{onSelect,onCamera,lowPower=true,locations}) {
+  const c=canvas.getContext('2d',{alpha:false});
+  const base=canvas.ownerDocument.createElement('canvas');
+  const back=base.getContext('2d',{alpha:false});
+  if(!c||!back) throw new Error('Canvas graphics unavailable');
+  let width=0,height=0,dpr=1,scale=1,zoom=1,left=0,top=0, panX=0,panY=0;
+  let needBase=true, packed=false, selected=null, phase=0, pointer=null;
+  const hits=[];
+  const sites=Object.entries(locations);
+  function resize(){
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    if(!w||!h||(w===width&&h===height)) return;
+    if(!width&&w<540) zoom=1.38;
+    width=w;height=h;
+    dpr=Math.min(globalThis.devicePixelRatio||1,lowPower?1:1.5);
+    canvas.width=base.width=Math.round(w*dpr);
+    canvas.height=base.height=Math.round(h*dpr);
+    needBase=true;
   }
-
-  function cabin(x, z, width, height, depth, roofColor, wall = COLORS.wood) {
-    box(COLORS.shale, x, .13, z, width + .22, .26, depth + .22);
-    box(wall, x, height / 2 + .22, z, width, height, depth);
-    for (const dx of [-width / 2 + .03, width / 2 - .03]) {
-      box(COLORS.darkWood, x + dx, height / 2 + .22, z + depth / 2, .14, height, .13);
-      box(COLORS.darkWood, x + dx, height / 2 + .22, z - depth / 2, .14, height, .13);
-    }
-    for (let i = 1; .3 * i < height; i++) {
-      box(COLORS.darkWood, x, .3 * i + .19, z + depth / 2, width, .025, .028);
-      box(COLORS.darkWood, x + width / 2, .3 * i + .19, z, .028, .025, depth);
-    }
-    const panel = (depth / 2 + .17) / Math.cos(.43);
-    for (const sign of [-1, 1]) {
-      box(roofColor, x, height + .49, z + sign * (depth / 4 + .05), width + .45, .18, panel, 0, sign * .43);
-      box(COLORS.snow, x, height + .585, z + sign * (depth / 4 + .02), width + .3, .09, panel * .88, 0, sign * .43);
-    }
-    box(roofColor, x, height + .785, z, width + .42, .11, .13);
+  function camera(){
+    scale=Math.min(width/1130,height/650)*zoom;
+    left=width*.5+panX;
+    top=height*.51+panY;
   }
-
-  function workshop(x, z, accent, [width, depth]) {
-    const back = z - depth / 2;
-    const left = x - width / 2;
-    box(COLORS.shale, x + .05, .08, z + .04, width + .29, .15, depth + .26);
-    box(COLORS.tile, x, .176, z, width + .1, .1, depth + .1);
-    const floor = [0xa79994, 0xb8aaa2, 0xa99f99, 0xada29c, 0x9c938e];
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j < 6; j++) {
-        const tint = floor[Math.floor(seededFraction(i * 7 + j + 42) * floor.length)];
-        box(tint, left + (i + .5) * width / 7, .233, back + (j + .5) * depth / 6, width / 7 - .024, .025, depth / 6 - .025);
-      }
-    }
-    const high = 1.91;
-    const wallTop = high + .25;
-    const sideA = depth / 2 - .8;
-    const sideB = depth / 2 - .39;
-    const gateSide = [[back + sideA / 2, sideA], [back + depth - sideB / 2, sideB]];
-    box(COLORS.wall, x, high / 2 + .25, back, width + .17, high, .18);
-    box(COLORS.wallTrim, x, wallTop + .04, back, width + .23, .12, .22);
-    box(COLORS.snow, x, wallTop + .11, back, width + .16, .04, .11);
-    for (const [center, length] of gateSide) {
-      box(COLORS.wallLight, left, high / 2 + .25, center, .18, high, length);
-      box(COLORS.wallTrim, left, wallTop + .04, center, .22, .12, length + .05);
-      box(COLORS.snow, left, wallTop + .11, center, .11, .04, length - .03);
-      box(COLORS.wallTrim, left + .113, .39, center, .05, .19, length);
-      for (const fraction of [-.28, .08, .36]) {
-        box(COLORS.wallTrim, left + .1, 1.21, center + fraction * length, .025, 1.83, .019);
-      }
-    }
-    for (const edge of [back + sideA, back + depth - sideB]) {
-      box(COLORS.wallTrim, left, 1.2, edge, .225, 1.9, .195);
-    }
-    for (let i = 1; i < 10; i++) {
-      box(COLORS.wallTrim, left + i * width / 10, 1.2, back + .101, .022, 1.84, .02);
-    }
-    box(COLORS.darkWood, left + .03, 1.18, back + .05, .19, 1.89, .18);
-    box(COLORS.darkWood, left + width, 1.2, back + .03, .16, 1.9, .2);
-    box(COLORS.darkWood, left, 1.2, back + depth, .2, 1.9, .17);
-    box(accent, x, .29, back + depth + .064, width + .17, .14, .16);
-    box(accent, left + width + .07, .287, z, .15, .13, depth + .07);
-    box(COLORS.wallTrim, x, .39, back + .113, width, .19, .05);
-    for (let i = 0; i < 2; i++) {
-      const panelX = x - .72 + i * 1.48;
-      box(COLORS.wallTrim, panelX, 1.49, back + .113, .92, .65, .09);
-      box(COLORS.rail, panelX, 1.49, back + .174, .77, .53, .05);
-      box(COLORS.glass, panelX, 1.52, back + .206, .66, .39, .024);
-      box(COLORS.rail, panelX, 1.5, back + .224, .057, .47, .03);
-    }
+  function reset(c2){c2.setTransform(dpr*scale,0,0,dpr*scale,dpr*left,dpr*top);}
+  function background(){
+    back.setTransform(1,0,0,1,0,0);
+    back.fillStyle='#767174';
+    back.fillRect(0,0,base.width,base.height);
+    reset(back);drawShell(back);
+    for(const [id,{x,z}] of sites) drawZone(back,id,x,z);
+    path(back,-10,2.3,35);
+    path(back,-10,-2.8,33);
+    if(packed){path(back,-10,5.2,31);path(back,-9.7,-.05,29);}
+    needBase=false;
   }
-
-  function crate(x, y, z, tint, size = .52) {
-    box(COLORS.darkWood, x, y - .04, z, size + .03, .09, size + .03);
-    box(tint, x, y + size * .39, z, size, size * .8, size);
-    box(COLORS.timber, x, y + size * .79, z, size + .04, .092, size + .04);
-    box(COLORS.lit, x, y + size * .39, z + size * .51, size * .35, size * .25, .02);
+  function label(x,z,id){
+    const [mx,my]=project(x-1.5,z-1.65,1.2);
+    const px=mx*scale+left, py=my*scale+top;
+    const color=COLORS[id];
+    c.setTransform(dpr,0,0,dpr,0,0);
+    c.font='700 11px system-ui,sans-serif';
+    const labelWidth=c.measureText(LABELS[id]).width+18;
+    c.fillStyle=selected?.type==='site'&&selected.id===id?'#9e563f':'#3f3943';
+    c.fillRect(px-labelWidth/2,py-11,labelWidth,20);
+    c.fillStyle=color;
+    c.fillRect(px-labelWidth/2,py-11,3,20);
+    c.fillStyle='#fff6e4';
+    c.textAlign='center';
+    c.textBaseline='middle';
+    c.fillText(LABELS[id],px+1,py-1);
+    hits.push({type:'site',id,x:px,y:py,rx:labelWidth/2+4,ry:15});
   }
-
-  function workstation(x, z, width = 1.75, depth = .94) {
-    box(0x857b75, x + .06, .256, z + .08, width + .22, .025, depth + .34);
-    for (const dx of [-width / 2 + .17, width / 2 - .17]) {
-      box(COLORS.darkWood, x + dx, .53, z, .16, .63, depth * .83);
-    }
-    box(COLORS.machine, x, .82, z, width, .23, depth);
-    box(COLORS.rail, x, .70, z + depth / 2, width, .185, .07);
-    box(COLORS.glass, x, .938, z, width - .17, .065, depth - .12);
-    box(COLORS.darkWood, x, .87, z - depth / 2 + .05, width, .124, .08);
-  }
-
-  function loadZone(x, z, accent, width = 1.2, depth = 1.04) {
-    box(accent, x, .264, z, width, .033, depth);
-    const mark = 0xeae3d4;
-    box(mark, x, .285, z - .03, .14, .016, .48);
-    box(mark, x - .085, .287, z - .26, .125, .017, .24, -.73);
-    box(mark, x + .085, .287, z - .26, .125, .017, .24, .73);
-  }
-
-  function kitchen(x, z) {
-    workshop(x, z, 0xce745a, WORKSHOPS.kitchen);
-    workstation(x - .7, z - .77, 2.14, 1.17);
-    box(COLORS.rail, x - .79, 1.03, z - .85, 1.82, .15, .85);
-    for (const dx of [-1.3, -.71, -.11]) {
-      add('trunk', 0x35434c, x + dx, 1.16, z - .78, .46, .10, .46);
-      add('trunk', COLORS.red, x + dx, 1.217, z - .78, .25, .04, .24);
-    }
-    for (const dx of [-1.67, .25]) box(COLORS.shale, x + dx, 1.44, z - 1, .10, .78, .12);
-    box(COLORS.shale, x - .71, 1.856, z - 1.03, 2.1, .24, 1.06);
-    box(COLORS.wallTrim, x - .72, 1.765, z - .525, 2.16, .15, .14);
-    box(COLORS.lit, x - .72, 1.727, z - .444, 1.33, .039, .035);
-    box(COLORS.shale, x - .71, 2.21, z - 1.24, .47, .56, .51);
-    box(COLORS.darkWood, x - .71, 2.5, z - 1.24, .61, .12, .65);
-    workstation(x + 1.25, z -.78, 1.15, 1.1);
-    add('trunk', COLORS.lit, x + 1.07, 1.006, z - .66, .21, .12, .2);
-    add('trunk', COLORS.red, x + 1.42, 1.03, z - .82, .32, .18, .27);
-    loadZone(x + 1.36, z + 1.31, COLORS.green);
-    crate(x + 1.65, .29, z + .47, 0xc18c4c, .48);
-  }
-
-  function mill(x, z) {
-    workshop(x, z, 0xd2915f, WORKSHOPS.mill);
-    workstation(x, z - .57, 2.7, 1.26);
-    box(COLORS.rail, x, 1.11, z - .57, 2.35, .23, .95);
-    box(COLORS.shale, x - .7, 1.22, z - .55, .20, .1, .89);
-    box(COLORS.shale, x + .7, 1.22, z - .55, .20, .1, .89);
-    box(COLORS.red, x + 1.18, 1.137, z + .065, .14, .1, .075);
-    timberStack(x - 1.43, z + .5, .91);
-    for (let i = 0; i < 3; i++) box(i % 2 ? COLORS.wood : COLORS.timber, x + 1.63, .28 + i * .1, z + .47, .58, .09, 1.2);
-    loadZone(x + 1.51, z + 1.5, 0x937857, .95, .76);
-  }
-
-  function depot(x, z) {
-    workshop(x, z, 0x75a1aa, WORKSHOPS.depot);
-    for (const side of [-1, 1]) {
-      const rx = x + side * 1.17;
-      box(COLORS.rail, rx, .376, z - .86, 1.88, .18, 1.36);
-      box(COLORS.rail, rx, 1.06, z - .86, 1.88, .13, 1.36);
-      for (const dx of [-.88, .88]) {
-        box(COLORS.rail, rx + dx, .927, z - .27, .1, 1.33, .12);
-        box(COLORS.rail, rx + dx, .927, z - 1.45, .1, 1.33, .12);
-      }
-    }
-    // Only permanent fittings are static. The colored crates on each shelf represent actual inventory.
-    for (const dx of [-1.33, -.02, 1.29]) loadZone(x + dx, z + 1.15, COLORS.rail);
-  }
-
-  function hall(x, z) {
-    cabin(x, z, 3.56, 1.92, 2.08, 0x685d81, 0xa98269);
-    box(COLORS.darkWood, x, .83, z + 1.06, .82, 1.22, .15);
-    box(COLORS.wood, x, .78, z + 1.15, .57, 1.08, .07);
-    windowAt(x - 1, 1.26, z + 1.06, .7);
-    windowAt(x + 1, 1.26, z + 1.06, .7);
-    box(COLORS.shale, x - 1.15, 2.5, z - .52, .44, 1.21, .43);
-    box(COLORS.snow, x - 1.15, 3.13, z - .52, .51, .08, .49);
-    box(COLORS.darkWood, x + 2.18, 1.14, z + .85, .11, 2.26, .13);
-    box(0x665e91, x + 2.48, 1.86, z + .86, .62, .59, .078);
-    box(COLORS.lit, x + 2.48, 1.69, z + .907, .48, .058, .034);
-  }
-
-  function roadSegment(x1, z1, x2, z2, width, tint) {
-    const dx = x2 - x1;
-    const dz = z2 - z1;
-    const distance = Math.hypot(dx, dz);
-    const yaw = Math.atan2(dx, dz);
-    box(tint, (x1 + x2) / 2, .014, (z1 + z2) / 2, width, .027, distance + width * .5, yaw);
-    const markers = Math.ceil(distance / .85);
-    for (let i = 1; i < markers; i++) {
-      roadMarks.push(part('box', 0xe7dbc0, x1 + dx * i / markers, .037, z1 + dz * i / markers, .10, .025, .3, yaw));
-    }
-  }
-
-  function siteLabel(id, location, lift) {
-    const surface = document.createElement('canvas');
-    surface.width = 384;
-    surface.height = 80;
-    const context = surface.getContext('2d');
-    const texture = new THREE.CanvasTexture(surface);
-    texture.encoding = THREE.sRGBEncoding;
-    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-    const sprite = new THREE.Sprite(material);
-    sprite.position.set(location.x, lift, location.z - .78);
-    sprite.renderOrder = 2;
-    scene.add(sprite);
-    labelAssets.push(texture, material);
-    siteLabels.set(id, { sprite, surface, context, texture, text: location.name, status: '', width: 0 });
-  }
-
-  function paintLabel(id, label, status) {
-    if (label.status === status) return;
-    label.status = status;
-    const { context, surface, texture, text } = label;
-    context.clearRect(0, 0, surface.width, surface.height);
-    const font = '700 30px system-ui, sans-serif';
-    context.font = font;
-    const w = clamp(context.measureText(text).width + 60, 152, 365);
-    const x = (surface.width - w) / 2;
-    const tint = status === 'blocked' ? '#ffc176' : SITE_ACCENT[id] || '#cce8f6';
-    context.fillStyle = '#172d3c';
-    context.beginPath();
-    if (context.roundRect) context.roundRect(x, 7, w, 62, 23);
-    else context.rect(x, 7, w, 62);
-    context.fill();
-    context.fillStyle = tint;
-    context.beginPath();
-    context.arc(x + 24, 38, 6, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = '#fff';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(text, 204, 38, w - 44);
-    texture.needsUpdate = true;
-    label.width = w / surface.width;
-  }
-
-  const w = bounds.xmax - bounds.xmin;
-  const d = bounds.zmax - bounds.zmin;
-  box(COLORS.soil, midX + .06, -.65, midZ + .08, w + .12, 1.27, d + .12);
-  box(COLORS.shale, midX, -.33, midZ, w + .2, .48, d + .2);
-  box(COLORS.ice, midX, -.14, midZ, w + .08, .21, d + .08);
-  box(COLORS.field, midX, -.047, midZ, w, .094, d);
-  for (const [ix, iz] of [[-10, .15], [-2.6, -7.8], [1.6, 7.6], [7.8, .9], [8.5, -6.3], [-8.9, 6.94]]) {
-    const n = ix * 13 + iz * 5;
-    add('stone', COLORS.snow, ix, .02, iz, 1.47 + seededFraction(n), .075, .79, n);
-    add('stone', COLORS.ice, ix + .4, .015, iz + .23, 1.08, .047, .58, n + .38);
-  }
-  box(0x95abba, midX + .38, -1.31, midZ + .47, w + .45, .13, d + .46);
-  for (let i = 0; i < 42; i++) {
-    const along = seededFraction(i * 12 + 4);
-    const spread = seededFraction(i * 6 + 11);
-    const bx = i % 2 ? bounds.xmin + .3 + along * (w - .6) : i % 4 === 0 ? bounds.xmin + .25 + spread : bounds.xmax - .25 - spread;
-    const bz = i % 2 ? i % 4 === 1 ? bounds.zmin + .22 + spread : bounds.zmax - .22 - spread : bounds.zmin + along * d;
-    const size = .2 + seededFraction(i * 11) * .58;
-    add('stone', i % 3 ? COLORS.ice : COLORS.shale, bx, .06, bz, size, size * .38, size * .74, along * 11);
-  }
-  const siteShapes = { forest, farm: greenhouse, kitchen, mill, depot, hall };
-  const lifts = { forest: 3.5, farm: 2.1, kitchen: 3.25, mill: 3.2, depot: 3.2, hall: 3.5 };
-  const connector = locations.depot || Object.values(locations)[0];
-  for (const [id, location] of Object.entries(locations)) {
-    const { x, z } = location;
-    if (id !== 'depot') roadSegment(x, z + .55, connector.x, connector.z + .55, 1.05, COLORS.path);
-    box(0xc1c6c2, x + .18, .025, z + .14, 3.95, .046, 2.86);
-    // The stations stand behind the simulation's arrival point so crew and loads remain visible.
-    siteShapes[id]?.(x, z - (WORKSHOPS[id] ? .76 : 1.18));
-    siteLabel(id, location, lifts[id] || 2.6);
-  }
-  assembleStaticMeshes();
-  const packedRoad = new THREE.InstancedMesh(geometries.box, solid, roadMarks.length);
-  for (const [i, mark] of roadMarks.entries()) setInstance(packedRoad, i, mark);
-  packedRoad.frustumCulled = false;
-  scene.add(packedRoad);
-
-  let viewportWidth = 0;
-  let viewportHeight = 0;
-  let viewHeight = 1;
-  let viewWidth = 1;
-  let visualTime = 0;
-  let selection = null;
-  let lastState = null;
-  let lastAlpha = 1;
-
-  function fit() {
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    if (!width || !height) return false;
-    if (width === viewportWidth && height === viewportHeight) return true;
-    viewportWidth = width;
-    viewportHeight = height;
-    const margin = width < 560 ? 1.035 : 1.12;
-    const ratio = width / height;
-    viewHeight = Math.max(extent.y * margin, extent.x * margin / ratio) * 2;
-    viewWidth = viewHeight * ratio;
-    camera.left = -viewWidth / 2;
-    camera.right = viewWidth / 2;
-    camera.top = viewHeight / 2;
-    camera.bottom = -viewHeight / 2;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height, false);
-    for (const { sprite } of siteLabels.values()) {
-      const pixels = clamp(width * .284, 111, 159);
-      sprite.scale.set(pixels * viewWidth / width, pixels / 4.8 * viewHeight / height, 1);
-    }
-    return true;
-  }
-
-  function target(type, id, x, y, z, rx, ry) {
-    vector.set(x, y, z).project(camera);
-    clickTargets.push({
-      type, id, x: (vector.x + 1) * viewportWidth / 2,
-      y: (1 - vector.y) * viewportHeight / 2, rx, ry,
+  function render(state, alpha=1, dt=0) {
+    resize();
+    if(!width||!height) return;
+    phase+=dt;
+    const hasPaths=Boolean(state.projects.road.complete);
+    if(hasPaths!==packed){packed=hasPaths;needBase=true;}
+    camera();
+    if(needBase) background();
+    c.setTransform(1,0,0,1,0,0);
+    c.drawImage(base,0,0);
+    reset(c);
+    hits.length=0;
+    const actors=sites.map(([id,point])=>({id,...point,site:true}));
+    for(const [i,w] of state.workers.entries()) actors.push({
+      id:w.id,x:mix(w.prevX,w.x,alpha),z:mix(w.prevZ,w.z,alpha),w,i,
     });
-  }
-
-  function addWorker(worker, index, alpha, hasCart) {
-    const { task, id } = worker;
-    const px = worker.prevX ?? worker.x;
-    const pz = worker.prevZ ?? worker.z;
-    const dx = worker.x - px;
-    const dz = worker.z - pz;
-    const x = px + dx * alpha;
-    const z = pz + dz * alpha;
-    const onFloor = Object.entries(WORKSHOPS).some(([id, [w, d]]) =>
-      Math.abs(x - locations[id].x) < w / 2 && Math.abs(z - locations[id].z + .76) < d / 2);
-    const baseY = onFloor ? .25 : 0;
-    const walking = dx * dx + dz * dz > 0.00001;
-    const working = task?.stage === 'work' && !walking;
-    const carrying = (task?.kind === 'haul' || task?.kind === 'repair') && task.stage === 'deliver' && task.amount > 0;
-    const usingCart = carrying && hasCart && task.kind === 'haul' && task.amount >= 3;
-    const tint = worker.color ?? COATS[index % COATS.length];
-    const phase = visualTime * 12 + index * 1.1;
-    const stride = walking ? Math.sin(phase) * .63 : 0;
-    const facing = walking ? Math.atan2(dx, dz) : rotations.get(id) ?? .1;
-    rotations.set(id, facing);
-    const sin = Math.sin(facing);
-    const cos = Math.cos(facing);
-    const size = 1.2;
-    const bob = walking ? Math.abs(Math.sin(phase)) * .09 : 0;
-    // Coat, hood, trim and swinging limbs follow the same person silhouette as Kitchen & Mill.
-    const limb = (type, c, sx, sy, sz, dx, y, dz, tilt = 0, roll = 0) => (
-      addMoving(type, c, x + (dx * cos + dz * sin) * size, baseY + (y + bob) * size,
-        z + (dz * cos - dx * sin) * size, sx * size, sy * size, sz * size, facing, tilt, roll)
-    );
-    if (selection?.type === 'worker' && selection.id === id) addMoving('trunk', 0x4eaaac, x, baseY + .029, z, 1.10, .032, 1.02);
-    addMoving('trunk', COLORS.shadow, x, baseY + .046, z, .83, .021, .72);
-    limb('box', 0x273543, .22, .44, .24, -.13, .23, 0, stride);
-    limb('box', 0x273543, .22, .44, .24, .13, .23, 0, -stride);
-    limb('coat', tint, .81, .77, .73, 0, .78, 0);
-    limb('trunk', COLORS.snow, .59, .09, .55, 0, 1.16, 0);
-    limb('orb', tint, .66, .68, .63, 0, 1.44, -.06);
-    limb('orb', SKIN[index % SKIN.length], .47, .51, .40, 0, 1.43, .15);
-    limb('box', 0x353b3e, .053, .047, .048, -.09, 1.457, .327);
-    limb('box', 0x353b3e, .053, .047, .048, .09, 1.457, .327);
-    limb('box', tint, .18, .46, .21, -.43, .86, carrying ? .17 : 0, carrying ? -.72 : -stride);
-    limb('box', tint, .18, .46, .21, .43, .86, carrying ? .17 : 0, carrying ? -.72 : working ? -.55 + Math.sin(phase) * .8 : stride);
-    if (carrying) {
-      const resource = task.resource;
-      const crate = resource === 'meals' ? 0xd39a57 : resource === 'crops' ? 0xc19c51 : 0xaa724d;
-      const cargoY = usingCart ? .51 : .91;
-      const cargoZ = usingCart ? .87 : .47;
-      if (resource === 'logs') {
-        for (const dy of [0, .14]) limb('trunk', crate, .19, .75, .19, 0, cargoY + dy, cargoZ, 0, Math.PI / 2);
-      } else if (resource === 'planks') {
-        for (let i = 0; i < 3; i++) limb('box', i % 2 ? crate : COLORS.timber, .75, .09, .48, 0, cargoY + .10 * i, cargoZ);
-      } else {
-        limb('box', crate, .69, .39, .5, 0, cargoY, cargoZ);
-        limb('box', resource === 'meals' ? 0xffdead : 0xb48556, .72, .08, .53, 0, cargoY + .20, cargoZ);
-      }
-      if (usingCart) {
-        limb('box', COLORS.darkWood, .85, .115, .66, 0, .29, .87);
-        for (const offset of [-.45, .45]) {
-          limb('box', COLORS.wallTrim, .089, .13, .75, offset, .39, .71, -.19);
-          limb('trunk', 0x344856, .48, .13, .48, offset, .24, .96, 0, Math.PI / 2);
-        }
+    actors.sort((a,b)=>a.x+a.z-b.x-b.z);
+    for(const a of actors){
+      if(a.site){
+        const active=state.workers.some(w=>w.task?.to===a.id&&w.task.stage==='work'&&Math.hypot(w.x-a.x,w.z-a.z)<2.1);
+        if(selected?.type==='site'&&selected.id===a.id) quadrilateral(c,a.x-2.21,a.z-1.99,4.41,3.61,.023,'#fff8de35','#fff0a9');
+        drawEquipment(c,a.id,a.x,a.z,{...state.sites[a.id],phase,active});
+        const [sx,sy]=project(a.x,a.z-.38,.63);
+        hits.push({type:'site',id:a.id,x:sx*scale+left,y:sy*scale+top,rx:Math.max(17,scale*42),ry:Math.max(13,scale*27)});
+      }else{
+        const [sx,sy]=project(a.x,a.z);
+        if(selected?.type==='worker'&&selected.id===a.id) oval(c,sx,sy,14,6,'#fff0ac');
+        worker(c,a.x,a.z,a.w,a.i,phase,state.projects.cart.complete,Math.hypot(a.w.x-a.w.prevX,a.w.z-a.w.prevZ)>.03);
+        hits.push({type:'worker',id:a.id,x:sx*scale+left,y:(sy-14)*scale+top,rx:12,ry:15});
       }
     }
-    target('worker', id, x, baseY + 1.07, z, 18, 22);
+    for(const [id,{x,z}] of sites) label(x,z,id);
   }
-
-  function animateSites(state) {
-    packedRoad.visible = Boolean(state.projects?.road?.complete);
-    const operators = new Set();
-    for (const { task, x, z } of state.workers) {
-      if (task?.kind !== 'process' || task.stage !== 'work') continue;
-      const stop = locations[task.to];
-      if (stop && Math.hypot(x - stop.x, z - stop.z - .9) < .6) operators.add(task.to);
-    }
-    for (const [id, loc] of Object.entries(locations)) {
-      const { x, z } = loc;
-      const site = state.sites[id];
-      const label = siteLabels.get(id);
-      const stock = site?.stock || {};
-      const wear = site?.wear || 0;
-      paintLabel(id, label, wear >= 80 ? 'blocked' : 'normal');
-      if (selection?.type === 'site' && selection.id === id) {
-        addMoving('trunk', 0x78b9bd, x, .267, z + .95, .89, .048, .89);
-      }
-      if (state.projects?.[id]?.queued) {
-        const progress = state.projects[id].progress;
-        const base = id === 'depot' ? x + 2.62 : x - 1.42;
-        addMoving('box', COLORS.wallTrim, base, .32, z + .30, .91, .15, .77);
-        for (const offset of [-.4, .4]) {
-          addMoving('box', COLORS.timber, base + offset, .76, z + .33, .11, 1.00, .11);
-        }
-        addMoving('box', COLORS.wallLight, base, progress > 12 ? 1.16 : .57, z + .33, .83, .12, .16);
-      }
-      if (id === 'depot' && site?.level > 1) {
-        addMoving('box', COLORS.wall, x + 3.06, .91, z - 1.06, 1.51, 1.63, 1.69);
-        addMoving('box', COLORS.rail, x + 3.06, 1.78, z - 1.06, 1.65, .14, 1.86);
-        addMoving('box', COLORS.snow, x + 3.06, 1.9, z - 1.06, 1.56, .09, 1.78);
-        addMoving('box', COLORS.darkWood, x + 3.06, .72, z - .19, .62, 1.37, .085);
-        addMoving('box', COLORS.lit, x + 3.51, 1.03, z - .16, .28, .29, .08);
-      }
-      if (id === 'mill') {
-        const spin = operators.has(id) ? visualTime * 8 : 0;
-        const saws = site?.level > 1 ? [-.46, .46] : [0];
-        for (const offset of saws) {
-          addMoving('trunk', wear >= 80 ? 0xa86e59 : 0xc7d5dd, x + offset, 1.42, z - 1.22, .79, .086, .79, 0, Math.PI / 2);
-          for (let j = 0; j < 8; j++) {
-            const angle = j * Math.PI / 4 + spin;
-            addMoving('box', 0x5f747c, x + offset + Math.sin(angle) * .275, 1.42 + Math.cos(angle) * .275, z - 1.16, .067, .21, .035, 0, 0, -angle);
-          }
-        }
-      }
-      if (id === 'kitchen') {
-        if (site?.level > 1) {
-          addMoving('box', COLORS.machine, x + 1.26, .76, z - .37, 1.08, .98, .76);
-          addMoving('box', COLORS.rail, x + 1.26, .75, z + .03, .91, .63, .15);
-          addMoving('box', COLORS.lit, x + 1.26, .82, z + .13, .58, .19, .057);
-          addMoving('box', COLORS.darkWood, x + 1.27, 1.27, z - .34, 1.17, .10, .84);
-        }
-        if (operators.has(id)) {
-          for (let j = 0; j < 3; j++) {
-            const rise = (visualTime * .74 + j * .33) % 1;
-            addMoving('orb', 0xe7e3dd, x - .71 + rise * .65, 2.56 + rise * .8, z - 2, .16 + rise * .22, .21, .17);
-          }
-        }
-      }
-      for (const [i, [resource, count]] of Object.entries(stock).entries()) {
-        if (!count) continue;
-        const tint = resource === 'crops' ? COLORS.crop : resource === 'meals' ? 0xd79868 : resource === 'logs' ? COLORS.wood : COLORS.timber;
-        const bins = clamp(Math.ceil(count / 5), 1, id === 'depot' ? 5 : 3);
-        const stackX = id === 'depot' ? x - 1.62 + i * 1.41 : x + 1.25 + i * .39;
-        const stackZ = id === 'depot' ? z - 1.52 : z + .65;
-        for (let j = 0; j < bins; j++) {
-          const bx = stackX + (id === 'depot' ? j % 2 * .49 : 0);
-          const by = id === 'depot' && j > 1 ? 1.13 + Math.floor((j - 2) / 2) * .26 : .27 + j * Number(id !== 'depot') * .25;
-          if (resource === 'logs') {
-            addMoving('trunk', tint, bx, by + .114, stackZ, .24, .46, .24, 0, Math.PI / 2);
-            addMoving('trunk', COLORS.timber, bx, by + .114, stackZ + .238, .18, .035, .18, 0, Math.PI / 2);
-          } else {
-            addMoving('box', tint, bx, by + .10, stackZ, .40, .225, .405);
-            addMoving('box', COLORS.lit, bx, by + .136, stackZ + .21, .14, .085, .025);
-          }
-        }
-      }
-      const labelWidth = label.sprite.scale.x / viewWidth * viewportWidth * label.width;
-      target('site', id, label.sprite.position.x, label.sprite.position.y, label.sprite.position.z, Math.max(24, labelWidth / 2), 13);
-      const worldScale = viewportWidth / viewWidth;
-      target('site', id, x, 1.0, z - 1.10, worldScale * 1.48, worldScale * 1.1);
-    }
+  const local=e=>[e.clientX-canvas.getBoundingClientRect().left,e.clientY-canvas.getBoundingClientRect().top];
+  function down(e){
+    if(!e.isPrimary) return;
+    const [x,y]=local(e);
+    pointer={id:e.pointerId,x,y,panX,panY,moved:false};
+    canvas.setPointerCapture?.(e.pointerId);
   }
-
-  function render(state, alpha = 1, dt = 0) {
-    lastState = state;
-    lastAlpha = alpha;
-    if (!fit()) return;
-    visualTime += clamp(dt, 0, .2);
-    clickTargets.length = 0;
-    for (const batch of dynamicParts.values()) batch.count = 0;
-    animateSites(state);
-    for (const [i, worker] of state.workers.entries()) addWorker(worker, i, alpha, state.projects?.cart?.complete);
-    for (const { mesh, count } of dynamicParts.values()) {
-      mesh.count = count;
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.instanceColor.needsUpdate = true;
-    }
-    renderer.render(scene, camera);
+  function move(e){
+    if(pointer?.id!==e.pointerId||zoom<=1) return;
+    const [x,y]=local(e);
+    if(Math.hypot(x-pointer.x,y-pointer.y)<6&&!pointer.moved)return;
+    pointer.moved=true;
+    panX=clamp(pointer.panX+x-pointer.x,-width*zoom*.5,width*zoom*.5);
+    panY=clamp(pointer.panY+y-pointer.y,-height*zoom*.5,height*zoom*.5);
+    needBase=true;
+    onCamera?.();
   }
-
-  let pointerStart;
-  function pointerDown(event) {
-    if (event.isPrimary) pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  function up(e){
+    if(pointer?.id!==e.pointerId) return;
+    const [x,y]=local(e), moved=pointer.moved||Math.hypot(x-pointer.x,y-pointer.y)>8;
+    pointer=null;
+    if(moved) return;
+    const hit=hits.slice().reverse().find(a=>Math.abs(x-a.x)<=a.rx&&Math.abs(y-a.y)<=a.ry);
+    if(hit) onSelect({type:hit.type,id:hit.id});
   }
-  function pointerUp(event) {
-    if (pointerStart?.id !== event.pointerId) return;
-    const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
-    pointerStart = null;
-    if (distance > 12) return;
-    const rect = canvas.getBoundingClientRect();
-    let nearest = null;
-    let best = 1;
-    for (const hit of clickTargets) {
-      const score = Math.hypot((event.clientX - rect.left - hit.x) / hit.rx, (event.clientY - rect.top - hit.y) / hit.ry);
-      if (score < best) {
-        best = score;
-        nearest = hit;
-      }
-    }
-    if (nearest) {
-      selection = { type: nearest.type, id: nearest.id };
-      onSelect(selection);
-    }
-  }
-  canvas.addEventListener('pointerdown', pointerDown);
-  canvas.addEventListener('pointerup', pointerUp);
+  function cancel(){pointer=null;}
+  canvas.addEventListener('pointerdown',down);
+  canvas.addEventListener('pointermove',move);
+  canvas.addEventListener('pointerup',up);
+  canvas.addEventListener('pointercancel',cancel);
   return {
-    render,
-    resize() { if (lastState) render(lastState, lastAlpha); else fit(); },
-    select(value) { selection = value; },
-    stats() {
-      return { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, width: canvas.width, height: canvas.height };
-    },
-    dispose() {
-      canvas.removeEventListener('pointerdown', pointerDown);
-      canvas.removeEventListener('pointerup', pointerUp);
-      for (const asset of [...Object.values(geometries), solid, ...labelAssets]) asset.dispose();
-      renderer.dispose();
+    render,resize,select(value){selected=value;},
+    zoom(step){zoom=clamp(zoom+step*.38,1,2.52);if(zoom===1)panX=panY=0;needBase=true;return zoom;},
+    stats(){return {width,height,dpr,targets:hits.map(h=>({...h})),zoom};},
+    dispose(){
+      canvas.removeEventListener('pointerdown',down);
+      canvas.removeEventListener('pointermove',move);
+      canvas.removeEventListener('pointerup',up);
+      canvas.removeEventListener('pointercancel',cancel);
     },
   };
 }

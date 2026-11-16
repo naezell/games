@@ -32,16 +32,23 @@ a { color: #295b4f; text-underline-offset: .2em; }
 .balances div { border-left: 1px solid #718174; padding-left: clamp(7px, 1.6vw, 20px); }
 .balances dt { font-size: .7rem; color: #eadac1; white-space: nowrap; }
 .balances dd { margin: 0; font: bold clamp(17px, 2.4vw, 24px) Georgia, serif; }
-.dashboard {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(350px, 410px);
-  max-width: 1720px; gap: 14px; padding: 14px; margin: 0 auto;
-}
+.dashboard { position: relative; min-height: calc(100dvh - 70px); }
 .settlement { min-width: 0; }
 .map {
-  position: relative; height: clamp(480px, calc(100dvh - 178px), 940px); overflow: hidden;
-  background: #a3aaa1; border: 1px solid #7d8576; border-radius: 12px; box-shadow: 0 6px 20px var(--shadow);
+  position: relative; height: max(500px, calc(100dvh - 165px)); overflow: hidden;
+  background: #767174;
 }
 canvas { display: block; width: 100%; height: 100%; touch-action: manipulation; }
+canvas.zoomed { touch-action: none; cursor: grab; }
+canvas.zoomed:active { cursor: grabbing; }
+.zoom {
+  position: absolute; right: 12px; bottom: 13px; display: flex; gap: 4px;
+  border-radius: 8px; padding: 3px; background: #302c33e8;
+}
+.zoom button {
+  min-width: 44px; min-height: 44px; border: 0; border-radius: 5px;
+  background: #625760; color: #fff2d8; font-size: 1.2rem; font-weight: bold;
+}
 #map-error { position: absolute; inset: 15% 12% auto; padding: 14px; background: var(--light); border-radius: 8px; }
 .map-status {
   position: absolute; inset: 10px 10px auto; display: flex; align-items: center;
@@ -61,21 +68,26 @@ canvas { display: block; width: 100%; height: 100%; touch-action: manipulation; 
 }
 .speed button[aria-pressed="true"] { background: #f2c18d; color: #352817; }
 .situation {
-  margin-top: 10px; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--paper); font-size: .86rem; line-height: 1.35;
+  padding: 6px 13px; min-height: 37px; background: #51474c; color: #fff2df;
+  font-size: .82rem; line-height: 1.35; display: flex; align-items: center; gap: .38em; flex-wrap: wrap;
 }
-.situation strong { margin-right: .32em; }
-.management {
-  background: var(--paper); border: 1px solid #c2b093; border-radius: 12px; min-width: 0;
-  box-shadow: 0 6px 20px var(--shadow); align-self: start; overflow: clip;
+.situation strong { color: #f3c492; }
+.management { background: #352f37; }
+.management nav {
+  display: flex; justify-content: center; gap: 6px; padding: 5px 10px max(5px, env(safe-area-inset-bottom));
 }
-.management nav { display: grid; grid-template-columns: 1.3fr 1fr 1fr .85fr; padding: 5px; gap: 2px; background: #e6d9c1; }
 .management nav button {
-  background: none; border: 0; border-radius: 7px; padding: 2px 5px;
-  color: var(--ink); font-weight: bold; font-size: .85rem;
+  background: #524751; border: 1px solid #6e5d63; border-radius: 6px; padding: 2px 14px;
+  color: #fff0dd; font-weight: bold; font-size: .85rem;
 }
-.management nav button[aria-current] { background: var(--green); color: var(--light); }
-#panel { padding: 13px; max-height: calc(100dvh - 166px); overflow-y: auto; scrollbar-width: thin; }
+.management nav button[aria-expanded="true"] { background: #e8b284; color: #382929; }
+#drawer {
+  position: absolute; right: 12px; top: 65px; width: min(380px, 36vw); z-index: 2;
+  background: var(--paper); border: 1px solid #b5a295; border-radius: 9px;
+  box-shadow: 0 6px 26px #261f2699;
+}
+.drawer-top { display: flex; justify-content: end; padding: 6px 9px 0; }
+#panel { padding: 9px 13px 13px; max-height: calc(100dvh - 274px); overflow-y: auto; scrollbar-width: thin; }
 h2, h3 { font-family: Georgia, serif; line-height: 1.13; }
 h2 { font-size: 1.43rem; margin: 0 0 5px; }
 h3 { font-size: 1.06rem; margin: 0 0 5px; }
@@ -115,23 +127,20 @@ textarea {
   width: 100%; min-height: 80px; resize: vertical; padding: 8px;
   border: 1px solid #a9ac96; background: #fffcf3; color: var(--ink); border-radius: 6px;
 }
-@media (max-width: 840px) {
-  .dashboard { grid-template-columns: 1fr; gap: 8px; padding: 7px; }
-  .map { height: clamp(300px, 51dvh, 630px); border-radius: 9px; }
-  .situation { margin-top: 6px; padding: 6px 9px; font-size: .78rem; }
-  #panel { max-height: none; }
+@media (max-width: 720px) {
+  .map { height: max(356px, calc(100dvh - 171px)); }
   .top { min-height: 57px; padding: 7px 9px; gap: 5px; }
   .title h1 span { display: block; }
   .title p { display: none; }
   .balances dt { font-size: .64rem; }
   .map-status { inset: 6px 6px auto; }
-}
-@media (min-width: 560px) and (max-width: 840px) and (orientation: landscape) {
-  .dashboard { grid-template-columns: minmax(0, 1fr) minmax(262px, 38%); }
-  .map { height: clamp(245px, calc(100dvh - 106px), 550px); }
+  .situation { font-size: .76rem; }
+  .management nav button { flex: 1; padding: 2px 5px; }
+  #drawer { top: auto; bottom: 57px; right: 6px; left: 6px; width: auto; }
+  #panel { max-height: 43dvh; }
 }
 .link-button {
-  background: transparent; color: var(--green); border: 0; padding: 0 7px;
+  background: transparent; color: #ffe1aa; border: 0; padding: 0 7px;
   font-size: inherit; font-weight: bold; text-decoration: underline; text-underline-offset: .2em;
 }
 

@@ -3,11 +3,11 @@ export const DAY = 360;
 export const VERSION = 1;
 
 export const LOCATIONS = {
-  forest: { name: 'Pinewood', x: -8, z: -5 },
-  farm: { name: 'Winter Farm', x: 3, z: -6 },
+  forest: { name: 'Timber Intake', x: -8, z: -5 },
+  farm: { name: 'Grow Room', x: 3, z: -6 },
   kitchen: { name: 'Kitchen', x: 7, z: -2 },
   mill: { name: 'Sawmill', x: -7, z: 3 },
-  depot: { name: 'Warehouse', x: 0, z: 1 },
+  depot: { name: 'Dispatch', x: 0, z: 1 },
   hall: { name: 'Dining Hall', x: 5, z: 6 },
 };
 export const ROLES = {
