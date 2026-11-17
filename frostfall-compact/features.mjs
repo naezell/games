@@ -33,6 +33,8 @@ export const FEATURES = {
     buildExchange: ["Market exchange", "Collect its bonus on spot sales."],
   },
   Market: {
+    supplyMerchant: ["Supply merchant", "Buy limited shipments of raw materials or finished goods at the Market."],
+    marketSpecials: ["Featured market goods", "Earn a limited rotating bonus on spot sales."],
     contracts: ["Market contracts", "Take multi-stage jobs and ship installments."],
     bulk: ["Quick bulk order", "Take or deliver the original board-and-steak order."],
     accounts: ["Standing accounts", "Trade with the carpenter and inn. Their pickup clock pauses when off."],
@@ -47,8 +49,9 @@ export const FEATURES = {
   },
 };
 const names = Object.values(FEATURES).flatMap(Object.keys);
-export const feature = (s, id) => s.features?.[id] ?? (id !== "battery");
-export const featureDefaults = () => Object.fromEntries(names.map(id => [id, id !== "battery"]));
+const defaultSetting = id => id !== "battery" && id !== "marketSpecials";
+export const feature = (s, id) => s.features?.[id] ?? defaultSetting(id);
+export const featureDefaults = () => Object.fromEntries(names.map(id => [id, defaultSetting(id)]));
 export const featuresValid = value => !!value && Object.keys(value).length === names.length &&
   names.every(id => typeof value[id] === "boolean");
 export function setFeature(s, id, enabled) {

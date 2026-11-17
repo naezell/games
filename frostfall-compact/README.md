@@ -38,6 +38,8 @@ Every structure has two optional upgrade levels at its original plot. Higher lev
 
 After hiring a helper, assign **Deliver to pinned build** to collect the required finished goods from workshop outputs, the market reserve, or the camp crate. You still fund construction at the plot. At each workshop, **Recipe choice → Fill orders and pinned build first** can cover shortages automatically. Open the **Camp board** from Settings, Build, or the improvement pad to see shortages across your current jobs. Each addition has its own switch.
 
+The optional supply merchant sells limited stock at the Market. Finished premium goods unlock after two contracts or a Market Exchange. The separate **Featured market goods** switch adds a rotating spot-sale premium for a limited number of items per trading day. Both follow active play and can be switched off independently.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

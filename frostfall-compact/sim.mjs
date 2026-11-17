@@ -1,3 +1,4 @@
+import { TRADER, createTrading, advanceTrading, merchantStock, hasSpotBonus, spendSpotBonus, SPECIAL_BONUS, tradingValid } from "./trading.mjs";
 import { feature, featureDefaults, featuresValid, setFeature } from "./features.mjs";
 import { buildingLevel, newConstruction, migrateConstructionLevels, reservedForPlan, advanceConstruction, constructionIsValid, pinnedProject, supplyPlot } from "./construction.mjs";
 import { createMarket, marketIsValid, marketDay, marketAdvance, shipAccounts, marketTargets, marketNeed,
@@ -76,7 +77,8 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 7,
+    version: 8,
+    trading: createTrading(),
     features: featureDefaults(),
     cash: 0,
     levels: { pack: 0, saw: 0, grill: 0, storage: 0 },
@@ -332,6 +334,26 @@ export function handleLoad(s, key, action) {
   return false;
 }
 
+export const merchantAvailable = (s, good) => merchantStock(s, good) > 0 &&
+  (!TRADER[good].premium || buildingLevel(s, "exchange") > 0 || s.market.completed >= 2);
+export const quotedSpotPrice = (s, good) => spotPrice(s, good) + (hasSpotBonus(s, good) ? SPECIAL_BONUS : 0);
+
+export function buySupplies(s, good, fill = false) {
+  if (!near(s.player, SPOTS.sell) || !merchantAvailable(s, good)) return false;
+  const price = TRADER[good].price;
+  const n = Math.min(fill ? Infinity : 1, roomFor(s, s.player, good), merchantStock(s, good), Math.floor(s.cash / price));
+  if (!n) return false;
+  s.player.bag[good] += n;
+  s.cash -= n * price;
+  s.trading.bought[good] = (s.trading.bought[good] ?? 0) + n;
+  // Purchased stock would otherwise sell as soon as the next market tick starts.
+  if (Object.hasOwn(PRICES, good)) {
+    s.trading.hold = true;
+    s.player.sell = 0;
+  }
+  return true;
+}
+
 export function marketAction(s, action, id) {
   if (!near(s.player, SPOTS.sell)) return false;
   if (action === "accept") return contractAction(s, id);
@@ -490,7 +512,7 @@ function topUpStock(s, person, hasOrders) {
 function sellOne(s, person, good) {
   person.sell = 0;
   person.bag[good]--;
-  s.cash += spotPrice(s, good);
+  s.cash += spotPrice(s, good) + spendSpotBonus(s, good);
   s.sold++;
   animate(person, "stack", good);
 }
@@ -531,12 +553,14 @@ export function interact(s, person = s.player, dt = .1) {
   }
 
   const atCounter = near(person, SPOTS.sell);
+  if (manual && !atCounter) s.trading.hold = false;
+  const automaticSales = !manual || (feature(s, "autoSell") && !s.trading.hold);
   if (atCounter && !manual && feature(s, "routes") && person.route.reserve && saleGoods.some(k => b[k])) {
     if (s.order) deliverBulk(s, person);
     for (const t of marketTargets(s)) packAtCounter(s, t.id, person, true);
   }
-  if (atCounter && (!manual || feature(s, "autoSell")) && feature(s, "stockTargets") && (b.boards || b.steaks)) topUpStock(s, person, manual);
-  const good = atCounter && (!manual || feature(s, "autoSell")) && saleGoods.find(k =>
+  if (atCounter && automaticSales && feature(s, "stockTargets") && (b.boards || b.steaks)) topUpStock(s, person, manual);
+  const good = atCounter && automaticSales && saleGoods.find(k =>
     b[k] > 0 && b[k] > (manual ? keepForMarketAndPlan(s, k) : 0));
   person.sell = good ? (person.sell || 0) + dt : 0;
   if (person.sell + 1e-9 >= .6) sellOne(s, person, good);
@@ -668,6 +692,7 @@ function runStation(s, key, dt) {
 export function tick(s, dt = .1) {
   const day = marketDay(s);
   marketAdvance(s, dt);
+  advanceTrading(s, dt);
   if (marketDay(s) > day) shipAccounts(s);
   advanceConstruction(s, dt);
   for (const [key, source] of Object.entries(s.sources)) {
@@ -752,7 +777,7 @@ const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3, 
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2, 3, 4, 5, 6, 7].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3, 4, 5, 6, 7, 8].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
     if (s.version === 2 && !migrateOperations(s)) return null;
@@ -779,7 +804,14 @@ export function deserialize(text) {
       s.features.campBoard = feature(s, "upgrades") || feature(s, "construction") || feature(s, "contracts");
       for (const key of stationKeys) s.stations[key].followDemand = false;
     }
-    if (!featuresValid(s.features) || !constructionIsValid(s)) return null;
+    if (s.version === 7) {
+      s.version = 8;
+      s.trading = createTrading();
+      if (!s.features) return null;
+      s.features.supplyMerchant = feature(s, "upgrades") || feature(s, "construction") || feature(s, "contracts");
+      s.features.marketSpecials = false;
+    }
+    if (!featuresValid(s.features) || !constructionIsValid(s) || !tradingValid(s.trading)) return null;
     if (!marketIsValid(s.market) || !integer(s.timberSorted, 30) ||
         !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
         typeof s.ownedRacks?.timber !== "boolean" || typeof s.ownedRacks?.food !== "boolean" ||
