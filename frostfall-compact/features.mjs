@@ -4,6 +4,7 @@ export const FEATURES = {
     autoHandling: ["Automatic station handling", "Load or collect by standing at a station. Manual buttons always work."],
     autoSell: ["Automatic spot sales", "Sell surplus at the Market. The manual sale button always works."],
     premium: ["Premium recipes", "Produce finished lumber and steak trays. Existing goods remain usable."],
+    demandRecipes: ["Demand-based recipes", "Let stations make whichever goods a pinned plan or current order still needs."],
     stockTargets: ["Stock targets", "Make basics first and keep spare stock at the counter."],
     sorting: ["Timber sorting", "Sort logs for faster finishing. Existing selected logs can still be recovered."],
     fuel: ["Offcut fuel", "Collect sawmill offcuts and use them to cook double trays."],
@@ -15,6 +16,7 @@ export const FEATURES = {
     stationProjects: ["Station projects", "Use drop-off bins and specialized workshop rebuilds."],
     construction: ["Camp construction", "Build permanent structures. Pauses unfinished work."],
     helpers: ["Helpers", "Keep hired helpers working around camp."],
+    projectHelpers: ["Construction helpers", "Assign hired helpers to deliver finished goods to your pinned plot."],
     routes: ["Custom helper routes", "Set supply routes, pickup priorities, and order packing."],
     cart: ["Handcart", "Use the handcart and its extra carrying slots."],
     cartRacks: ["Specialized cart racks", "Use the timber or food rack. When off, use the mixed bed."],
@@ -37,6 +39,7 @@ export const FEATURES = {
     loadingBay: ["Loading bay", "Build and use the Market’s larger shipments."],
   },
   Display: {
+    campBoard: ["Camp board", "See inventory, bottlenecks, and missing goods for plans and orders in one view."],
     markers: ["Station markers", "Show tappable labels and status at stations. Build plans can still guide you."],
     jobHud: ["Order reminder", "Show the current contract above the map."],
     animation: ["Work animations", "Show tool swings, carrying motions, and other character animations."],

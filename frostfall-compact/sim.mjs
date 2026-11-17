@@ -1,5 +1,5 @@
 import { feature, featureDefaults, featuresValid, setFeature } from "./features.mjs";
-import { buildingLevel, newConstruction, migrateConstructionLevels, reservedForPlan, advanceConstruction, constructionIsValid } from "./construction.mjs";
+import { buildingLevel, newConstruction, migrateConstructionLevels, reservedForPlan, advanceConstruction, constructionIsValid, pinnedProject, supplyPlot } from "./construction.mjs";
 import { createMarket, marketIsValid, marketDay, marketAdvance, shipAccounts, marketTargets, marketNeed,
   packGoods, contractAction, accountAction, closeMarketJob, BAY } from "./market.mjs";
 
@@ -53,11 +53,11 @@ export const REBUILDS = {
 export const TARGETS = [0, 4, 8, 12, 16];
 export const ROUTE_PRIORITIES = { supply: "Supply first", pickup: "Pickup first" };
 export const FUEL_CAP = 16;
-const stationExtras = () => ({ staging: 0, bin: false, layout: null, target: 0, manual: false });
+const stationExtras = () => ({ staging: 0, bin: false, layout: null, target: 0, manual: false, followDemand: false });
 const routeDefaults = () => ({ line: "saw", min: 2, priority: "supply", reserve: false });
 export const JOBS = {
   lumber: "Supply sawmill", meat: "Supply grill", haul: "Haul finished goods",
-  clear: "Clear full outputs first", split: "Split gathering", route: "Run a route",
+  clear: "Clear full outputs first", split: "Split gathering", route: "Run a route", builder: "Deliver to pinned build",
 };
 export const BULK = { boards: 8, steaks: 8, reward: 92 };
 const stationKeys = Object.keys(LINES);
@@ -76,7 +76,7 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 6,
+    version: 7,
     features: featureDefaults(),
     cash: 0,
     levels: { pack: 0, saw: 0, grill: 0, storage: 0 },
@@ -165,12 +165,17 @@ export function onHand(s, good) {
   return s.player.bag[good] + s.stash[good] + waiting + (s.market.stock[good] ?? 0) +
     s.workers.reduce((n, w, i) => n + (workerActive(s, i) ? w.bag[good] : 0), 0);
 }
-function nextGood(s, key) {
-  const st = s.stations[key], basic = LINES[key].goods[0];
+export function nextGood(s, key) {
+  const st = s.stations[key], [basic, premium] = LINES[key].goods;
   if (!feature(s, "premium")) return basic;
-  if (!feature(s, "stockTargets")) return st.recipe;
-  const scheduled = st.jobs.reduce((n, job) => n + (job.good === basic ? job.units : 0), 0);
-  return onHand(s, basic) + scheduled < st.target ? basic : st.recipe;
+  const scheduled = good => st.jobs.reduce((n, job) => n + (job.good === good ? job.units : 0), 0);
+  if (feature(s, "demandRecipes") && st.followDemand) {
+    const plot = pinnedProject(s);
+    const needs = good => (plot?.needs[good] ?? 0) + marketNeed(s, good) + bulkRemaining(s, good);
+    const short = [basic, premium].find(good => needs(good) > onHand(s, good) + scheduled(good));
+    if (short) return short;
+  }
+  return feature(s, "stockTargets") && onHand(s, basic) + scheduled(basic) < st.target ? basic : st.recipe;
 }
 export function recipeSeconds(s, key, good) {
   const st = s.stations[key], basic = good === LINES[key].goods[0];
@@ -263,6 +268,7 @@ export function setWorkerRoute(s, index, field, value) {
 export function setStation(s, key, field, value) {
   if (!stationKeys.includes(key) || stationAt(s.player) !== key) return false;
   if (field === "target" && feature(s, "stockTargets") && TARGETS.includes(value)) s.stations[key].target = value;
+  else if (field === "followDemand" && feature(s, "demandRecipes") && typeof value === "boolean") s.stations[key].followDemand = value;
   else if (field === "manual" && typeof value === "boolean") s.stations[key].manual = value;
   else if (key === "grill" && field === "doubles" && feature(s, "fuel") && typeof value === "boolean") s.doubles = value;
   else return false;
@@ -382,7 +388,7 @@ export function purchase(s, key) {
 }
 
 export function assign(s, i, job) {
-  if (!s.workers[i] || !workerActive(s, i) || !Object.hasOwn(JOBS, job) || (job === "route" && !feature(s, "routes"))) return false;
+  if (!s.workers[i] || !workerActive(s, i) || !Object.hasOwn(JOBS, job) || (job === "route" && !feature(s, "routes")) || (job === "builder" && !feature(s, "projectHelpers"))) return false;
   s.workers[i].job = job;
   return true;
 }
@@ -554,8 +560,59 @@ export function retrieve(s, k) {
   s.player.bag[k] += n;
 }
 
+function projectTask(s, w) {
+  if (w.job !== "builder" || !feature(s, "projectHelpers")) return null;
+  const plan = pinnedProject(s);
+  if (!plan) return null;
+  if (saleGoods.some(k => plan.needs[k] > 0 && w.bag[k])) {
+    return {
+      position: plan.position,
+      run() {
+        if (!near(w, plan.position, 1.45)) return;
+        const good = supplyPlot(s, plan.id, plan.level, w.bag);
+        if (good) animate(w, "stack", good);
+      },
+    };
+  }
+  if (count(w.bag)) return null;
+  const sources = [
+    { position: SPOTS.build, inventory: s.stash },
+    { position: SPOTS.sell, inventory: s.market.stock },
+    ...stationKeys.map(key => ({
+      position: SPOTS[key + "Out"],
+      inventory: s.stations[key],
+      field: good => LINES[key].goods[0] === good ? "output" : LINES[key].goods[1] === good ? "premium" : null,
+    })),
+  ];
+  const need = Object.fromEntries(Object.entries(plan.needs).map(([k, n]) => [k, Math.max(0, n -
+    s.workers.reduce((sum, other, i) => sum + (other !== w && workerActive(s, i) && other.job === "builder" ? other.bag[k] : 0), 0))]));
+  const inStock = (source, good) => source.inventory[source.field ? source.field(good) : good] ?? 0;
+  const distance = ({ position }) => Math.hypot(w.x - position.x, w.z - position.z) + Math.hypot(plan.position.x - position.x, plan.position.z - position.z);
+  const source = sources.filter(src => saleGoods.some(k => need[k] > 0 && inStock(src, k)))
+    .sort((a, b) => distance(a) - distance(b))[0];
+  if (!source) return null;
+  return {
+    position: source.position,
+    run() {
+      for (const good of saleGoods) {
+        const units = Math.min(need[good] ?? 0, inStock(source, good), roomFor(s, w, good));
+        if (!units) continue;
+        const field = source.field ? source.field(good) : good;
+        source.inventory[field] -= units;
+        w.bag[good] += units;
+        animate(w, "stack", good);
+      }
+    },
+  };
+}
+
 function workerTarget(s, w) {
   const b = w.bag;
+  if (w.job === "builder") {
+    if (!feature(s, "projectHelpers") || !feature(s, "construction")) return null;
+    const raw = stationKeys.find(key => b[LINES[key].raw]);
+    return raw ? SPOTS[raw + "In"] : null;
+  }
   if (saleGoods.some(k => b[k])) return SPOTS.sell;
   const route = w.job === "route" && feature(s, "routes") ? w.route : null;
   const job = w.job === "route" && !route ? (w.route.line === "saw" ? "lumber" : "meat") : w.job;
@@ -623,13 +680,16 @@ export function tick(s, dt = .1) {
   interact(s, s.player, dt);
   for (const [i, w] of s.workers.entries()) {
     if (!workerActive(s, i)) continue;
-    const target = workerTarget(s, w);
-    if (target && move(w, target, dt, buildingLevel(s, "dispatch") >= 2 ? 3.9 : 3)) interact(s, w, dt);
+    const delivery = projectTask(s, w);
+    const target = delivery?.position ?? workerTarget(s, w);
+    const arrived = target && move(w, target, dt, buildingLevel(s, "dispatch") >= 2 ? 3.9 : 3);
+    if (arrived && !delivery) interact(s, w, dt);
     else {
       const active = motions.get(w);
       if (active && ((active.left -= dt) <= 0 || ["chop", "gather"].includes(active.kind))) motions.delete(w);
       w.gather = 0;
       w.sell = 0;
+      if (arrived && delivery) delivery.run();
     }
   }
 }
@@ -692,7 +752,7 @@ const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3, 
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2, 3, 4, 5, 6].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3, 4, 5, 6, 7].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
     if (s.version === 2 && !migrateOperations(s)) return null;
@@ -711,6 +771,14 @@ export function deserialize(text) {
       if (!migrateConstructionLevels(s)) return null;
       if (s.features) s.features.buildingLevels = feature(s, "construction");
     }
+    if (s.version === 6) {
+      s.version = 7;
+      if (!s.features || !s.stations?.saw || !s.stations.grill) return null;
+      s.features.demandRecipes = feature(s, "premium");
+      s.features.projectHelpers = feature(s, "helpers") && feature(s, "construction");
+      s.features.campBoard = feature(s, "upgrades") || feature(s, "construction") || feature(s, "contracts");
+      for (const key of stationKeys) s.stations[key].followDemand = false;
+    }
     if (!featuresValid(s.features) || !constructionIsValid(s)) return null;
     if (!marketIsValid(s.market) || !integer(s.timberSorted, 30) ||
         !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
@@ -726,7 +794,7 @@ export function deserialize(text) {
       const st = s.stations?.[key], { goods } = LINES[key];
       if (!st || !goods.includes(st.recipe) || (st.equipment !== null && !Object.hasOwn(EQUIPMENT, st.equipment)) ||
           (st.layout !== null && !Object.hasOwn(REBUILDS, st.layout)) || typeof st.bin !== "boolean" ||
-          typeof st.manual !== "boolean" || !TARGETS.includes(st.target) || !integer(st.staging, stageCapacity(s, key, true)) ||
+          typeof st.manual !== "boolean" || typeof st.followDemand !== "boolean" || !TARGETS.includes(st.target) || !integer(st.staging, stageCapacity(s, key, true)) ||
           !integer(st.input) || inputCount(s, key) > inputCapacity(s, key, true) || !integer(st.output) || !integer(st.premium) ||
           !Array.isArray(st.jobs) || st.jobs.length > slots(s, key, true) ||
           !st.jobs.every(job => job && goods.includes(job.good) && job.left > 0 && number(job.left, 17.5) &&

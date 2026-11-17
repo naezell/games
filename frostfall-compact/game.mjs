@@ -36,9 +36,9 @@ import {
   cancelBulk, CART_RACKS, BIN_COST, REBUILDS, TARGETS, ROUTE_PRIORITIES, FUEL_CAP,
   cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
   handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
-  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity,
+  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity, nextGood,
 } from "./sim.mjs";
-import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled } from "./construction.mjs";
+import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled, pinnedProject } from "./construction.mjs";
 import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor } from "./market.mjs";
 const THREE = globalThis.THREE;
 const KEY = "frostfall-compact-v1",
@@ -344,6 +344,7 @@ if (renderer) {
   let destination = null;
   let buildMenu = false;
   let settingsMenu = false;
+  let ledgerMenu = false;
   let catalog = false;
   let inspectedBuild = null;
   const tmp = new THREE.Vector3();
@@ -355,6 +356,7 @@ if (renderer) {
     el.onclick = () => {
       buildMenu = false;
       settingsMenu = false;
+      ledgerMenu = false;
       destination = { ...SPOTS[key] };
       updateUI();
     };
@@ -370,6 +372,7 @@ if (renderer) {
     if (!state.plan) return;
     buildMenu = true;
     settingsMenu = false;
+    ledgerMenu = false;
     catalog = false;
     inspectedBuild = null;
     destination = BUILDINGS[state.plan];
@@ -511,16 +514,20 @@ if (renderer) {
   function helperControls(w, i) {
     const route = w.route;
     const routeSelect = (label, field, options) => select(label, `data-route="${field}" data-worker="${i}"`, route[field], options);
-    const jobs = Object.entries(JOBS).filter(([job]) => job !== "route" || enabled("routes")).map(([job, name]) =>
+    const jobs = Object.entries(JOBS).filter(([job]) => (job !== "route" || enabled("routes")) &&
+      (job !== "builder" || enabled("projectHelpers") && enabled("construction"))).map(([job, name]) =>
       `<button data-worker="${i}" data-job="${job}" aria-pressed="${w.job === job}" class="${w.job === job ? "active" : ""}">${name}</button>`).join("");
     const settings = w.job === "route" && enabled("routes") ?
       `<div class="fields">${routeSelect("Route", "line", { saw: "Forest → Sawmill → Counter", grill: "Boars → Grill → Counter" })}
       ${routeSelect("Preferred load", "min", Object.fromEntries(Array.from({ length: workerCapacity(state) },
         (_, i) => [i + 1, `${i + 1} item${i ? "s" : ""}`])))}
       ${routeSelect("Priority", "priority", ROUTE_PRIORITIES)}</div>` : "";
+    const project = w.job === "builder" && enabled("projectHelpers") && enabled("construction") ? pinnedProject(state) : null;
+    const buildNote = w.job === "builder" ? `<p>${project ? `Delivering to ${BUILDINGS[project.id].name} level ${project.level}.` :
+      "Waiting for an enabled build plan. Carried goods stay with this helper until you reassign it or pin a suitable plan."}</p>` : "";
     return details(`worker-${i}`, `Helper ${i + 1} · ${w.job === "route" ? (route.line === "saw" ? "Timber route" : "Food route") : JOBS[w.job]}`,
-      `<div class="helper">${jobs}</div>${settings}
-      ${enabled("routes") ? `<div class="fields">${routeSelect("At the counter", "reserve", { false: "Sell goods", true: "Pack jobs first · sell surplus" })}</div>` : ""}`);
+      `<div class="helper">${jobs}</div>${settings}${buildNote}
+      ${enabled("routes") && w.job !== "builder" ? `<div class="fields">${routeSelect("At the counter", "reserve", { false: "Sell goods", true: "Pack jobs first · sell surplus" })}</div>` : ""}`);
   }
   function stationControls(key, st, atInput) {
     const { raw, goods } = LINES[key], load = state.player.bag[raw];
@@ -529,7 +536,10 @@ if (renderer) {
     const mode = enabled("autoHandling") ? setting("Handling", "manual", st.manual, { false: "Automatic", true: "Manual" }) : "";
     const target = enabled("stockTargets") ? setting(`Keep ${goods[0]}`, "target", st.target,
       Object.fromEntries(TARGETS.map(n => [n, n || "Off"]))) : "";
-    const handling = mode || target ? `<div class="fields">${mode}${target}</div>${target ?
+    const demand = enabled("demandRecipes") && enabled("premium") ? setting("Recipe choice", "followDemand", st.followDemand,
+      { false: "Use selected recipe", true: "Fill orders and pinned build first" }) : "";
+    const handling = mode || target || demand ? `<div class="fields">${mode}${target}${demand}</div>${demand && st.followDemand ?
+      `<p class="station-details">Next product · ${NAMES[nextGood(state, key)]}</p>` : ""}${target ?
       `<p class="station-details">${onHand(state, goods[0])} ${goods[0]} on hand. A stock target holds surplus at the counter.</p>` : ""}` : "";
     const timber = key === "saw" && (enabled("sorting") || state.timberSorted)
       ? `<p class="station-details">${state.timberSorted} selected logs. Selected timber speeds up finished lumber.</p><div class="actions">
@@ -644,7 +654,7 @@ if (renderer) {
     const improvements = Object.keys(BUILDINGS).reduce((sum, k) => sum + Math.max(0, buildingLevel(state, k, true) - 1), 0);
     return `<p class="station-details">${finished}/${buildingCount} structures built${enabled("buildingLevels") ? ` · ${improvements}/${buildingCount * 2} upgrades` : ""}.
       Pin a plot to set aside what the plan still needs from automatic sales.</p>
-      ${action("Buy equipment & hire helpers", 'data-construction="shop"')}
+      ${action("Buy equipment & hire helpers", 'data-construction="shop"')}${ledgerButton()}
       <div class="offer-list build-list">${Object.entries(BUILDINGS).map(([key, definition]) => {
         const owned = buildingLevel(state, key, true);
         const level = nextLevel(state, key);
@@ -658,9 +668,25 @@ if (renderer) {
           <p>${plan.effect}</p>${action(buttonLabel, `data-build-plan="${key}"`)}</article>`;
       }).join("")}</div>`;
   }
+  const ledgerButton = () => enabled("campBoard") ? action("Open camp board", 'data-ledger="open"') : "";
+  function campBoard() {
+    const plot = pinnedProject(state);
+    const orders = marketTargets(state);
+    const rows = Object.entries(PRICES).map(([good]) => {
+      const needed = (plot?.needs[good] ?? 0) + bulkRemaining(state, good) + orders.reduce((n, target) => n + neededFor(target, good), 0);
+      const stock = onHand(state, good);
+      return `<tr><th scope="row">${NAMES[good]}</th><td>${stock}</td><td>${needed}</td><td>${Math.max(0, needed - stock)}</td></tr>`;
+    }).join("");
+    const station = (key, name) => action(`${name} · ${stationStatus(state, key)}`, `data-visit="${key}In"`);
+    return `<p class="station-details">${state.cash} coins · ${state.sold} goods sold or shipped · ${state.market.completed} contracts finished</p>
+      <table class="camp-stock"><thead><tr><th scope="col">Goods</th><th scope="col">On hand</th><th scope="col">Needed</th><th scope="col">To make</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="station-details">Needed includes enabled orders and the pinned construction phase. Goods on hand may still need hauling.</p>
+      <div class="actions">${station("saw", "Sawmill")}${station("grill", "Grill")}${action("Walk to Market", 'data-visit="sell"')}
+      ${plot ? action("Open pinned plan", 'data-ledger="plan"') : ""}${action("Close", 'data-ledger="close"')}</div>`;
+  }
   function settingsControls() {
     return `<p class="station-details">Choose what you want in this save. Turning features off preserves purchases, materials, and unfinished work.</p>
-      <div class="actions">${action("Simple camp", 'data-preset="simple"')}${action("Full camp", 'data-preset="all"')}</div>
+      <div class="actions">${action("Simple camp", 'data-preset="simple"')}${action("Full camp", 'data-preset="all"')}${ledgerButton()}</div>
       <div class="feature-list">${Object.entries(FEATURES).map(([group, flags]) =>
         details("features-" + group, group, Object.entries(flags).map(([id, [label, description]]) =>
           `<label class="feature-choice"><span><strong>${label}</strong><small>${description}</small></span>
@@ -744,7 +770,7 @@ if (renderer) {
             )
             .join("") +
           "</div>" +
-          cartControls() + state.workers.map((w, i) => workerActive(state, i) ? helperControls(w, i) : "").join("");
+          ledgerButton() + cartControls() + state.workers.map((w, i) => workerActive(state, i) ? helperControls(w, i) : "").join("");
       } else if (k === "sell") {
         title = "Market counter";
         content = marketControls(b);
@@ -776,6 +802,12 @@ if (renderer) {
       content = settingsControls();
       hint = "Your choices are saved with this camp.";
     }
+    if (ledgerMenu && enabled("campBoard")) {
+      title = "Camp board";
+      icon = "▦";
+      content = campBoard();
+      hint = "Check what is on hand and what still needs making.";
+    }
     $("hint").textContent = hint;
     $("panelTitle").textContent = title;
     $("panelIcon").textContent = icon;
@@ -799,12 +831,16 @@ if (renderer) {
       lastPanel = content;
     }
   }
-  $("jobStatus").onclick = () => { buildMenu = false; settingsMenu = false; destination = { ...SPOTS.sell }; updateUI(); };
-  $("settingsMenu").onclick = () => { settingsMenu = !settingsMenu; buildMenu = false; updateUI(); };
-  $("buildMenu").onclick = () => { settingsMenu = false; buildMenu = !buildMenu; catalog = false; inspectedBuild = null; updateUI(); };
+  $("jobStatus").onclick = () => { buildMenu = false; settingsMenu = false; ledgerMenu = false; destination = { ...SPOTS.sell }; updateUI(); };
+  $("settingsMenu").onclick = () => { settingsMenu = !settingsMenu; buildMenu = false; ledgerMenu = false; updateUI(); };
+  $("buildMenu").onclick = () => { settingsMenu = false; ledgerMenu = false; buildMenu = !buildMenu; catalog = false; inspectedBuild = null; updateUI(); };
   $("panelContent").addEventListener("click", (e) => {
     let t = e.target.closest("button");
     if (!t) return;
+    if (t.dataset.ledger === "open") { ledgerMenu = true; settingsMenu = false; buildMenu = false; }
+    if (t.dataset.ledger === "close") ledgerMenu = false;
+    if (t.dataset.ledger === "plan") { ledgerMenu = false; buildMenu = true; catalog = false; inspectedBuild = null; }
+    if (Object.hasOwn(SPOTS, t.dataset.visit)) { ledgerMenu = false; destination = SPOTS[t.dataset.visit]; }
     if (t.dataset.preset && featurePreset(state, t.dataset.preset)) {
       setGraphicsQuality();
       resize();

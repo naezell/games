@@ -78,15 +78,17 @@ export function trackPlan(s, id) {
   s.planLevel = level;
   return true;
 }
-export function reservedForPlan(s, good) {
+export function pinnedProject(s) {
   const { plan: id, planLevel: level } = s;
-  if (!id || !phaseEnabled(s, id, level) || !unlocked(s, id, level)) return 0;
-  const site = sitePhase(s, id, level);
-  if (site.left !== null) return 0;
-  return Math.max(0, (BUILDINGS[id].levels[level - 1].goods[good] ?? 0) - (site.delivered[good] ?? 0) - s.stash[good]);
+  if (!id || !phaseEnabled(s, id, level) || !unlocked(s, id, level) || sitePhase(s, id, level).left !== null) return null;
+  return { id, level, position: BUILDINGS[id], needs: plotInfo(s, id, level).needs };
+}
+export function reservedForPlan(s, good) {
+  const plan = pinnedProject(s);
+  return plan ? Math.max(0, (plan.needs[good] ?? 0) - s.stash[good]) : 0;
 }
 
-export const atPlot = (s, id) => Math.hypot(s.player.x - BUILDINGS[id].x, s.player.z - BUILDINGS[id].z) < 1.45;
+export const atPlot = (s, id, person = s.player) => Math.hypot(person.x - BUILDINGS[id].x, person.z - BUILDINGS[id].z) < 1.45;
 export function plotInfo(s, id, level = 1) {
   const plan = BUILDINGS[id].levels[level - 1];
   const site = sitePhase(s, id, level);
@@ -101,22 +103,27 @@ export function buildAtPlot(s, id, action, level = 1) {
   const plan = BUILDINGS[id].levels[level - 1];
   const info = plotInfo(s, id, level);
   if (action === "supply") {
-    let moved = false;
-    for (const [good, needed] of Object.entries(info.needs)) {
-      const carried = Math.min(needed, s.player.bag[good]);
-      const held = Math.min(needed - carried, s.stash[good]);
-      if (!carried && !held) continue;
-      s.player.bag[good] -= carried;
-      s.stash[good] -= held;
-      site.delivered[good] = (site.delivered[good] ?? 0) + carried + held;
-      moved = true;
-    }
-    return moved;
+    const carried = supplyPlot(s, id, level, s.player.bag);
+    const stored = supplyPlot(s, id, level, s.stash);
+    return !!(carried || stored);
   }
   if (action !== "build" || !info.ready || !info.funded) return false;
   s.cash -= plan.cash;
   site.left = plan.seconds;
   return true;
+}
+export function supplyPlot(s, id, level, bag) {
+  const site = sitePhase(s, id, level);
+  const { needs } = plotInfo(s, id, level);
+  let delivered = null;
+  for (const [good, n] of Object.entries(needs)) {
+    const units = Math.min(n, bag[good]);
+    if (!units) continue;
+    bag[good] -= units;
+    site.delivered[good] = (site.delivered[good] ?? 0) + units;
+    delivered = good;
+  }
+  return delivered;
 }
 export function advanceConstruction(s, dt) {
   if (!feature(s, "construction")) return;
