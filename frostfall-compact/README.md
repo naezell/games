@@ -28,6 +28,12 @@ Tap a place label to walk there, drag the clearing or use the joystick, or move 
 
 The improvement pad also has a 16-item crate. Set down goods, then retrieve them by type. Raw goods can be returned to their renewable source for no coins.
 
+## Build
+
+Tap **Build** in the header to see eight permanent structures. Open a plan to mark its plot and reserve the necessary finished goods from automatic sales. Deliver materials from your load or the camp crate in as many visits as needed, then fund construction at the marked plot. The Timber Yard is a first project you can fund by making five boards, selling three for 12 coins, and delivering the two that remain.
+
+The yard and cold store improve gathering and unlock the workshop extensions. Build a storehouse to enlarge the camp crate, then choose more cart capacity, a third helper position, or better spot prices. Existing equipment, shop upgrades, and helpers are available from **Buy equipment & hire helpers** or the improvement pad.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

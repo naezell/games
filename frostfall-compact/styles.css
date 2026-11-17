@@ -25,3 +25,11 @@ header{padding-left:max(11px,env(safe-area-inset-left));padding-right:max(11px,e
 #jobStatus{flex:none;text-align:left;border:0;border-bottom:1px solid #d5e9df;background:#e4f2e9;color:#315d59;font-size:11px;font-weight:800;padding:5px 18px}
 #jobStatus:focus-visible{outline:2px solid #24546a;outline-offset:-2px}
 @media(max-width:600px){#jobStatus{padding-inline:11px}}
+
+#buildMenu{border:1px solid #b0cbbd;border-radius:10px;background:#d9efe4;padding:7px 10px;color:#25554d;font-weight:850;min-height:37px}
+#buildMenu[aria-pressed=true]{background:#366f69;border-color:#366f69;color:#fff}
+.plot-marker{border-color:#e5bc72;background:#fff3d5;color:#685028;max-width:104px;white-space:normal}
+.plot-marker span{color:#805c2d}
+.blueprint-card progress{width:min(100%,190px);height:12px;accent-color:#548977}
+.build-list .operation-card{margin:0}
+@media(max-width:420px){header{gap:7px}.cash{padding-inline:6px}#pause{width:32px}#buildMenu{padding-inline:7px}header h1{font-size:17px}}
