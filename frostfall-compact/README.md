@@ -40,6 +40,8 @@ After hiring a helper, assign **Deliver to pinned build** to collect the require
 
 The optional supply merchant sells limited stock at the Market. Finished premium goods unlock after two contracts or a Market Exchange. The separate **Featured market goods** switch adds a rotating spot-sale premium for a limited number of items per trading day. Both follow active play and can be switched off independently.
 
+The Market’s optional **Odd jobs** board offers a short untimed order alongside your main contract. At the Sawmill and Grill, buy optional **Workshop attachments** for faster or larger batches. Only one attachment runs at each station, and owned attachments can be swapped for free. Each has its own Settings switch.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

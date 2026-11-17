@@ -27,9 +27,9 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, buySupplies, quotedSpotPrice, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, buySupplies, quotedSpotPrice, changeAttachment, activeAttachment, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
-import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
+import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS, quickOffers } from "./market.mjs";
 import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo, buildingLevel, nextLevel, reservedForPlan } from "./construction.mjs";
 const at = (p, k) => Object.assign(p, { x: SPOTS[k].x, z: SPOTS[k].z });
 const advance = (s, seconds) => {
@@ -268,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -470,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -845,4 +845,94 @@ test("featured prices are optional, capped, then rotate to the next goods", () =
   setFeature(s, "marketSpecials", false);
   assert.equal(quotedSpotPrice(s, "steaks"), 5);
   assert.ok(deserialize(serialize(s)));
+});
+
+test("attachments reserve a batch, keep ownership when disabled, and swap without repurchase", () => {
+  let s = createState();
+  s.cash = 200;
+  assert.equal(changeAttachment(s, "saw", "gangSaw"), false);
+  at(s.player, "sawIn");
+  assert.ok(changeAttachment(s, "saw", "gangSaw"));
+  assert.equal(s.cash, 168);
+  s.stations.saw.input = 2;
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].units, 3);
+  assert.equal(s.stations.saw.input, 0);
+  setFeature(s, "gangSaw", false);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  assert.equal(activeAttachment(s, "saw"), null);
+  advance(s, 7);
+  assert.equal(s.stations.saw.output, 3);
+  s.stations.saw.input = 2;
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].units, 1);
+  s.stash.lumber = 2;
+  assert.ok(changeAttachment(s, "saw", "finishingJig"));
+  const before = s.cash;
+  setFeature(s, "gangSaw", true);
+  assert.ok(changeAttachment(s, "saw", "gangSaw"));
+  assert.equal(s.cash, before);
+  assert.equal(s.stash.lumber, 0);
+});
+
+test("grill press never spends fuel and heat rack speeds up double trays", () => {
+  const s = createState();
+  s.cash = 150;
+  s.stash.lumber = 2;
+  at(s.player, "grillIn");
+  assert.ok(changeAttachment(s, "grill", "grillPress"));
+  s.stations.grill.input = 2;
+  s.fuel = 1;
+  tick(s);
+  assert.equal(s.stations.grill.jobs[0].units, 2);
+  assert.equal(s.fuel, 1);
+  advance(s, 6);
+  assert.ok(changeAttachment(s, "grill", "warmingRack"));
+  assert.ok(selectRecipe(s, "grill", "trays"));
+  assert.ok(setStation(s, "grill", "doubles", true));
+  s.stations.grill.input = 5;
+  tick(s);
+  assert.equal(s.fuel, 0);
+  assert.equal(s.stations.grill.jobs[0].left, 13.125);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("odd jobs coexist, pause with packed goods, and rotate after payout", () => {
+  let s = createState();
+  at(s.player, "sell");
+  assert.deepEqual(quickOffers(s), ["fence", "lunch", "kettle"]);
+  assert.ok(marketAction(s, "accept", "builder"));
+  assert.ok(marketAction(s, "oddJob", "fence"));
+  assert.equal(marketAction(s, "oddJob", "lunch"), false);
+  s.player.bag.boards = 2;
+  assert.ok(marketAction(s, "pack", "quick"));
+  setFeature(s, "quickJobs", false);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  assert.equal(s.market.quick.packed.boards, 2);
+  assert.deepEqual(marketTargets(s).map(t => t.id), ["contract"]);
+  assert.equal(marketAction(s, "pack", "quick"), false);
+  setFeature(s, "quickJobs", true);
+  s.player.bag.boards = 2;
+  assert.ok(marketAction(s, "pack", "quick"));
+  assert.equal(s.cash, 29);
+  assert.equal(s.market.quick, null);
+  assert.equal(s.market.quickCount, 1);
+  assert.deepEqual(quickOffers(s), ["lunch", "kettle", "shelves"]);
+  assert.equal(s.market.active.id, "builder");
+});
+
+test("a previous Simple Camp save keeps the new systems off", () => {
+  const s = createState();
+  featurePreset(s, "simple");
+  s.version = 8;
+  delete s.attachments;
+  for (const id of ["gangSaw", "finishingJig", "grillPress", "warmingRack", "quickJobs"]) delete s.features[id];
+  delete s.market.quick;
+  delete s.market.quickCount;
+  const restored = deserialize(serialize(s));
+  assert.ok(restored);
+  assert.equal(feature(restored, "quickJobs"), false);
+  assert.equal(feature(restored, "gangSaw"), false);
 });

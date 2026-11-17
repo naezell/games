@@ -2,7 +2,7 @@ import { TRADER, createTrading, advanceTrading, merchantStock, hasSpotBonus, spe
 import { feature, featureDefaults, featuresValid, setFeature } from "./features.mjs";
 import { buildingLevel, newConstruction, migrateConstructionLevels, reservedForPlan, advanceConstruction, constructionIsValid, pinnedProject, supplyPlot } from "./construction.mjs";
 import { createMarket, marketIsValid, marketDay, marketAdvance, shipAccounts, marketTargets, marketNeed,
-  packGoods, contractAction, accountAction, closeMarketJob, BAY } from "./market.mjs";
+  packGoods, quickJobAction, contractAction, accountAction, closeMarketJob, BAY } from "./market.mjs";
 
 export const GOODS = ["logs", "boards", "lumber", "meat", "steaks", "trays"];
 export const NAMES = { logs: "logs", boards: "boards", lumber: "finished lumber", meat: "meat", steaks: "steaks", trays: "steak trays" };
@@ -38,6 +38,18 @@ export const EQUIPMENT = {
   rack: { name: "Loading rack", price: 40, effect: "Hold 4 more raw goods" },
   bench: { name: "Packing bench", price: 45, effect: "Stack 4 more finished goods" },
 };
+export const ATTACHMENTS = {
+  gangSaw: { station: "saw", good: "boards", name: "Gang saw", cash: 32, lumber: 0,
+    effect: "2 logs → 3 boards in one cycle", raw: 2, units: 3, time: 1.55 },
+  finishingJig: { station: "saw", good: "lumber", name: "Finishing jig", cash: 72, lumber: 2,
+    effect: "Finished lumber takes 30% less time", time: .7 },
+  grillPress: { station: "grill", good: "steaks", name: "Grill press", cash: 36, lumber: 0,
+    effect: "2 meat → 2 steaks in 1.4 cycles", raw: 2, units: 2, time: 1.4 },
+  warmingRack: { station: "grill", good: "trays", name: "Warming rack", cash: 76, lumber: 2,
+    effect: "Steak trays take 25% less time", time: .75 },
+};
+
+const attachmentState = () => ({ mounted: null, owned: [] });
 export const CART_PRICE = 55;
 export const CART_SLOTS = 5;
 export const CART_RACKS = {
@@ -77,7 +89,8 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 8,
+    version: 9,
+    attachments: { saw: attachmentState(), grill: attachmentState() },
     trading: createTrading(),
     features: featureDefaults(),
     cash: 0,
@@ -184,15 +197,27 @@ export function recipeSeconds(s, key, good) {
   const accelerated = feature(s, "stationProjects") && st.layout === (basic ? "fast" : "finish");
   return UPGRADES[key].values[levelOf(s, key)] * LINES[key].recipes[good].time * (accelerated ? .6 : 1) * [1, .8, .65, .5][siteExtension(s, key)];
 }
-function batch(s, key) {
-  const st = s.stations[key], good = nextGood(s, key);
-  const recipe = LINES[key].recipes[good];
-  const selected = key === "saw" && good === "lumber" && feature(s, "sorting") ? Math.min(s.timberSorted, recipe.input) : 0;
-  const boosted = key === "grill" && good === "trays" && feature(s, "fuel") && s.doubles && s.fuel > 0 &&
-    inputCapacity(s, key) >= 5 && outputRoom(s, key) >= 2;
-  return { good, selected, raw: boosted ? 5 : recipe.input - selected, units: boosted ? 2 : 1,
-    left: recipeSeconds(s, key, good) * (boosted ? 1.25 : 1 - .2 * selected) };
+export function activeAttachment(s, key) {
+  const id = s.attachments[key].mounted;
+  return id && feature(s, id) ? ATTACHMENTS[id] : null;
 }
+
+function batch(s, key) {
+  const good = nextGood(s, key), recipe = LINES[key].recipes[good];
+  const mounted = activeAttachment(s, key);
+  const attachment = mounted?.good === good ? mounted : null;
+  const room = outputRoom(s, key), duration = recipeSeconds(s, key, good);
+  if (attachment?.units && room >= attachment.units && inputCapacity(s, key) >= attachment.raw) {
+    return { good, selected: 0, raw: attachment.raw, units: attachment.units, fuel: 0, left: duration * attachment.time };
+  }
+  const selected = key === "saw" && good === "lumber" && feature(s, "sorting") ? Math.min(s.timberSorted, recipe.input) : 0;
+  const fuel = key === "grill" && good === "trays" && feature(s, "fuel") && s.doubles && s.fuel > 0 &&
+    inputCapacity(s, key) >= 5 && room >= 2 ? 1 : 0;
+  const modifier = attachment && !attachment.units ? attachment.time : 1;
+  return { good, selected, raw: fuel ? 5 : recipe.input - selected, units: fuel ? 2 : 1, fuel,
+    left: duration * modifier * (fuel ? 1.25 : 1 - .2 * selected) };
+}
+
 export function stationStatus(s, key) {
   const st = s.stations[key];
   if (st.jobs.length) return "Processing";
@@ -224,6 +249,22 @@ function payProject(s, cost) {
   s.player.bag.lumber -= carried;
   s.stash.lumber -= cost.lumber - carried;
   s.cash -= cost.cash;
+  return true;
+}
+
+export function changeAttachment(s, key, id) {
+  if (!stationKeys.includes(key) || stationAt(s.player) !== key) return false;
+  const tools = s.attachments[key];
+  if (id === "none") {
+    tools.mounted = null;
+    return true;
+  }
+  if (!Object.hasOwn(ATTACHMENTS, id) || !feature(s, id) || ATTACHMENTS[id].station !== key) return false;
+  if (!tools.owned.includes(id)) {
+    if (!payProject(s, ATTACHMENTS[id])) return false;
+    tools.owned.push(id);
+  }
+  tools.mounted = id;
   return true;
 }
 
@@ -357,6 +398,7 @@ export function buySupplies(s, good, fill = false) {
 export function marketAction(s, action, id) {
   if (!near(s.player, SPOTS.sell)) return false;
   if (action === "accept") return contractAction(s, id);
+  if (action === "oddJob") return quickJobAction(s, id);
   if (action === "account") return accountAction(s, id);
   if (action === "close") return closeMarketJob(s, id, Object.fromEntries(saleGoods.map(k => [k, spotPrice(s, k)])));
   if (action === "pack") {
@@ -684,7 +726,7 @@ function runStation(s, key, dt) {
     if (st.input < plan.raw) break;
     st.input -= plan.raw;
     s.timberSorted -= plan.selected;
-    if (plan.units === 2) s.fuel--;
+    s.fuel -= plan.fuel;
     st.jobs.push({ good: plan.good, units: plan.units, left: plan.left });
   }
 }
@@ -777,7 +819,7 @@ const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3, 
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2, 3, 4, 5, 6, 7, 8].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
     if (s.version === 2 && !migrateOperations(s)) return null;
@@ -811,6 +853,15 @@ export function deserialize(text) {
       s.features.supplyMerchant = feature(s, "upgrades") || feature(s, "construction") || feature(s, "contracts");
       s.features.marketSpecials = false;
     }
+    if (s.version === 8) {
+      if (!s.features || !s.market) return null;
+      s.version = 9;
+      s.attachments = { saw: attachmentState(), grill: attachmentState() };
+      for (const id of Object.keys(ATTACHMENTS)) s.features[id] = feature(s, "equipment");
+      s.features.quickJobs = feature(s, "contracts") || feature(s, "bulk");
+      s.market.quick = null;
+      s.market.quickCount = 0;
+    }
     if (!featuresValid(s.features) || !constructionIsValid(s) || !tradingValid(s.trading)) return null;
     if (!marketIsValid(s.market) || !integer(s.timberSorted, 30) ||
         !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
@@ -824,13 +875,18 @@ export function deserialize(text) {
           bulkGoods.every(k => s.order[k] === BULK[k])))) return null;
     for (const key of stationKeys) {
       const st = s.stations?.[key], { goods } = LINES[key];
+      const tools = s.attachments?.[key];
+      if (!tools || !Array.isArray(tools.owned) || new Set(tools.owned).size !== tools.owned.length ||
+          !tools.owned.every(id => Object.hasOwn(ATTACHMENTS, id) && ATTACHMENTS[id].station === key) ||
+          (tools.mounted !== null && !tools.owned.includes(tools.mounted))) return null;
       if (!st || !goods.includes(st.recipe) || (st.equipment !== null && !Object.hasOwn(EQUIPMENT, st.equipment)) ||
           (st.layout !== null && !Object.hasOwn(REBUILDS, st.layout)) || typeof st.bin !== "boolean" ||
           typeof st.manual !== "boolean" || typeof st.followDemand !== "boolean" || !TARGETS.includes(st.target) || !integer(st.staging, stageCapacity(s, key, true)) ||
           !integer(st.input) || inputCount(s, key) > inputCapacity(s, key, true) || !integer(st.output) || !integer(st.premium) ||
           !Array.isArray(st.jobs) || st.jobs.length > slots(s, key, true) ||
           !st.jobs.every(job => job && goods.includes(job.good) && job.left > 0 && number(job.left, 17.5) &&
-            (job.units === 1 || (job.units === 2 && job.good === "trays"))) || outputRoom(s, key, true) < 0) return null;
+            (job.units === 1 || (job.good === "boards" && job.units === 3 && tools.owned.includes("gangSaw")) ||
+              (job.units === 2 && (job.good === "trays" || (job.good === "steaks" && tools.owned.includes("grillPress")))))) || outputRoom(s, key, true) < 0) return null;
     }
     return s;
   } catch {
