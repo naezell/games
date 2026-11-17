@@ -38,9 +38,10 @@ import {
   cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
   handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
   rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity, nextGood, buySupplies, merchantAvailable,
+  ATTACHMENTS, activeAttachment, changeAttachment,
 } from "./sim.mjs";
 import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled, pinnedProject } from "./construction.mjs";
-import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor } from "./market.mjs";
+import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor, QUICK_JOBS, quickOffers, marketJobName } from "./market.mjs";
 const THREE = globalThis.THREE;
 const KEY = "frostfall-compact-v1",
   $ = (id) => document.getElementById(id);
@@ -247,6 +248,11 @@ if (renderer) {
       if (part === "rack") box(1.4, .12, .61, 0xb38a65, 0, .23, 0, fixture);
     }
   }
+  const mountedTools = {
+    saw: box(.48, .21, .77, 0xdbac68, -4.94, .88, -2.18),
+    grill: box(.54, .23, .58, 0x8f8f95, 6.07, .86, -2.03),
+  };
+  const attachmentColors = { boards: 0xd3a45f, lumber: 0x914f30, steaks: 0x859eaa, trays: 0xe2a452 };
   function makeBuilding(id, plan) {
     const site = group(plan.x, plan.z);
     const paint = { yard: 0x657d60, cold: 0x5b8195, store: 0x7c966f, mill: 0x577e83,
@@ -505,6 +511,23 @@ if (renderer) {
     return `<details data-section="equipment"><summary>Choose this station’s one equipment upgrade</summary><div class="actions">${Object.entries(EQUIPMENT).map(([part, e]) =>
       `<button class="action" data-install="${part}" data-station="${key}" ${unavailable(state.cash < e.price)}>${e.name} · ${e.price} coins<br><small>${e.effect}</small></button>`).join("")}</div></details>`;
   }
+  function attachmentControls(key) {
+    const choices = Object.entries(ATTACHMENTS).filter(([id, part]) => part.station === key && enabled(id));
+    if (!choices.length) return "";
+    const tools = state.attachments[key];
+    const working = activeAttachment(state, key);
+    const cards = choices.map(([id, part]) => {
+      const owned = tools.owned.includes(id);
+      const mounted = tools.mounted === id;
+      return `<article class="operation-card"><h3>${part.name}</h3><p>${part.effect}</p>
+        <p>${owned ? mounted ? "Mounted" : "Owned" : part.lumber ? projectLabel(part) : part.cash + " coins"}</p>
+        ${action(owned ? "Mount" : "Buy & mount", `data-attachment="${id}" data-station="${key}"`,
+          mounted || (!owned && !projectReady(state, part)))}</article>`;
+    }).join("");
+    return details("attachments", working ? `Attachment · ${working.name}` : "Workshop attachments",
+      `<p>One attachment runs at each workshop. Swap between owned attachments for free.</p>
+      <div class="offer-list">${cards}</div>${working ? action("Remove attachment", `data-attachment="none" data-station="${key}"`) : ""}`);
+  }
   function cartControls() {
     if (!cartActive(state) || !enabled("cartRacks")) return "";
     return details("cart", `Cart · ${CART_RACKS[state.cartRack].name}`, `<div class="actions">${Object.entries(CART_RACKS).map(([id, r]) =>
@@ -563,7 +586,7 @@ if (renderer) {
         Object.entries(REBUILDS).map(([id, layout]) => action(`${layout.name}<br><small>${projectLabel(layout)} · ${layout.effect}</small>`,
           `data-project="${id}" ${stage}`, !projectReady(state, layout))).join("")}</div>`;
     return loading + (handling || timber ? details("production", "Stock targets, handling & batches", handling + timber) : "") +
-      (enabled("equipment") ? equipmentControls(key, st) : "") +
+      attachmentControls(key) + (enabled("equipment") ? equipmentControls(key, st) : "") +
       (enabled("stationProjects") ? details("projects", "Drop-off bin & permanent rebuild", projects) : "");
   }
   const listedGoods = goods => Object.entries(goods).map(([good, qty]) => `${qty} ${NAMES[good]}`).join(" + ");
@@ -580,6 +603,14 @@ if (renderer) {
     }).join("");
     return details("merchant", "Buy supplies", `<p>Stock refills every three active minutes. After buying finished goods, automatic sales resume on your next visit.</p><div class="offer-list">${goods}</div>`);
   }
+  function oddJobOffers() {
+    return `<p>Take one short order alongside your other jobs. There’s no deadline.</p>
+      <div class="offer-list">${quickOffers(state).map(id => {
+        const job = QUICK_JOBS[id];
+        return `<article class="operation-card"><h3>${job.name}</h3><p>${listedGoods(job.goods)} · ${job.reward} coins</p>
+          ${action("Take odd job", `data-market="oddJob" data-id="${id}"`)}</article>`;
+      }).join("")}</div>`;
+  }
   function marketControls(b) {
     const m = state.market;
     const spot = Object.keys(PRICES).map(k => `${NAMES[k]} ${spotPrice(state, k)}`).join(" · ");
@@ -589,7 +620,7 @@ if (renderer) {
     const showTarget = t => {
       const progress = Object.entries(t.goods).map(([k, qty]) => `${t.packed[k] ?? 0}/${qty} ${NAMES[k]} · ${onHand(state, k)} on hand`).join("<br>");
       const pausedRecipe = !enabled("premium") && ["lumber", "trays"].some(k => neededFor(t, k) > onHand(state, k));
-      const timing = t.id === "contract" ? `Installment ${t.part + 1}/${t.total}` : t.ready ? "Pickup ready" : `Pickup on day ${t.due}`;
+      const timing = t.id === "contract" ? `Installment ${t.part + 1}/${t.total}` : t.id === "quick" ? "Odd job" : t.ready ? "Pickup ready" : `Pickup on day ${t.due}`;
       return `<article class="operation-card"><h3>${t.name}</h3><p>${timing} · ${t.reward} coins</p><p>${progress}</p>${pausedRecipe ? '<p>Enable premium recipes in Settings to make the remaining goods.</p>' : ""}<div class="actions">
         ${action("Pack available goods", `data-market="pack" data-id="${t.id}"`, !canPack(available, t))}
         ${action("Close at regular prices", `data-market="close" data-id="${t.id}"`)}</div></article>`;
@@ -611,7 +642,7 @@ if (renderer) {
       return t ? showTarget(t) : `<article class="operation-card"><h3>${a.name}</h3>
         <p>${listedGoods(a.goods)} · ${a.reward} coins per pickup</p>${action("Open standing account", `data-market="account" data-id="${id}"`)}</article>`;
     }).join("") : "<p>Complete a market job to open standing accounts.</p>";
-    const notice = m.notice ? `<p class="payment">${(CONTRACTS[m.notice.id] ?? ACCOUNTS[m.notice.id]).name} · ${m.notice.sale ? "Closed" : "Paid"} · ${m.notice.reward} coins</p>` : "";
+    const notice = m.notice ? `<p class="payment">${marketJobName(m.notice.id)} · ${m.notice.sale ? "Closed" : "Paid"} · ${m.notice.reward} coins</p>` : "";
     const warehouse = `<p>Held at the counter · ${stock.boards} boards · ${stock.steaks} steaks</p><div class="actions">
       ${Object.keys(stock).map(k => action(`Take ${NAMES[k]}`, `data-market="withdraw" data-id="${k}"`, !stock[k] || roomFor(state, state.player, k) <= 0)).join("")}</div>`;
     const sales = `<p>Spot prices per item · ${spot}</p>${state.trading.hold ? "<p>Automatic sales are paused for this visit.</p>" : ""}<div class="actions">
@@ -622,11 +653,14 @@ if (renderer) {
       action(`Build loading bay · ${projectLabel(BAY)}`, 'data-project="bay"', !projectReady(state, BAY));
     const status = [enabled("accounts") ? `Day ${marketDay(state)} · ${m.recurring} account pickups` : "",
       enabled("contracts") ? `${m.completed} jobs finished` : ""].filter(Boolean).join(" · ");
-    const anyOrders = enabled("accounts") || enabled("contracts") || enabled("bulk");
+    const anyOrders = enabled("accounts") || enabled("contracts") || enabled("bulk") || enabled("quickJobs");
+    const oddJob = targets.find(t => t.id === "quick");
+    const oddJobs = enabled("quickJobs") ?
+      details("odd-jobs", oddJob ? "Odd job in progress" : `Odd jobs · ${m.quickCount} done`, oddJob ? showTarget(oddJob) : oddJobOffers()) : "";
     const special = specialInfo(state);
     const currentSpecial = special ? `<p class="payment">Featured spot sale · ${NAMES[special.good]} +${SPECIAL_BONUS} coins · ${special.left ? `${special.left} bonus sales left` : "bonus used"}</p>` : "";
     return `${currentSpecial}${status ? `<p class="station-details">${status}</p>` : ""}${notice && anyOrders ? notice : ""}
-      ${active ? showTarget(active) : offers}${legacy}
+      ${active ? showTarget(active) : offers}${legacy}${oddJobs}
       ${enabled("accounts") ? details("accounts", "Standing accounts", "<p>Pack ahead. Pickups recur every two play days.</p>" + accounts) : ""}
       ${anyOrders ? details("sales", "Spot sales & reserved stock", sales) : sales}
       ${merchantControls()}
@@ -736,8 +770,9 @@ if (renderer) {
       SPOTS[key + "Out"].el.lastElementChild.textContent =
         outputCount(st) === outputCapacity(state, key) ? "Output full" : `${outputCount(st)} ready`;
     }
-    const current = marketTargets(state).find(t => t.id === "contract");
-    SPOTS.sell.el.lastElementChild.textContent = current ? `Job ${current.part + 1}/${current.total}` :
+    const jobs = marketTargets(state);
+    const current = jobs.find(t => t.id === "contract") ?? jobs.find(t => t.id === "quick");
+    SPOTS.sell.el.lastElementChild.textContent = current ? (current.id === "quick" ? "Odd job" : `Job ${current.part + 1}/${current.total}`) :
       enabled("bulk") && state.order ? "Bulk order" : "Jobs & sales";
     const focus = $("jobStatus");
     focus.hidden = !current || !enabled("jobHud");
@@ -881,6 +916,7 @@ if (renderer) {
     if (t.dataset.return) returnRaw(state, t.dataset.return);
     if (t.dataset.job) assign(state, +t.dataset.worker, t.dataset.job);
     if (t.dataset.recipe) selectRecipe(state, t.dataset.station, t.dataset.recipe);
+    if (t.dataset.attachment) changeAttachment(state, t.dataset.station, t.dataset.attachment);
     if (t.dataset.install) install(state, t.dataset.station, t.dataset.install);
     if (t.dataset.merchant) buySupplies(state, t.dataset.merchant, t.dataset.fill === "true");
     if (t.dataset.market) marketAction(state, t.dataset.market, t.dataset.id);
@@ -990,6 +1026,9 @@ if (renderer) {
     const packed = active ? Object.values(active.packed).reduce((sum, n) => sum + n, 0) : 0;
     packedCrates.forEach((crate, i) => { crate.visible = i < Math.ceil(packed / 3); });
     for (const [key, kit] of Object.entries(fixtures)) {
+      const tool = activeAttachment(state, key);
+      mountedTools[key].visible = !!tool;
+      if (tool) mountedTools[key].material = mat(attachmentColors[tool.good]);
       const st = state.stations[key];
       for (const part of Object.keys(EQUIPMENT)) kit[part].visible = enabled("equipment") && st.equipment === part;
       kit.supply.visible = enabled("stationProjects") && st.bin || st.staging > 0;

@@ -26,11 +26,22 @@ export const ACCOUNTS = {
   carpenter: { name: "Village carpenter", goods: { boards: 6, lumber: 2 }, reward: 61 },
   inn: { name: "Roadside inn", goods: { steaks: 4, trays: 2 }, reward: 77 },
 };
+export const QUICK_JOBS = {
+  fence: { name: "Repair the fence", goods: { boards: 4 }, reward: 29 },
+  lunch: { name: "Crew lunch", goods: { steaks: 4 }, reward: 33 },
+  kettle: { name: "Counter refill", goods: { boards: 3, steaks: 2 }, reward: 38 },
+  shelves: { name: "New shop shelves", goods: { lumber: 2 }, reward: 40 },
+  party: { name: "Table for six", goods: { trays: 2 }, reward: 55 },
+  cellar: { name: "Stock the cellar", goods: { boards: 6, steaks: 3 }, reward: 65 },
+  crate: { name: "Crate and supper", goods: { lumber: 2, steaks: 3 }, reward: 64 },
+  sender: { name: "Traveler’s supply", goods: { boards: 2, trays: 2 }, reward: 66 },
+};
+export const marketJobName = id => [CONTRACTS, ACCOUNTS, QUICK_JOBS].find(list => Object.hasOwn(list, id))?.[id].name;
 export const BAY = { cash: 215, lumber: 6 };
 
 export function createMarket() {
   return { elapsed: 0, bay: false, completed: 0, shipments: 0, recurring: 0,
-    stock: { boards: 0, steaks: 0 }, active: null, accounts: { carpenter: null, inn: null }, autoSale: true, nextOffer: 0, notice: null };
+    stock: { boards: 0, steaks: 0 }, quick: null, quickCount: 0, active: null, accounts: { carpenter: null, inn: null }, autoSale: true, nextOffer: 0, notice: null };
 }
 
 const smallOffers = ["builder", "supper", "outfitter"];
@@ -47,6 +58,19 @@ export function marketOffers(s) {
   return [smallOffers[offset], largeOffers[offset], largeOffers[(offset + 1) % largeOffers.length]];
 }
 
+export function quickOffers(s) {
+  if (!feature(s, "quickJobs")) return [];
+  const keys = Object.keys(QUICK_JOBS).filter(id => feature(s, "premium") ||
+    Object.keys(QUICK_JOBS[id].goods).every(k => k === "boards" || k === "steaks"));
+  return Array.from({ length: 3 }, (_, i) => keys[(s.market.quickCount + i) % keys.length]);
+}
+
+export function quickJobAction(s, id) {
+  if (s.market.quick || !quickOffers(s).includes(id)) return false;
+  s.market.quick = { id, packed: {} };
+  return true;
+}
+
 const currentStage = active => CONTRACTS[active.id].stages[active.part];
 export function marketTargets(s) {
   const { active, accounts } = s.market;
@@ -59,6 +83,10 @@ export function marketTargets(s) {
     if (account) targets.push({ ...ACCOUNTS[id], id, packed: account.packed,
       ready: marketDay(s) >= account.due, due: account.due });
   }
+  if (feature(s, "quickJobs") && s.market.quick) {
+    const { id, packed } = s.market.quick;
+    targets.push({ ...QUICK_JOBS[id], id: "quick", packed, ready: true });
+  }
   return targets;
 }
 
@@ -67,10 +95,11 @@ export const marketNeed = (s, good) => marketTargets(s).reduce((n, t) => n + nee
 export const canPack = (bag, target) => Object.keys(target.goods).some(k => bag[k] > 0 && neededFor(target, k) > 0);
 export const marketAdvance = (s, dt) => { if (feature(s, "accounts")) s.market.elapsed += dt; };
 
+const jobId = (m, id) => id === "contract" ? m.active.id : id === "quick" ? m.quick.id : id;
 function paid(s, target) {
   s.cash += target.reward;
   s.sold += Object.values(target.goods).reduce((n, qty) => n + qty, 0);
-  s.market.notice = { id: target.id === "contract" ? s.market.active.id : target.id, reward: target.reward, sale: false };
+  s.market.notice = { id: jobId(s.market, target.id), reward: target.reward, sale: false };
 }
 function shipIfReady(s, target) {
   if (!target.ready || Object.keys(target.goods).some(k => neededFor(target, k))) return;
@@ -83,6 +112,9 @@ function shipIfReady(s, target) {
       m.completed++;
       m.nextOffer++;
     } else m.active.packed = {};
+  } else if (target.id === "quick") {
+    m.quick = null;
+    m.quickCount++;
   } else {
     m.recurring++;
     m.accounts[target.id] = { due: marketDay(s) + ACCOUNT_DAYS, packed: {} };
@@ -91,7 +123,7 @@ function shipIfReady(s, target) {
 
 export function shipAccounts(s) {
   // Only inspect accounts at a day boundary. Packing handles shipments already due.
-  for (const t of marketTargets(s)) if (t.id !== "contract") shipIfReady(s, t);
+  for (const t of marketTargets(s)) if (Object.hasOwn(ACCOUNTS, t.id)) shipIfReady(s, t);
 }
 
 export function packGoods(s, id, bag) {
@@ -131,8 +163,9 @@ export function closeMarketJob(s, id, prices) {
   }
   s.cash += proceeds;
   const m = s.market;
-  m.notice = { id: id === "contract" ? m.active.id : id, reward: proceeds, sale: true };
+  m.notice = { id: jobId(m, id), reward: proceeds, sale: true };
   if (id === "contract") m.active = null;
+  else if (id === "quick") m.quick = null;
   else m.accounts[id] = null;
   return true;
 }
@@ -143,12 +176,14 @@ export function marketIsValid(m) {
     typeof packed === "object" && Object.entries(packed).every(([k, n]) => Object.hasOwn(goods, k) && uint(n, goods[k]));
   if (!m || !Number.isFinite(m.elapsed) || m.elapsed < 0 || m.elapsed > Number.MAX_SAFE_INTEGER ||
       typeof m.bay !== "boolean" || typeof m.autoSale !== "boolean" || !uint(m.completed) ||
-      !uint(m.stock?.boards, 16) || !uint(m.stock?.steaks, 16) || !uint(m.shipments, m.completed) || !uint(m.recurring) || !uint(m.nextOffer) || !m.accounts) return false;
+      !uint(m.stock?.boards, 16) || !uint(m.stock?.steaks, 16) || !uint(m.shipments, m.completed) || !uint(m.recurring) || !uint(m.nextOffer) || !uint(m.quickCount) || !m.accounts) return false;
   if (m.active !== null && (!m.active || !Object.hasOwn(CONTRACTS, m.active.id) ||
       !uint(m.active.part, CONTRACTS[m.active.id].stages.length - 1) ||
       !validPack(m.active.packed, currentStage(m.active).goods) ||
       (largeOffers.includes(m.active.id) && !m.bay))) return false;
-  if (m.notice !== null && (!m.notice || !(Object.hasOwn(CONTRACTS, m.notice.id) || Object.hasOwn(ACCOUNTS, m.notice.id)) ||
+  if (m.quick !== null && (!m.quick || !Object.hasOwn(QUICK_JOBS, m.quick.id) ||
+      !validPack(m.quick.packed, QUICK_JOBS[m.quick.id].goods))) return false;
+  if (m.notice !== null && (!m.notice || !marketJobName(m.notice.id) ||
       !uint(m.notice.reward) || typeof m.notice.sale !== "boolean")) return false;
   return Object.keys(m.accounts).length === Object.keys(ACCOUNTS).length &&
     Object.entries(ACCOUNTS).every(([id, info]) =>

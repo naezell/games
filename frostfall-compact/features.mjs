@@ -12,6 +12,10 @@ export const FEATURES = {
   },
   Camp: {
     upgrades: ["Shop upgrades", "Buy larger backpacks, faster machines, and larger station buffers."],
+    gangSaw: ["Gang saw", "Use the sawmill attachment that cuts three boards from two logs."],
+    finishingJig: ["Finishing jig", "Use the attachment that speeds up finished lumber."],
+    grillPress: ["Grill press", "Use the attachment that cooks two steaks in one cycle."],
+    warmingRack: ["Warming rack", "Use the attachment that speeds up steak trays."],
     equipment: ["Station equipment", "Use a second machine, loading rack, or packing bench."],
     stationProjects: ["Station projects", "Use drop-off bins and specialized workshop rebuilds."],
     construction: ["Camp construction", "Build permanent structures. Pauses unfinished work."],
@@ -35,6 +39,7 @@ export const FEATURES = {
   Market: {
     supplyMerchant: ["Supply merchant", "Buy limited shipments of raw materials or finished goods at the Market."],
     marketSpecials: ["Featured market goods", "Earn a limited rotating bonus on spot sales."],
+    quickJobs: ["Odd jobs", "Take small untimed orders at the Market. Switching off saves the order and packed goods."],
     contracts: ["Market contracts", "Take multi-stage jobs and ship installments."],
     bulk: ["Quick bulk order", "Take or deliver the original board-and-steak order."],
     accounts: ["Standing accounts", "Trade with the carpenter and inn. Their pickup clock pauses when off."],
