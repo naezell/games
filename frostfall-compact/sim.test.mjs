@@ -26,9 +26,10 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
+import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo } from "./construction.mjs";
 const at = (p, k) => Object.assign(p, { x: SPOTS[k].x, z: SPOTS[k].z });
 const advance = (s, seconds) => {
   for (let i = 0; i < seconds * 10; i++) tick(s, 0.1);
@@ -266,7 +267,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 3);
+  assert.equal(s.version, 4);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -468,8 +469,93 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 3);
+  assert.equal(s.version, 4);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
+});
+
+test("a fresh camp can earn and build the timber yard from its first five boards", () => {
+  let s = createState();
+  assert.ok(trackPlan(s, "yard"));
+  assert.equal(buildAtPlot(s, "yard", "build"), false);
+  at(s.player, "forest");
+  advance(s, 5);
+  at(s.player, "sawIn");
+  advance(s, 21);
+  at(s.player, "sawOut");
+  advance(s, .1);
+  assert.equal(s.player.bag.boards, 5);
+  at(s.player, "sell");
+  advance(s, 5);
+  assert.equal(s.cash, 12);
+  assert.equal(s.player.bag.boards, 2);
+  Object.assign(s.player, { x: BUILDINGS.yard.x, z: BUILDINGS.yard.z });
+  assert.ok(buildAtPlot(s, "yard", "supply"));
+  assert.equal(s.player.bag.boards, 0);
+  assert.ok(buildAtPlot(s, "yard", "build"));
+  assert.equal(s.cash, 0);
+  assert.equal(built(s, "yard"), false);
+  advance(s, 2);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  advance(s, 2);
+  assert.equal(built(s, "yard"), true);
+  assert.equal(sourceCapacity(s, "forest"), 9);
+  assert.equal(buildAtPlot(s, "yard", "build"), false);
+});
+
+test("dependencies and construction costs hold for each new building", () => {
+  let s = createState();
+  s.cash = 3000;
+  for (const [key, plan] of Object.entries(BUILDINGS)) {
+    Object.assign(s.player, { x: plan.x, z: plan.z });
+    if (plan.after) assert.ok(built(s, plan.after));
+    const first = Object.keys(plan.goods)[0];
+    s.player.bag[first] = 1;
+    assert.ok(buildAtPlot(s, key, "supply"));
+    assert.equal(buildAtPlot(s, key, "build"), false);
+    for (const [good, n] of Object.entries(plotInfo(s, key).needs)) s.stash[good] = n;
+    assert.ok(buildAtPlot(s, key, "supply"));
+    const before = s.cash;
+    assert.ok(buildAtPlot(s, key, "build"));
+    assert.equal(s.cash, before - plan.cash);
+    advance(s, plan.seconds);
+    assert.ok(built(s, key));
+    assert.ok(deserialize(serialize(s)));
+  }
+  assert.equal(stashCapacity(s), 32);
+  assert.equal(sourceCapacity(s, "boars"), 9);
+  assert.equal(recipeSeconds(s, "saw", "boards"), 3.2);
+  assert.equal(outputCapacity(s, "grill"), 9);
+  assert.ok(purchase(s, "cart"));
+  assert.equal(capacity(s), 14);
+  assert.equal(helperLimit(s), 3);
+  for (let i = 0; i < 3; i++) assert.ok(purchase(s, "helper"));
+  assert.equal(purchase(s, "helper"), false);
+  assert.equal(spotPrice(s, "trays"), 23);
+  at(s.player, "sell");
+  s.player.bag.trays = 1;
+  const before = s.cash;
+  assert.ok(marketAction(s, "sell"));
+  assert.equal(s.cash, before + 23);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("new construction is initialized in existing saves and locked plots cannot take supplies", () => {
+  const previous = createState();
+  previous.version = 3;
+  previous.cash = 400;
+  previous.player.bag.boards = 4;
+  delete previous.construction;
+  delete previous.plan;
+  const s = deserialize(serialize(previous));
+  assert.ok(s);
+  assert.equal(s.cash, 400);
+  assert.equal(s.player.bag.boards, 4);
+  Object.assign(s.player, { x: BUILDINGS.mill.x, z: BUILDINGS.mill.z });
+  assert.equal(buildAtPlot(s, "mill", "supply"), false);
+  assert.equal(s.plan, null);
+  s.construction.mill.left = 0;
+  assert.equal(deserialize(serialize(s)), null);
 });

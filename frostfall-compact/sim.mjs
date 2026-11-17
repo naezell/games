@@ -1,3 +1,4 @@
+import { built, newConstruction, reservedForPlan, advanceConstruction, constructionIsValid } from "./construction.mjs";
 import { createMarket, marketIsValid, marketDay, marketAdvance, shipAccounts, marketTargets, marketNeed,
   packGoods, contractAction, accountAction, closeMarketJob, BAY } from "./market.mjs";
 
@@ -74,7 +75,7 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 3,
+    version: 4,
     cash: 0,
     levels: { pack: 0, saw: 0, grill: 0, storage: 0 },
     player: { x: 0, z: 7, bag: empty(), gather: 0, sell: 0 },
@@ -93,15 +94,25 @@ export function createState() {
     timberSorted: 0,
     fuel: 0,
     doubles: false,
+    construction: newConstruction(),
+    plan: null,
   };
 }
 
 export const packCapacity = s => UPGRADES.pack.values[s.levels.pack];
-export const capacity = s => packCapacity(s) + (s.cart ? CART_RACKS[s.cartRack].slots : 0);
+export const rackSlots = (s, rack = s.cartRack) => CART_RACKS[rack].slots + (built(s, "cart") ? 3 : 0);
+export const capacity = s => packCapacity(s) + (s.cart ? rackSlots(s) : 0);
+export const stashCapacity = s => built(s, "store") ? 32 : 16;
+export const helperLimit = s => built(s, "dispatch") ? 3 : 2;
+export const helperPrice = s => [35, 80, 125][s.workers.length];
+export const spotPrice = (s, good) => PRICES[good] + (built(s, "exchange") ? (good === "lumber" || good === "trays" ? 3 : 1) : 0);
+const sourceUpgrade = key => key === "forest" ? "yard" : "cold";
+export const sourceCapacity = (s, key) => built(s, sourceUpgrade(key)) ? 9 : 6;
+const siteExtension = (s, key) => built(s, key === "saw" ? "mill" : "kitchen");
 const mixFits = (s, rack, bag) => {
-  const { goods, slots } = CART_RACKS[rack];
+  const { goods } = CART_RACKS[rack];
   const load = count(bag);
-  return load <= packCapacity(s) + slots &&
+  return load <= packCapacity(s) + rackSlots(s, rack) &&
     (!goods || load - goods.reduce((n, k) => n + bag[k], 0) <= packCapacity(s));
 };
 export function roomFor(s, person, good) {
@@ -123,7 +134,7 @@ export const storage = s => UPGRADES.storage.values[s.levels.storage];
 export const inputCount = (s, key) => s.stations[key].input + (key === "saw" ? s.timberSorted : 0);
 const freight = (s, key) => s.stations[key].layout === "freight";
 export const inputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "rack" ? 4 : 0) + (freight(s, key) ? 8 : 0);
-export const outputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "bench" ? 4 : 0) + (freight(s, key) ? 8 : 0);
+export const outputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "bench" ? 4 : 0) + (freight(s, key) ? 8 : 0) + (siteExtension(s, key) ? 4 : 0);
 export const stageCapacity = (s, key) => (s.stations[key].bin ? 12 : 4) + (freight(s, key) ? 4 : 0);
 const inputRoom = (s, key) => inputCapacity(s, key) - inputCount(s, key);
 export const outputCount = st => st.output + st.premium;
@@ -146,7 +157,7 @@ function nextGood(s, key) {
 export function recipeSeconds(s, key, good) {
   const st = s.stations[key], basic = good === LINES[key].goods[0];
   const accelerated = st.layout === (basic ? "fast" : "finish");
-  return UPGRADES[key].values[s.levels[key]] * LINES[key].recipes[good].time * (accelerated ? .6 : 1);
+  return UPGRADES[key].values[s.levels[key]] * LINES[key].recipes[good].time * (accelerated ? .6 : 1) * (siteExtension(s, key) ? .8 : 1);
 }
 function batch(s, key) {
   const st = s.stations[key], good = nextGood(s, key);
@@ -301,7 +312,7 @@ export function marketAction(s, action, id) {
   if (!near(s.player, SPOTS.sell)) return false;
   if (action === "accept") return contractAction(s, id);
   if (action === "account") return accountAction(s, id);
-  if (action === "close") return closeMarketJob(s, id, PRICES);
+  if (action === "close") return closeMarketJob(s, id, Object.fromEntries(saleGoods.map(k => [k, spotPrice(s, k)])));
   if (action === "pack") {
     return packAtCounter(s, id, s.player, true);
   }
@@ -337,8 +348,8 @@ export function purchase(s, key) {
     return true;
   }
   if (key === "helper") {
-    if (s.workers.length >= 2) return false;
-    const price = [35, 80][s.workers.length];
+    if (s.workers.length >= helperLimit(s)) return false;
+    const price = helperPrice(s);
     if (s.cash < price) return false;
     s.cash -= price;
     s.workers.push({ x: -8, z: 7, bag: empty(), job: "lumber", nextLine: "saw", route: routeDefaults(), gather: 0, sell: 0 });
@@ -387,7 +398,7 @@ export function deliverBulk(s, person = s.player) {
 export function cancelBulk(s) {
   if (!s.order || !near(s.player, SPOTS.sell)) return false;
   for (const k of bulkGoods) {
-    s.cash += s.order[k] * PRICES[k];
+    s.cash += s.order[k] * spotPrice(s, k);
     s.sold += s.order[k];
   }
   s.order = null;
@@ -406,7 +417,7 @@ function move(person, target, dt) {
 }
 
 const other = key => key === "saw" ? "grill" : "saw";
-function collect(person, source, good, room, dt) {
+function collect(person, source, good, room, restock, dt) {
   if (!source.remaining || room <= 0) {
     person.gather = 0;
     return;
@@ -417,7 +428,7 @@ function collect(person, source, good, room, dt) {
   if (person.gather + 1e-9 < 1) return;
   person.gather = Math.max(0, person.gather - 1);
   person.bag[good]++;
-  if (--source.remaining === 0) source.regrow = 8;
+  if (--source.remaining === 0) source.regrow = restock;
 }
 
 function packAtCounter(s, id, person, useStock) {
@@ -438,10 +449,12 @@ function packAtCounter(s, id, person, useStock) {
   return true;
 }
 
+const keepForMarketAndPlan = (s, good) => marketNeed(s, good) + bulkRemaining(s, good) + reservedForPlan(s, good);
+
 function topUpStock(s, person, hasOrders) {
   for (const key of stationKeys) {
     const good = LINES[key].goods[0], stock = s.market.stock;
-    const spare = person.bag[good] - (hasOrders ? marketNeed(s, good) + bulkRemaining(s, good) : 0);
+    const spare = person.bag[good] - (hasOrders ? keepForMarketAndPlan(s, good) : 0);
     const n = Math.max(0, Math.min(spare, s.stations[key].target - stock[good]));
     if (!n) continue;
     person.bag[good] -= n;
@@ -453,7 +466,7 @@ function topUpStock(s, person, hasOrders) {
 function sellOne(s, person, good) {
   person.sell = 0;
   person.bag[good]--;
-  s.cash += PRICES[good];
+  s.cash += spotPrice(s, good);
   s.sold++;
   animate(person, "stack", good);
 }
@@ -464,8 +477,8 @@ export function interact(s, person = s.player, dt = .1) {
   if (active && (active.left -= dt) <= 0) motions.delete(person);
   const source = stationKeys.find(key => near(person, SPOTS[LINES[key].source]));
   if (source) {
-    const good = LINES[source].raw;
-    collect(person, s.sources[LINES[source].source], good, roomFor(s, person, good), dt);
+    const { raw, source: key } = LINES[source];
+    collect(person, s.sources[key], raw, roomFor(s, person, raw), built(s, sourceUpgrade(key)) ? 6 : 8, dt);
   } else {
     person.gather = 0;
     if (active?.kind === "chop" || active?.kind === "gather") motions.delete(person);
@@ -492,14 +505,14 @@ export function interact(s, person = s.player, dt = .1) {
   }
   if (atCounter && (!manual || s.market.autoSale) && (b.boards || b.steaks)) topUpStock(s, person, manual);
   const good = atCounter && (!manual || s.market.autoSale) && saleGoods.find(k =>
-    b[k] > 0 && b[k] > (manual ? bulkRemaining(s, k) + marketNeed(s, k) : 0));
+    b[k] > 0 && b[k] > (manual ? keepForMarketAndPlan(s, k) : 0));
   person.sell = good ? (person.sell || 0) + dt : 0;
   if (person.sell + 1e-9 >= .6) sellOne(s, person, good);
 }
 
 export function stashAll(s) {
   for (const k of GOODS) {
-    const n = Math.min(s.player.bag[k], 16 - count(s.stash));
+    const n = Math.min(s.player.bag[k], stashCapacity(s) - count(s.stash));
     s.stash[k] += n;
     s.player.bag[k] -= n;
   }
@@ -571,10 +584,11 @@ export function tick(s, dt = .1) {
   const day = marketDay(s);
   marketAdvance(s, dt);
   if (marketDay(s) > day) shipAccounts(s);
-  for (const source of Object.values(s.sources)) {
+  advanceConstruction(s, dt);
+  for (const [key, source] of Object.entries(s.sources)) {
     if (!source.remaining) {
       source.regrow = Math.max(0, source.regrow - dt);
-      if (source.regrow <= 1e-9) source.remaining = 6;
+      if (source.regrow <= 1e-9) source.remaining = sourceCapacity(s, key);
     }
   }
   for (const key of stationKeys) runStation(s, key, dt);
@@ -649,18 +663,24 @@ const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3].
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2, 3].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3, 4].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
     if (s.version === 2 && !migrateOperations(s)) return null;
+    if (s.version === 3) {
+      s.version = 4;
+      s.construction = newConstruction();
+      s.plan = null;
+    }
+    if (!constructionIsValid(s)) return null;
     if (!marketIsValid(s.market) || (s.order && s.market.active) || !integer(s.timberSorted, 30) ||
         !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
         typeof s.ownedRacks?.timber !== "boolean" || typeof s.ownedRacks?.food !== "boolean" ||
         (s.cartRack !== "mixed" && (!s.cart || !s.ownedRacks[s.cartRack]))) return null;
     if (typeof s.cart !== "boolean" || !validPerson(s.player) || count(s.player.bag) > capacity(s) || (s.cart && !mixFits(s, s.cartRack, s.player.bag)) ||
-        !validBag(s.stash) || count(s.stash) > 16 || !Array.isArray(s.workers) || s.workers.length > 2 ||
+        !validBag(s.stash) || count(s.stash) > stashCapacity(s) || !Array.isArray(s.workers) || s.workers.length > helperLimit(s) ||
         !s.workers.every(w => validPerson(w) && count(w.bag) <= 3 && Object.hasOwn(JOBS, w.job) && stationKeys.includes(w.nextLine) && isRoute(w.route)) ||
-        !["forest", "boars"].every(k => integer(s.sources?.[k]?.remaining, 6) && number(s.sources[k].regrow, 8)) ||
+        !["forest", "boars"].every(k => integer(s.sources?.[k]?.remaining, sourceCapacity(s, k)) && number(s.sources[k].regrow, 8)) ||
         (s.order !== null && (!s.order || !bulkGoods.every(k => integer(s.order[k], BULK[k])) ||
           bulkGoods.every(k => s.order[k] === BULK[k])))) return null;
     for (const key of stationKeys) {
