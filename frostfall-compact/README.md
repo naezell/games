@@ -42,6 +42,8 @@ The optional supply merchant sells limited stock at the Market. Finished premium
 
 The Market’s optional **Odd jobs** board offers a short untimed order alongside your main contract. At the Sawmill and Grill, buy optional **Workshop attachments** for faster or larger batches. Only one attachment runs at each station, and owned attachments can be swapped for free. Each has its own Settings switch.
 
+Optional **Production schedules** let each workshop queue up to four work orders of 1–24 items. Queued recipes come first, and oversized attachment batches fall back to single units at the end of an order. Pause new batches while allowing work in progress to finish, or have the station wait when its queue empties.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

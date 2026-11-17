@@ -38,6 +38,40 @@ export const EQUIPMENT = {
   rack: { name: "Loading rack", price: 40, effect: "Hold 4 more raw goods" },
   bench: { name: "Packing bench", price: 45, effect: "Stack 4 more finished goods" },
 };
+export const ORDER_MAX = 24;
+export const ORDER_LIMIT = 4;
+const newSchedule = () => ({ orders: [], paused: false, holdAfter: false });
+export const activeOrder = (s, key) => feature(s, "schedules") ? (s.schedules[key].orders[0] ?? null) : null;
+function scheduleStop(s, key) {
+  if (!feature(s, "schedules")) return "";
+  const schedule = s.schedules[key];
+  const order = schedule.orders[0];
+  if (schedule.paused) return "New batches paused";
+  if (order && order.good === LINES[key].goods[1] && !feature(s, "premium")) return "Queued recipe needs premium enabled";
+  return !order && schedule.holdAfter ? "Waiting for a work order" : "";
+}
+
+export function changeSchedule(s, key, action, value) {
+  if (!feature(s, "schedules") || !Object.hasOwn(LINES, key) || stationAt(s.player) !== key) return false;
+  const schedule = s.schedules[key];
+  if (action === "enqueue") {
+    if (!value || schedule.orders.length >= ORDER_LIMIT || !(Number.isSafeInteger(value.quantity) && value.quantity >= 1 && value.quantity <= ORDER_MAX) ||
+        !LINES[key].goods.includes(value.good) || (!feature(s, "premium") && value.good !== LINES[key].goods[0])) return false;
+    schedule.orders.push({ good: value.good, remaining: value.quantity });
+    return true;
+  }
+  if (action === "remove") {
+    if (!Number.isSafeInteger(value) || value < 0 || value >= schedule.orders.length) return false;
+    schedule.orders.splice(value, 1);
+    return true;
+  }
+  if ((action === "paused" || action === "holdAfter") && typeof value === "boolean") {
+    schedule[action] = value;
+    return true;
+  }
+  return false;
+}
+
 export const ATTACHMENTS = {
   gangSaw: { station: "saw", good: "boards", name: "Gang saw", cash: 32, lumber: 0,
     effect: "2 logs → 3 boards in one cycle", raw: 2, units: 3, time: 1.55 },
@@ -89,7 +123,8 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 9,
+    version: 10,
+    schedules: { saw: newSchedule(), grill: newSchedule() },
     attachments: { saw: attachmentState(), grill: attachmentState() },
     trading: createTrading(),
     features: featureDefaults(),
@@ -182,6 +217,8 @@ export function onHand(s, good) {
 }
 export function nextGood(s, key) {
   const st = s.stations[key], [basic, premium] = LINES[key].goods;
+  const order = activeOrder(s, key);
+  if (order) return order.good;
   if (!feature(s, "premium")) return basic;
   const scheduled = good => st.jobs.reduce((n, job) => n + (job.good === good ? job.units : 0), 0);
   if (feature(s, "demandRecipes") && st.followDemand) {
@@ -206,7 +243,7 @@ function batch(s, key) {
   const good = nextGood(s, key), recipe = LINES[key].recipes[good];
   const mounted = activeAttachment(s, key);
   const attachment = mounted?.good === good ? mounted : null;
-  const room = outputRoom(s, key), duration = recipeSeconds(s, key, good);
+  const room = Math.min(outputRoom(s, key), activeOrder(s, key)?.remaining ?? Infinity), duration = recipeSeconds(s, key, good);
   if (attachment?.units && room >= attachment.units && inputCapacity(s, key) >= attachment.raw) {
     return { good, selected: 0, raw: attachment.raw, units: attachment.units, fuel: 0, left: duration * attachment.time };
   }
@@ -221,6 +258,8 @@ function batch(s, key) {
 export function stationStatus(s, key) {
   const st = s.stations[key];
   if (st.jobs.length) return "Processing";
+  const stop = scheduleStop(s, key);
+  if (stop) return stop;
   if (outputRoom(s, key) <= 0) return "Output full";
   const next = batch(s, key);
   if (st.input < next.raw) return next.raw === 1 ? `Waiting for ${LINES[key].raw}` : `Needs ${next.raw} ${LINES[key].raw}`;
@@ -721,13 +760,15 @@ function runStation(s, key, dt) {
   }
   st.jobs = st.jobs.filter(job => job.left > 1e-9);
   if (hasBin(s, key) || freight(s, key)) stagingToInput(s, key, inputRoom(s, key));
-  while (st.jobs.length < slots(s, key) && outputRoom(s, key) > 0) {
+  while (st.jobs.length < slots(s, key) && outputRoom(s, key) > 0 && !scheduleStop(s, key)) {
+    const order = activeOrder(s, key);
     const plan = batch(s, key);
     if (st.input < plan.raw) break;
     st.input -= plan.raw;
     s.timberSorted -= plan.selected;
     s.fuel -= plan.fuel;
     st.jobs.push({ good: plan.good, units: plan.units, left: plan.left });
+    if (order && !(order.remaining -= plan.units)) s.schedules[key].orders.shift();
   }
 }
 
@@ -819,7 +860,7 @@ const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3, 
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
     if (s.version === 2 && !migrateOperations(s)) return null;
@@ -862,6 +903,12 @@ export function deserialize(text) {
       s.market.quick = null;
       s.market.quickCount = 0;
     }
+    if (s.version === 9) {
+      if (!s.features) return null;
+      s.version = 10;
+      s.features.schedules = feature(s, "demandRecipes") || feature(s, "stockTargets");
+      s.schedules = { saw: newSchedule(), grill: newSchedule() };
+    }
     if (!featuresValid(s.features) || !constructionIsValid(s) || !tradingValid(s.trading)) return null;
     if (!marketIsValid(s.market) || !integer(s.timberSorted, 30) ||
         !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
@@ -876,6 +923,11 @@ export function deserialize(text) {
     for (const key of stationKeys) {
       const st = s.stations?.[key], { goods } = LINES[key];
       const tools = s.attachments?.[key];
+      const schedule = s.schedules?.[key];
+      if (!schedule || typeof schedule.paused !== "boolean" || typeof schedule.holdAfter !== "boolean" ||
+          !Array.isArray(schedule.orders) || schedule.orders.length > ORDER_LIMIT ||
+          !schedule.orders.every(order => order && goods.includes(order.good) &&
+            integer(order.remaining, ORDER_MAX) && order.remaining > 0)) return null;
       if (!tools || !Array.isArray(tools.owned) || new Set(tools.owned).size !== tools.owned.length ||
           !tools.owned.every(id => Object.hasOwn(ATTACHMENTS, id) && ATTACHMENTS[id].station === key) ||
           (tools.mounted !== null && !tools.owned.includes(tools.mounted))) return null;
