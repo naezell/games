@@ -27,7 +27,7 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
 import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo, buildingLevel, nextLevel, reservedForPlan } from "./construction.mjs";
@@ -268,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 6);
+  assert.equal(s.version, 7);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -470,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 6);
+  assert.equal(s.version, 7);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -727,4 +727,69 @@ test("older feature saves keep their build progress and choices after level migr
   assert.equal(newer.construction.yard.left, 1.5);
   assert.equal(feature(newer, "cart"), false);
   assert.equal(feature(newer, "buildingLevels"), true);
+});
+
+test("a construction helper reserves only the needed load and stops safely when disabled", () => {
+  let s = createState();
+  s.cash = 100;
+  assert.ok(purchase(s, "helper"));
+  assert.ok(assign(s, 0, "builder"));
+  assert.ok(trackPlan(s, "yard"));
+  at(s.workers[0], "sawOut");
+  s.stations.saw.output = 4;
+  tick(s);
+  assert.equal(s.workers[0].bag.boards, 2);
+  assert.equal(s.stations.saw.output, 2);
+  setFeature(s, "projectHelpers", false);
+  advance(s, 14);
+  assert.equal(s.workers[0].bag.boards, 2);
+  assert.equal(s.cash, 65);
+  assert.deepEqual(s.construction.yard.delivered, {});
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  setFeature(s, "projectHelpers", true);
+  advance(s, 7);
+  assert.equal(s.construction.yard.delivered.boards, 2);
+  assert.equal(s.workers[0].bag.boards, 0);
+  assert.equal(s.construction.yard.left, null);
+  assert.equal(s.cash, 65);
+});
+
+test("demand recipes choose an understocked plan, then fall back without resetting your recipe", () => {
+  const s = createState();
+  at(s.player, "sawIn");
+  assert.ok(selectRecipe(s, "saw", "lumber"));
+  assert.ok(setStation(s, "saw", "followDemand", true));
+  assert.ok(trackPlan(s, "yard"));
+  assert.equal(nextGood(s, "saw"), "boards");
+  s.stations.saw.output = 1;
+  s.stations.saw.input = 3;
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].good, "boards");
+  assert.equal(nextGood(s, "saw"), "lumber");
+  s.stations.saw.jobs = [];
+  setFeature(s, "demandRecipes", false);
+  assert.equal(nextGood(s, "saw"), "lumber");
+  assert.equal(s.stations.saw.followDemand, true);
+  setFeature(s, "demandRecipes", true);
+  assert.equal(nextGood(s, "saw"), "boards");
+  s.stash.boards = 2;
+  assert.equal(nextGood(s, "saw"), "lumber");
+});
+
+test("construction planning and reports migrate from a prior Simple Camp save", () => {
+  let s = createState();
+  assert.ok(featurePreset(s, "simple"));
+  s.version = 6;
+  delete s.features.projectHelpers;
+  delete s.features.demandRecipes;
+  delete s.features.campBoard;
+  delete s.stations.saw.followDemand;
+  delete s.stations.grill.followDemand;
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  assert.equal(feature(s, "projectHelpers"), false);
+  assert.equal(feature(s, "demandRecipes"), false);
+  assert.equal(feature(s, "campBoard"), false);
+  assert.equal(s.stations.saw.followDemand, false);
 });

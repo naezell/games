@@ -36,6 +36,8 @@ The yard and cold store improve gathering and unlock the workshop extensions. Bu
 
 Every structure has two optional upgrade levels at its original plot. Higher levels expand what the building can hold or improve the work it supports. The Dispatch Cabin adds faster walking and a five-item helper pack. Use the gear button to pause building upgrades, individual buildings, or whole systems. The Simple Camp preset leaves the gather, process, and sell loop enabled, and you can change each switch independently.
 
+After hiring a helper, assign **Deliver to pinned build** to collect the required finished goods from workshop outputs, the market reserve, or the camp crate. You still fund construction at the plot. At each workshop, **Recipe choice → Fill orders and pinned build first** can cover shortages automatically. Open the **Camp board** from Settings, Build, or the improvement pad to see shortages across your current jobs. Each addition has its own switch.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

@@ -41,3 +41,6 @@ header{padding-left:max(11px,env(safe-area-inset-left));padding-right:max(11px,e
 .feature-choice input{width:19px;height:19px;accent-color:#366f69;flex:none}
 .feature-list{margin-top:5px}
 @media(max-width:370px){header{gap:5px}header h1{font-size:15px}.cash small{display:none}#settingsMenu{width:32px}#buildMenu{font-size:12px}}
+.camp-stock{width:100%;margin:6px 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.camp-stock th,.camp-stock td{padding:5px 4px;border-bottom:1px solid #d5e9df;text-align:right}
+.camp-stock th:first-child{text-align:left;color:#315d59}
