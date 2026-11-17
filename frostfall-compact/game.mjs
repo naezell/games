@@ -1,3 +1,4 @@
+import { TRADER, merchantStock, specialInfo, SPECIAL_BONUS } from "./trading.mjs";
 import { FEATURES, feature, setFeature, featurePreset } from "./features.mjs";
 import {
   createState,
@@ -36,7 +37,7 @@ import {
   cancelBulk, CART_RACKS, BIN_COST, REBUILDS, TARGETS, ROUTE_PRIORITIES, FUEL_CAP,
   cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
   handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
-  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity, nextGood,
+  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity, nextGood, buySupplies, merchantAvailable,
 } from "./sim.mjs";
 import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled, pinnedProject } from "./construction.mjs";
 import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor } from "./market.mjs";
@@ -566,6 +567,19 @@ if (renderer) {
       (enabled("stationProjects") ? details("projects", "Drop-off bin & permanent rebuild", projects) : "");
   }
   const listedGoods = goods => Object.entries(goods).map(([good, qty]) => `${qty} ${NAMES[good]}`).join(" + ");
+  function merchantControls() {
+    if (!enabled("supplyMerchant")) return "";
+    const goods = Object.entries(TRADER).map(([good, stock]) => {
+      const ready = merchantAvailable(state, good);
+      const available = merchantStock(state, good);
+      const canBuy = ready && state.cash >= stock.price && roomFor(state, state.player, good) > 0;
+      const note = stock.premium && !ready && available ? "Unlock with Market Exchange or two completed contracts" : `${available} available · ${stock.price} coins each`;
+      const data = `data-merchant="${good}"`;
+      return `<article class="operation-card"><h3>${NAMES[good]}</h3><p>${note}</p><div class="actions">
+        ${action("Buy 1", data, !canBuy)}${action("Buy a load", data + ' data-fill="true"', !canBuy)}</div></article>`;
+    }).join("");
+    return details("merchant", "Buy supplies", `<p>Stock refills every three active minutes. After buying finished goods, automatic sales resume on your next visit.</p><div class="offer-list">${goods}</div>`);
+  }
   function marketControls(b) {
     const m = state.market;
     const spot = Object.keys(PRICES).map(k => `${NAMES[k]} ${spotPrice(state, k)}`).join(" · ");
@@ -600,7 +614,7 @@ if (renderer) {
     const notice = m.notice ? `<p class="payment">${(CONTRACTS[m.notice.id] ?? ACCOUNTS[m.notice.id]).name} · ${m.notice.sale ? "Closed" : "Paid"} · ${m.notice.reward} coins</p>` : "";
     const warehouse = `<p>Held at the counter · ${stock.boards} boards · ${stock.steaks} steaks</p><div class="actions">
       ${Object.keys(stock).map(k => action(`Take ${NAMES[k]}`, `data-market="withdraw" data-id="${k}"`, !stock[k] || roomFor(state, state.player, k) <= 0)).join("")}</div>`;
-    const sales = `<p>Spot prices per item · ${spot}</p><div class="actions">
+    const sales = `<p>Spot prices per item · ${spot}</p>${state.trading.hold ? "<p>Automatic sales are paused for this visit.</p>" : ""}<div class="actions">
       ${action(`Automatic sales ${enabled("autoSell") ? "on" : "off"}`, 'data-market="autosale"')}
       ${action("Sell one at spot price", 'data-market="sell"', !Object.keys(PRICES).some(k => b[k]))}
       ${enabled("bulk") && !state.order ? action("Take quick bulk order · 92 coins", 'data-bulk="accept"') : ""}</div>` + warehouse;
@@ -609,10 +623,13 @@ if (renderer) {
     const status = [enabled("accounts") ? `Day ${marketDay(state)} · ${m.recurring} account pickups` : "",
       enabled("contracts") ? `${m.completed} jobs finished` : ""].filter(Boolean).join(" · ");
     const anyOrders = enabled("accounts") || enabled("contracts") || enabled("bulk");
-    return `${status ? `<p class="station-details">${status}</p>` : ""}${notice && anyOrders ? notice : ""}
+    const special = specialInfo(state);
+    const currentSpecial = special ? `<p class="payment">Featured spot sale · ${NAMES[special.good]} +${SPECIAL_BONUS} coins · ${special.left ? `${special.left} bonus sales left` : "bonus used"}</p>` : "";
+    return `${currentSpecial}${status ? `<p class="station-details">${status}</p>` : ""}${notice && anyOrders ? notice : ""}
       ${active ? showTarget(active) : offers}${legacy}
       ${enabled("accounts") ? details("accounts", "Standing accounts", "<p>Pack ahead. Pickups recur every two play days.</p>" + accounts) : ""}
       ${anyOrders ? details("sales", "Spot sales & reserved stock", sales) : sales}
+      ${merchantControls()}
       ${enabled("contracts") && enabled("loadingBay") ? details("bay", "Loading bay & large shipments", loadingBay) : ""}`;
   }
   function materialLine(goods) {
@@ -865,6 +882,7 @@ if (renderer) {
     if (t.dataset.job) assign(state, +t.dataset.worker, t.dataset.job);
     if (t.dataset.recipe) selectRecipe(state, t.dataset.station, t.dataset.recipe);
     if (t.dataset.install) install(state, t.dataset.station, t.dataset.install);
+    if (t.dataset.merchant) buySupplies(state, t.dataset.merchant, t.dataset.fill === "true");
     if (t.dataset.market) marketAction(state, t.dataset.market, t.dataset.id);
     if (t.dataset.cartRack) cartRack(state, t.dataset.cartRack);
     if (t.dataset.project) buildProject(state, t.dataset.project, t.dataset.station);

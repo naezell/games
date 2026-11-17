@@ -27,7 +27,7 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, buySupplies, quotedSpotPrice, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
 import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo, buildingLevel, nextLevel, reservedForPlan } from "./construction.mjs";
@@ -268,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -470,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -792,4 +792,57 @@ test("construction planning and reports migrate from a prior Simple Camp save", 
   assert.equal(feature(s, "demandRecipes"), false);
   assert.equal(feature(s, "campBoard"), false);
   assert.equal(s.stations.saw.followDemand, false);
+});
+
+test("the supply merchant respects capacity, stock, and automatic sale preferences", () => {
+  let s = createState();
+  s.cash = 300;
+  at(s.player, "build");
+  assert.equal(buySupplies(s, "logs"), false);
+  at(s.player, "sell");
+  assert.equal(buySupplies(s, "lumber"), false);
+  assert.ok(buySupplies(s, "logs", true));
+  assert.equal(s.player.bag.logs, 6);
+  assert.equal(s.cash, 282);
+  assert.equal(buySupplies(s, "logs"), false);
+  s.player.bag.logs = 0;
+  assert.ok(buySupplies(s, "logs", true));
+  assert.equal(s.player.bag.logs, 4);
+  assert.equal(buySupplies(s, "logs"), false);
+  s.player.bag.logs = 0;
+  assert.ok(buySupplies(s, "boards"));
+  assert.equal(feature(s, "autoSell"), true);
+  advance(s, 3);
+  assert.equal(s.player.bag.boards, 1);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  assert.equal(s.trading.hold, true);
+  at(s.player, "build");
+  tick(s);
+  at(s.player, "sell");
+  advance(s, 1);
+  assert.equal(s.player.bag.boards, 0);
+  setFeature(s, "supplyMerchant", false);
+  assert.equal(buySupplies(s, "boards"), false);
+  setFeature(s, "supplyMerchant", true);
+  tick(s, 180);
+  assert.ok(buySupplies(s, "logs"));
+});
+
+test("featured prices are optional, capped, then rotate to the next goods", () => {
+  const s = createState();
+  at(s.player, "sell");
+  assert.equal(quotedSpotPrice(s, "boards"), 4);
+  setFeature(s, "marketSpecials", true);
+  assert.equal(quotedSpotPrice(s, "boards"), 7);
+  s.player.bag.boards = 6;
+  for (let i = 0; i < 6; i++) assert.ok(marketAction(s, "sell"));
+  assert.equal(s.cash, 42);
+  assert.equal(quotedSpotPrice(s, "boards"), 4);
+  assert.equal(quotedSpotPrice(s, "steaks"), 5);
+  tick(s, 180);
+  assert.equal(quotedSpotPrice(s, "steaks"), 8);
+  setFeature(s, "marketSpecials", false);
+  assert.equal(quotedSpotPrice(s, "steaks"), 5);
+  assert.ok(deserialize(serialize(s)));
 });
