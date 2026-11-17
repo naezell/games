@@ -27,10 +27,10 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
-import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo } from "./construction.mjs";
+import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo, buildingLevel, nextLevel, reservedForPlan } from "./construction.mjs";
 const at = (p, k) => Object.assign(p, { x: SPOTS[k].x, z: SPOTS[k].z });
 const advance = (s, seconds) => {
   for (let i = 0; i < seconds * 10; i++) tick(s, 0.1);
@@ -268,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 5);
+  assert.equal(s.version, 6);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -470,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 5);
+  assert.equal(s.version, 6);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -509,7 +509,8 @@ test("a fresh camp can earn and build the timber yard from its first five boards
 test("dependencies and construction costs hold for each new building", () => {
   let s = createState();
   s.cash = 3000;
-  for (const [key, plan] of Object.entries(BUILDINGS)) {
+  for (const [key, definition] of Object.entries(BUILDINGS)) {
+    const plan = { ...definition, ...definition.levels[0] };
     Object.assign(s.player, { x: plan.x, z: plan.z });
     if (plan.after) assert.ok(built(s, plan.after));
     const first = Object.keys(plan.goods)[0];
@@ -640,4 +641,90 @@ test("switches pause individual buildings, helpers, contracts and account pickup
   assert.ok(built(s, "yard"));
   assert.notEqual(s.workers[0].z, 7);
   assert.equal(marketTargets(s).length, 2);
+});
+
+test("upgrades use the same plot, preserve earlier benefits, and pause independently", () => {
+  let s = createState();
+  const { x, z } = BUILDINGS.yard;
+  Object.assign(s.player, { x, z });
+  s.cash = 500;
+  assert.ok(trackPlan(s, "yard"));
+  s.player.bag.boards = 2;
+  assert.ok(buildAtPlot(s, "yard", "supply", 1));
+  assert.ok(buildAtPlot(s, "yard", "build", 1));
+  advance(s, 4);
+  assert.equal(buildingLevel(s, "yard"), 1);
+  assert.equal(nextLevel(s, "yard"), 2);
+  assert.equal(reservedForPlan(s, "boards"), 0);
+  assert.ok(trackPlan(s, "yard"));
+  assert.equal(s.planLevel, 2);
+  assert.equal(reservedForPlan(s, "boards"), 7);
+  assert.equal(buildAtPlot(s, "yard", "supply", 3), false);
+  s.stash.boards = 7;
+  s.stash.lumber = 2;
+  assert.ok(buildAtPlot(s, "yard", "supply", 2));
+  assert.ok(buildAtPlot(s, "yard", "build", 2));
+  advance(s, 2);
+  const time = s.construction.yard.upgrades[0].left;
+  setFeature(s, "buildingLevels", false);
+  advance(s, 12);
+  assert.equal(s.construction.yard.upgrades[0].left, time);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  assert.equal(sourceCapacity(s, "forest"), 9);
+  setFeature(s, "buildingLevels", true);
+  advance(s, 7);
+  assert.equal(sourceCapacity(s, "forest"), 12);
+  setFeature(s, "buildingLevels", false);
+  assert.equal(buildingLevel(s, "yard", true), 2);
+  assert.equal(sourceCapacity(s, "forest"), 9);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("all three building levels apply real economic and production effects", () => {
+  const s = createState();
+  s.cash = 15000;
+  for (const [id, plan] of Object.entries(BUILDINGS)) {
+    Object.assign(s.player, { x: plan.x, z: plan.z });
+    for (const [i, cost] of plan.levels.entries()) {
+      const level = i + 1;
+      assert.equal(nextLevel(s, id), level);
+      for (const [good, units] of Object.entries(cost.goods)) {
+        for (let left = units; left > 0; left -= 6) {
+          s.player.bag[good] = Math.min(6, left);
+          assert.ok(buildAtPlot(s, id, "supply", level));
+        }
+      }
+      const before = s.cash;
+      assert.ok(buildAtPlot(s, id, "build", level));
+      assert.equal(s.cash, before - cost.cash);
+      advance(s, cost.seconds);
+      assert.equal(buildingLevel(s, id), level);
+    }
+  }
+  assert.equal(sourceCapacity(s, "forest"), 15);
+  assert.equal(stashCapacity(s), 64);
+  assert.equal(outputCapacity(s, "saw"), 15);
+  assert.equal(recipeSeconds(s, "grill", "steaks"), 2);
+  assert.equal(workerCapacity(s), 5);
+  assert.equal(spotPrice(s, "trays"), 28);
+  assert.ok(purchase(s, "cart"));
+  assert.equal(capacity(s), 18);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("older feature saves keep their build progress and choices after level migration", () => {
+  const s = createState();
+  s.version = 5;
+  s.plan = "yard";
+  s.construction.yard = { delivered: { boards: 2 }, left: 1.5 };
+  delete s.features.buildingLevels;
+  delete s.planLevel;
+  setFeature(s, "cart", false);
+  const newer = deserialize(serialize(s));
+  assert.ok(newer);
+  assert.equal(newer.planLevel, 1);
+  assert.equal(newer.construction.yard.left, 1.5);
+  assert.equal(feature(newer, "cart"), false);
+  assert.equal(feature(newer, "buildingLevels"), true);
 });

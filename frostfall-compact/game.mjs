@@ -36,9 +36,9 @@ import {
   cancelBulk, CART_RACKS, BIN_COST, REBUILDS, TARGETS, ROUTE_PRIORITIES, FUEL_CAP,
   cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
   handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
-  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive,
+  rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity,
 } from "./sim.mjs";
-import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled } from "./construction.mjs";
+import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled } from "./construction.mjs";
 import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor } from "./market.mjs";
 const THREE = globalThis.THREE;
 const KEY = "frostfall-compact-v1",
@@ -285,7 +285,15 @@ if (renderer) {
     site.add(stakes);
     for (const x of [-.86, .86]) for (const z of [-.66, .66])
       box(.08, .42, .08, 0x987453, x, .24, z, stakes);
-    return { site, base, shell, stakes };
+    const addOns = [new THREE.Group(), new THREE.Group()];
+    for (const attachment of addOns) site.add(attachment);
+    box(.44, .52, .85, 0x9b704d, .91, .4, -.09, addOns[0]);
+    box(.51, .09, .92, paint, .92, .71, -.09, addOns[0]);
+    box(.44, .52, .85, 0x9b704d, -.91, .4, -.09, addOns[1]);
+    box(.51, .09, .92, paint, -.92, .71, -.09, addOns[1]);
+    box(.12, .65, .12, 0x805846, .73, height + .5, -.58, addOns[1]);
+    box(.27, .18, .09, 0xf0c68b, .73, height + .75, -.58, addOns[1]);
+    return { site, base, shell, stakes, addOns };
   }
   const structures = Object.fromEntries(Object.entries(BUILDINGS).map(([id, plan]) => [id, makeBuilding(id, plan)]));
   const cart = group(0, 0);
@@ -298,7 +306,7 @@ if (renderer) {
     wheel.rotation.z = Math.PI / 2;
   }
   const rackRails = [-.47, .47].map(x => box(.1, .35, 1.27, 0x39766e, x, .96, 0, cart));
-  const cartGoods = Array.from({ length: 11 }, (_, i) =>
+  const cartGoods = Array.from({ length: 15 }, (_, i) =>
     box(.35, .17, .35, goodsColors.logs, (i % 2 ? 1 : -1) * .2, .62 + Math.floor(i / 4) * .18, i % 4 < 2 ? -.25 : .21, cart));
   const customers = [person(0xdca34e, 1, 8, 0.78), person(0xb57d9c, 2.5, 9, 0.72)];
   customers.forEach((c) => (c.g.rotation.y = Math.PI));
@@ -507,7 +515,8 @@ if (renderer) {
       `<button data-worker="${i}" data-job="${job}" aria-pressed="${w.job === job}" class="${w.job === job ? "active" : ""}">${name}</button>`).join("");
     const settings = w.job === "route" && enabled("routes") ?
       `<div class="fields">${routeSelect("Route", "line", { saw: "Forest → Sawmill → Counter", grill: "Boars → Grill → Counter" })}
-      ${routeSelect("Preferred load", "min", { 1: "1 item", 2: "2 items", 3: "3 items" })}
+      ${routeSelect("Preferred load", "min", Object.fromEntries(Array.from({ length: workerCapacity(state) },
+        (_, i) => [i + 1, `${i + 1} item${i ? "s" : ""}`])))}
       ${routeSelect("Priority", "priority", ROUTE_PRIORITIES)}</div>` : "";
     return details(`worker-${i}`, `Helper ${i + 1} · ${w.job === "route" ? (route.line === "saw" ? "Timber route" : "Food route") : JOBS[w.job]}`,
       `<div class="helper">${jobs}</div>${settings}
@@ -603,42 +612,50 @@ if (renderer) {
   function constructionControls() {
     const id = catalog ? null : inspectedBuild ?? state.plan;
     const selected = id && BUILDINGS[id];
+    const buildingCount = Object.keys(BUILDINGS).length;
     const finished = Object.keys(BUILDINGS).filter(key => built(state, key)).length;
     if (selected) {
-      const site = state.construction[id];
-      const { needs, funded, ready } = plotInfo(state, id);
-      const remaining = materialLine(needs);
-      const packed = materialLine(site.delivered);
-      const onsite = atPlot(state, id);
+      const level = inspectedBuild ? (buildingLevel(state, id, true) || 1) : state.planLevel;
+      const site = sitePhase(state, id, level);
+      const plan = selected.levels[level - 1];
+      const { needs, funded, ready } = plotInfo(state, id, level);
+      const remaining = materialLine(needs), packed = materialLine(site.delivered), onsite = atPlot(state, id);
       const canDeliver = Object.entries(needs).some(([k, n]) => n && (state.player.bag[k] || state.stash[k]));
-      const control = !buildingEnabled(state, id) ? "<p>Paused in Settings.</p>" : built(state, id) ? '<p class="payment">Built and working</p>' :
+      const needsPremium = !enabled("premium") && ["lumber", "trays"].some(k => (needs[k] ?? 0) > onHand(state, k));
+      const upgrade = site.left === 0 && nextLevel(state, id) ? action("Open next upgrade", `data-build-plan="${id}"`) : "";
+      const control = !phaseEnabled(state, id, level) ? "<p>Paused in Settings.</p>" :
+        site.left === 0 ? `<p class="payment">Level ${level} complete</p>${upgrade}` :
         site.left !== null ? `<p class="payment">Building · ${Math.ceil(site.left)}s left</p>
-          <progress value="${selected.seconds - site.left}" max="${selected.seconds}" aria-label="Construction progress"></progress>` :
-          !unlocked(state, id) ? `<p>Build the ${BUILDINGS[selected.after].name} first.</p>` :
+          <progress value="${plan.seconds - site.left}" max="${plan.seconds}" aria-label="Construction progress"></progress>` :
+          !unlocked(state, id, level) ? `<p>Build the ${BUILDINGS[selected.after].name} first.</p>` :
           `<p>${remaining ? `Still needed · ${remaining}` : "All materials delivered"} ·
-            ${selected.cash} coins${funded ? " available" : ` · need ${selected.cash - state.cash} more`}</p>
+            ${plan.cash} coins${funded ? " available" : ` · need ${plan.cash - state.cash} more`}</p>
             ${packed ? `<p>At the site · ${packed}</p>` : ""}
-            <div class="actions">
-              ${onsite ? action("Deliver materials", 'data-construction="supply"', !canDeliver) +
-                action("Pay & build", 'data-construction="build"', !ready || !funded) :
-                action(`Walk to ${selected.area} site`, 'data-construction="walk"')}
-            </div>`;
-      return `<article class="operation-card blueprint-card"><h3>${selected.name}</h3>
-        <p>${selected.area} · ${selected.effect}</p>${control}</article>
+            ${needsPremium ? "<p>Enable premium recipes in Settings to make the remaining goods.</p>" : ""}
+            <div class="actions">${onsite ? action("Deliver materials", 'data-construction="supply"', !canDeliver) +
+                action(level > 1 ? "Pay & upgrade" : "Pay & build", 'data-construction="build"', !ready || !funded) :
+                action(`Walk to ${selected.area} site`, 'data-construction="walk"')}</div>`;
+      return `<article class="operation-card blueprint-card"><h3>${selected.name} · Level ${level}</h3>
+        <p>${selected.area} · ${plan.effect}</p>${control}</article>
         ${action("Show all plans", 'data-construction="list"')}
-        ${!built(state, id) && site.left === null ? action("Unpin plan", 'data-construction="unpin"') : ""}
-        ${built(state, id) && atPlot(state, id) ? action("Back to camp", 'data-construction="exit"') : ""}`;
+        ${site.left === null ? action("Unpin plan", 'data-construction="unpin"') : ""}
+        ${site.left === 0 && onsite ? action("Back to camp", 'data-construction="exit"') : ""}`;
     }
-    return `<p class="station-details">${finished}/${Object.keys(BUILDINGS).length} structures built.
-      Pick a plan to pin its plot. Automatic sales set aside what the plan still needs.</p>
+    const improvements = Object.keys(BUILDINGS).reduce((sum, k) => sum + Math.max(0, buildingLevel(state, k, true) - 1), 0);
+    return `<p class="station-details">${finished}/${buildingCount} structures built${enabled("buildingLevels") ? ` · ${improvements}/${buildingCount * 2} upgrades` : ""}.
+      Pin a plot to set aside what the plan still needs from automatic sales.</p>
       ${action("Buy equipment & hire helpers", 'data-construction="shop"')}
-      <div class="offer-list build-list">${Object.entries(BUILDINGS).map(([key, plan]) => {
-        const left = state.construction[key].left;
-        const status = !buildingEnabled(state, key) ? "Paused in Settings" : built(state, key) ? "Built" : left !== null ? "Building" :
-          !unlocked(state, key) ? `After ${BUILDINGS[plan.after].name}` :
-          `${plan.cash} coins + ${materialLine(plan.goods)}`;
-        return `<article class="operation-card"><h3>${plan.name}</h3><p>${status}</p>
-          <p>${plan.effect}</p>${action(built(state, key) ? "View structure" : "Open plan", `data-build-plan="${key}"`)}</article>`;
+      <div class="offer-list build-list">${Object.entries(BUILDINGS).map(([key, definition]) => {
+        const owned = buildingLevel(state, key, true);
+        const level = nextLevel(state, key);
+        const plan = definition.levels[(level ?? owned) - 1];
+        const left = level ? sitePhase(state, key, level).left : null;
+        const status = !buildingEnabled(state, key) ? "Paused in Settings" : !level ? `Level ${owned} complete` :
+          left !== null ? `Building level ${level}` : !unlocked(state, key, level) ?
+          `After ${BUILDINGS[definition.after].name}` : `${plan.cash} coins + ${materialLine(plan.goods)}`;
+        const buttonLabel = !level ? "View structure" : level > 1 ? `Level ${level} plan` : "Open plan";
+        return `<article class="operation-card"><h3>${definition.name}</h3><p>${status}</p>
+          <p>${plan.effect}</p>${action(buttonLabel, `data-build-plan="${key}"`)}</article>`;
       }).join("")}</div>`;
   }
   function settingsControls() {
@@ -658,10 +675,12 @@ if (renderer) {
     $("buildMenu").hidden = !enabled("construction");
     $("settingsMenu").setAttribute("aria-pressed", String(settingsMenu));
     for (const [key] of labels) SPOTS[key].el.hidden = !enabled("markers");
-    plotMarker.hidden = !enabled("construction") || !state.plan || !buildingEnabled(state, state.plan) || !unlocked(state, state.plan) || built(state, state.plan);
+    plotMarker.hidden = !state.plan || !phaseEnabled(state, state.plan, state.planLevel) ||
+      !unlocked(state, state.plan, state.planLevel) || sitePhase(state, state.plan, state.planLevel).left === 0;
     if (!plotMarker.hidden) {
       const planName = BUILDINGS[state.plan].name;
-      const markerText = `${planName}<span>${state.construction[state.plan].left > 0 ? "Building" : "BUILD SITE"}</span>`;
+      const markerText = `${planName}<span>${sitePhase(state, state.plan, state.planLevel).left > 0 ? "Building" :
+        state.planLevel === 1 ? "BUILD SITE" : `LEVEL ${state.planLevel} SITE`}</span>`;
       if (plotMarker.innerHTML !== markerText) plotMarker.innerHTML = markerText;
       positionPlotMarker();
     }
@@ -792,8 +811,7 @@ if (renderer) {
     }
     if (t.dataset.gather) gatherNow(state, t.dataset.gather);
     if (t.dataset.buildPlan) {
-      inspectedBuild = built(state, t.dataset.buildPlan) ? t.dataset.buildPlan : null;
-      if (!inspectedBuild) trackPlan(state, t.dataset.buildPlan);
+      inspectedBuild = trackPlan(state, t.dataset.buildPlan) ? null : t.dataset.buildPlan;
       catalog = false;
     }
     if (t.dataset.construction === "list") { catalog = true; inspectedBuild = null; }
@@ -802,7 +820,7 @@ if (renderer) {
     if (t.dataset.construction === "exit") buildMenu = false;
     if (t.dataset.construction === "shop") { buildMenu = false; destination = SPOTS.build; }
     if (t.dataset.construction === "supply" || t.dataset.construction === "build")
-      buildAtPlot(state, state.plan, t.dataset.construction);
+      buildAtPlot(state, state.plan, t.dataset.construction, state.planLevel);
     if (t.dataset.buildPlan || t.dataset.construction === "list" || t.dataset.construction === "unpin") $("panel").scrollTop = 0;
     if (t.dataset.buy) purchase(state, t.dataset.buy);
     if (t.hasAttribute("data-stash")) stashAll(state);
@@ -905,9 +923,13 @@ if (renderer) {
       const { left, delivered } = state.construction[id];
       model.site.visible = buildingEnabled(state, id) && (left !== null || state.plan === id && unlocked(state, id) || Object.values(delivered).some(Boolean));
       model.base.visible = left !== null || Object.values(delivered).some(Boolean);
-      model.stakes.visible = left !== 0;
+      const next = nextLevel(state, id);
+      const upgrading = next && next > 1 && sitePhase(state, id, next).left > 0;
+      model.stakes.visible = left !== 0 || !!upgrading;
       model.shell.visible = left !== null;
-      model.shell.scale.y = left === null ? 1 : .38 + .62 * (1 - left / BUILDINGS[id].seconds);
+      model.shell.scale.y = left === null ? 1 : .38 + .62 * (1 - left / BUILDINGS[id].levels[0].seconds);
+      const finished = buildingLevel(state, id);
+      for (const [i, addition] of model.addOns.entries()) addition.visible = finished >= i + 2;
     }
     bay.visible = enabled("loadingBay") && state.market.bay;
     const active = marketTargets(state).find(t => t.id === "contract");
