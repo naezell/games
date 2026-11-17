@@ -33,8 +33,11 @@ import {
   acceptBulk,
   bulkRemaining,
   deliverBulk,
-  cancelBulk,
+  cancelBulk, CART_RACKS, BIN_COST, REBUILDS, TARGETS, ROUTE_PRIORITIES, FUEL_CAP,
+  cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
+  handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
 } from "./sim.mjs";
+import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor } from "./market.mjs";
 const THREE = globalThis.THREE;
 const KEY = "frostfall-compact-v1",
   $ = (id) => document.getElementById(id);
@@ -203,11 +206,24 @@ if (renderer) {
   for (let x of [-1.4, 1.4]) box(0.12, 1.7, 0.12, 0x795039, x, 1.7, 0, counter);
   box(3.3, 0.17, 1.2, 0xdd7862, 0, 2.5, 0, counter);
   box(3.3, 0.08, 0.85, 0xfffcf2, 0, 2.62, -0.08, counter);
+  const bay = group(3.25, 6.85);
+  box(2.15, .2, 1.95, 0xb58154, 0, .13, 0, bay);
+  for (const z of [-.74, .7]) box(.13, .65, .13, 0x815140, .94, .34, z, bay);
+  box(.14, .13, 1.58, 0x815140, .94, .65, 0, bay);
+  const packedCrates = Array.from({ length: 5 }, (_, i) =>
+    box(.48, .43, .42, 0xd3a565, (i % 3) * .54 - .59, .42, Math.floor(i / 3) * .55 - .4, bay));
   // Equipment fits behind the existing machines and their loading pads.
   const fixtures = {};
   for (const [key, x] of [["saw", -5.5], ["grill", 5.5]]) {
     const kit = fixtures[key] = { machine: group(x, -4), rack: group(SPOTS[key + "In"].x, -3.4),
-      bench: group(SPOTS[key + "Out"].x, -3.35) };
+      bench: group(SPOTS[key + "Out"].x, -3.35), supply: group(SPOTS[key + "In"].x - 1.35, -2.85),
+      rebuild: group(x, -.82) };
+    box(.83, .17, .85, 0x98745a, 0, .16, 0, kit.supply);
+    for (const edge of [-.4, .4]) box(.11, .49, .86, 0x68867c, edge, .36, 0, kit.supply);
+    kit.staged = Array.from({ length: 4 }, (_, i) =>
+      box(.34, .14, .47, goodsColors[LINES[key].raw], i % 2 ? .19 : -.19, .29 + .15 * Math.floor(i / 2), 0, kit.supply));
+    kit.beam = box(1.65, .23, .27, 0x5e8e88, 0, .89, 0, kit.rebuild);
+    for (const edge of [-.69, .69]) box(.13, .95, .16, 0x795238, edge, .46, 0, kit.rebuild);
     if (key === "saw") {
       box(1.5, .75, .9, 0x986642, 0, .38, 0, kit.machine);
       kit.blade = cyl(.36, .36, .09, 0xcbdce0, 0, .86, 0, kit.machine, 16);
@@ -233,7 +249,8 @@ if (renderer) {
     const wheel = cyl(.27, .27, .13, 0x4b575b, x, .27, -.17, cart, 12);
     wheel.rotation.z = Math.PI / 2;
   }
-  const cartGoods = Array.from({ length: CART_SLOTS }, (_, i) =>
+  const rackRails = [-.47, .47].map(x => box(.1, .35, 1.27, 0x39766e, x, .96, 0, cart));
+  const cartGoods = Array.from({ length: 8 }, (_, i) =>
     box(.35, .17, .35, goodsColors.logs, (i % 2 ? 1 : -1) * .2, .62 + Math.floor(i / 4) * .18, i % 4 < 2 ? -.25 : .21, cart));
   const customers = [person(0xdca34e, 1, 8, 0.78), person(0xb57d9c, 2.5, 9, 0.72)];
   customers.forEach((c) => (c.g.rotation.y = Math.PI));
@@ -385,24 +402,112 @@ if (renderer) {
   }
   let lastPanel = "";
   const unavailable = yes => yes ? "disabled" : "";
+  const action = (label, data, disabled = false) => `<button class="action" ${data} ${unavailable(disabled)}>${label}</button>`;
+  const details = (id, name, content) => `<details data-section="${id}"><summary>${name}</summary>${content}</details>`;
+  const choices = (value, options) => Object.entries(options).map(([k, label]) =>
+    `<option value="${k}"${String(value) === k ? " selected" : ""}>${label}</option>`).join("");
+  const select = (label, data, value, options) => `<label class="field">${label}<select ${data}>${choices(value, options)}</select></label>`;
+  const projectLabel = cost => `${cost.cash} coins + ${cost.lumber} finished lumber`;
   const recipeButtons = (key, st) => Object.entries(LINES[key].recipes).map(([good, recipe]) =>
-    `<button class="action choice" data-recipe="${good}" data-station="${key}" aria-pressed="${st.recipe === good}">${recipe.name} · ${PRICES[good]} coins<br><small>${recipe.input} ${LINES[key].raw} · ${(recipe.time * UPGRADES[key].values[state.levels[key]]).toFixed(2).replace(/\.?0+$/, "")}s</small></button>`).join("");
+    `<button class="action choice" data-recipe="${good}" data-station="${key}" aria-pressed="${st.recipe === good}">${recipe.name} · ${PRICES[good]} coins<br><small>${recipe.input} ${LINES[key].raw} · ${recipeSeconds(state, key, good).toFixed(2).replace(/\.?0+$/, "")}s</small></button>`).join("");
   function equipmentControls(key, st) {
     if (st.equipment) return `<p class="station-details">${EQUIPMENT[st.equipment].name} installed</p>`;
-    return `<details><summary>Choose this station’s one equipment upgrade</summary><div class="actions">${Object.entries(EQUIPMENT).map(([part, e]) =>
+    return `<details data-section="equipment"><summary>Choose this station’s one equipment upgrade</summary><div class="actions">${Object.entries(EQUIPMENT).map(([part, e]) =>
       `<button class="action" data-install="${part}" data-station="${key}" ${unavailable(state.cash < e.price)}>${e.name} · ${e.price} coins<br><small>${e.effect}</small></button>`).join("")}</div></details>`;
   }
+  function cartControls() {
+    if (!state.cart) return "";
+    return details("cart", `Cart · ${CART_RACKS[state.cartRack].name}`, `<div class="actions">${Object.entries(CART_RACKS).map(([id, r]) =>
+      action(`${r.name} · +${r.slots} slots${r.cash && !state.ownedRacks[id] ? ` · ${r.cash} coins` : ""}`,
+        `data-cart-rack="${id}"`, state.cartRack === id || !rackFits(state, id) || id !== "mixed" && !state.ownedRacks[id] && state.cash < r.cash)
+    ).join("")}</div><p class="station-details">Timber and food racks leave the backpack free for other goods. Unload before switching if your load is too large.</p>`);
+  }
+  function helperControls(w, i) {
+    const route = w.route;
+    const routeSelect = (label, field, options) => select(label, `data-route="${field}" data-worker="${i}"`, route[field], options);
+    const jobs = Object.entries(JOBS).map(([job, name]) =>
+      `<button data-worker="${i}" data-job="${job}" aria-pressed="${w.job === job}" class="${w.job === job ? "active" : ""}">${name}</button>`).join("");
+    const settings = w.job === "route" ?
+      `<div class="fields">${routeSelect("Route", "line", { saw: "Forest → Sawmill → Counter", grill: "Boars → Grill → Counter" })}
+      ${routeSelect("Preferred load", "min", { 1: "1 item", 2: "2 items", 3: "3 items" })}
+      ${routeSelect("Priority", "priority", ROUTE_PRIORITIES)}</div>` : "";
+    return details(`worker-${i}`, `Helper ${i + 1} · ${w.job === "route" ? (route.line === "saw" ? "Timber route" : "Food route") : JOBS[w.job]}`,
+      `<div class="helper">${jobs}</div>${settings}
+      <div class="fields">${routeSelect("At the counter", "reserve", { false: "Sell goods", true: "Pack jobs first · sell surplus" })}</div>`);
+  }
+  function stationControls(key, st, atInput) {
+    const { raw, goods } = LINES[key], load = state.player.bag[raw];
+    const stage = `data-station="${key}"`;
+    const setting = (label, field, value, options) => select(label, `data-station-field="${field}" ${stage}`, value, options);
+    const handling = `<div class="fields">${setting("Handling", "manual", st.manual, { false: "Automatic", true: "Manual" })}
+      ${setting(`Keep ${goods[0]}`, "target", st.target, Object.fromEntries(TARGETS.map(n => [n, n || "Off"])))}</div>
+      <p class="station-details">${onHand(state, goods[0])} ${goods[0]} on hand. A stock target makes basics first and holds surplus at the counter. Choose a premium recipe to switch to after stocking up.</p>`;
+    const timber = key === "saw"
+      ? `<p class="station-details">${state.timberSorted} selected logs. Selected timber speeds up finished lumber.</p><div class="actions">
+         ${action("Sort 2 logs", `data-sort="2"`, !st.input)}${action("Return selected to general stock", `data-sort="-30"`, !state.timberSorted)}</div>`
+      : `<p class="station-details">Shared offcuts ${state.fuel}/${FUEL_CAP}. One offcut and five meat make two trays when there’s room.</p>
+         <div class="fields">${setting("Tray batches", "doubles", state.doubles, { false: "Single batch", true: "Double with offcuts" })}</div>`;
+    const loading = atInput
+      ? `<p class="station-details">Staged ${st.staging}/${stageCapacity(state, key)} ${raw}${st.bin ? " · bin feeds automatically" : ""}</p><div class="actions">
+          ${action("Unload matching goods", `data-load="unload" ${stage}`, !load || inputCount(state, key) >= inputCapacity(state, key))}
+          ${action(st.bin ? "Drop load into bin" : "Stage goods", `data-load="stage" ${stage}`, !load || st.staging >= stageCapacity(state, key))}
+          ${action("Load next batch", `data-load="queue" ${stage}`, !st.staging || !nextBatchNeeds(state, key) || inputCount(state, key) >= inputCapacity(state, key))}</div>`
+      : `<div class="actions">${action(state.cart ? "Fill cart from output" : "Pick up goods", `data-load="pickup" ${stage}`,
+          !goods.some((g, i) => roomFor(state, state.player, g) > 0 && (i ? st.premium : st.output)))}</div>`;
+    const projects = `<p class="station-details">Projects use lumber from your load or the camp crate.</p><div class="actions">
+      ${action(st.bin ? "Drop-off bin installed" : `Build drop-off bin<br><small>${projectLabel(BIN_COST)} · 12 staged goods</small>`,
+        `data-project="bin" ${stage}`, st.bin || !projectReady(state, BIN_COST))}
+      ${st.layout ? `<p class="station-details">${REBUILDS[st.layout].name} rebuild · ${REBUILDS[st.layout].effect}</p>` :
+        Object.entries(REBUILDS).map(([id, layout]) => action(`${layout.name}<br><small>${projectLabel(layout)} · ${layout.effect}</small>`,
+          `data-project="${id}" ${stage}`, !projectReady(state, layout))).join("")}</div>`;
+    return loading + details("production", "Stock targets, handling & batches", handling + timber) +
+      equipmentControls(key, st) + details("projects", "Drop-off bin & permanent rebuild", projects);
+  }
+  const listedGoods = goods => Object.entries(goods).map(([good, qty]) => `${qty} ${NAMES[good]}`).join(" + ");
   function marketControls(b) {
+    const m = state.market;
     const spot = Object.entries(PRICES).map(([k, price]) => `${NAMES[k]} ${price}`).join(" · ");
-    const order = state.order;
-    const canDeliver = ["boards", "steaks"].some(k => b[k] && bulkRemaining(state, k));
-    if (!order) return `<p class="station-details">Automatic sales · ${spot} coins each</p>
-      <button class="action" data-bulk="accept">Take bulk order · 8 boards + 8 steaks · ${BULK.reward} coins</button>
-      <small class="market-note">Optional · no deadline</small>`;
-    return `<p class="station-details"><strong>Bulk order · ${BULK.reward} coins</strong> · Boards ${order.boards}/${BULK.boards} · Steaks ${order.steaks}/${BULK.steaks}</p>
-      <p class="station-details">Needed goods stay in your load until you deliver them. Other goods sell automatically.</p>
-      <div class="actions"><button class="action" data-bulk="deliver" ${unavailable(!canDeliver)}>Deliver to order</button>
-      <button class="action" data-bulk="cancel">Close order at regular prices</button></div>`;
+    const stock = m.stock;
+    const available = Object.fromEntries(Object.keys(PRICES).map(k => [k, b[k] + (stock[k] ?? 0)]));
+    const targets = marketTargets(state);
+    const showTarget = t => {
+      const progress = Object.entries(t.goods).map(([k, qty]) => `${t.packed[k] ?? 0}/${qty} ${NAMES[k]} · ${onHand(state, k)} on hand`).join("<br>");
+      const timing = t.id === "contract" ? `Installment ${t.part + 1}/${t.total}` : t.ready ? "Pickup ready" : `Pickup on day ${t.due}`;
+      return `<article class="operation-card"><h3>${t.name}</h3><p>${timing} · ${t.reward} coins</p><p>${progress}</p><div class="actions">
+        ${action("Pack available goods", `data-market="pack" data-id="${t.id}"`, !canPack(available, t))}
+        ${action("Close at regular prices", `data-market="close" data-id="${t.id}"`)}</div></article>`;
+    };
+    const offers = m.active ? "" : `<div class="offer-list">${marketOffers(state).map(id => {
+      const c = CONTRACTS[id];
+      const total = c.stages.reduce((sum, part) => sum + part.reward, 0);
+      return `<article class="operation-card"><h3>${c.name}</h3><p>${c.stages.length} installments · ${total} coins</p>
+        <p>First pickup · ${listedGoods(c.stages[0].goods)}</p>
+        ${action("Take job", `data-market="accept" data-id="${id}"`)}</article>`;
+    }).join("")}</div>`;
+    const active = targets.find(t => t.id === "contract");
+    const legacy = state.order ? `<article class="operation-card"><h3>Bulk order</h3>
+      <p>Boards ${state.order.boards}/${BULK.boards} · Steaks ${state.order.steaks}/${BULK.steaks} · ${BULK.reward} coins</p><div class="actions">
+      ${action("Deliver to order", 'data-bulk="deliver"', !["boards", "steaks"].some(k => b[k] && bulkRemaining(state, k)))}
+      ${action("Close at regular prices", 'data-bulk="cancel"')}</div></article>` : "";
+    const accounts = accountUnlocked(state) ? Object.entries(ACCOUNTS).map(([id, a]) => {
+      const t = targets.find(entry => entry.id === id);
+      return t ? showTarget(t) : `<article class="operation-card"><h3>${a.name}</h3>
+        <p>${listedGoods(a.goods)} · ${a.reward} coins per pickup</p>${action("Open standing account", `data-market="account" data-id="${id}"`)}</article>`;
+    }).join("") : "<p>Complete a market job to open standing accounts.</p>";
+    const notice = m.notice ? `<p class="payment">${(CONTRACTS[m.notice.id] ?? ACCOUNTS[m.notice.id]).name} · ${m.notice.sale ? "Closed" : "Paid"} · ${m.notice.reward} coins</p>` : "";
+    const warehouse = `<p>Held at the counter · ${stock.boards} boards · ${stock.steaks} steaks</p><div class="actions">
+      ${Object.keys(stock).map(k => action(`Take ${NAMES[k]}`, `data-market="withdraw" data-id="${k}"`, !stock[k] || roomFor(state, state.player, k) <= 0)).join("")}</div>`;
+    const sales = `<p>Spot prices per item · ${spot}</p><div class="actions">
+      ${action(`Automatic sales ${m.autoSale ? "on" : "off"}`, 'data-market="autosale"')}
+      ${action("Sell one at spot price", 'data-market="sell"', !Object.keys(PRICES).some(k => b[k]))}
+      ${!m.active && !state.order ? action("Take quick bulk order · 92 coins", 'data-bulk="accept"') : ""}</div>` + warehouse;
+    const loadingBay = m.bay ? `<p>Loading bay open · ${m.shipments} large shipments completed.</p>` :
+      action(`Build loading bay · ${projectLabel(BAY)}`, 'data-project="bay"', !projectReady(state, BAY));
+    return `<p class="station-details">Day ${marketDay(state)} · ${m.completed} jobs finished · ${m.recurring} account pickups</p>${notice}
+      ${active ? showTarget(active) : legacy || offers}
+      ${details("accounts", "Standing accounts", "<p>Pack ahead. Pickups recur every two play days.</p>" + accounts)}
+      ${details("sales", "Spot sales & reserved stock", sales)}
+      ${details("bay", "Loading bay & large shipments", loadingBay)}`;
   }
   function updateUI() {
     const p = state.player,
@@ -416,6 +521,16 @@ if (renderer) {
       SPOTS[key + "In"].el.lastElementChild.textContent = stationStatus(state, key);
       SPOTS[key + "Out"].el.lastElementChild.textContent =
         outputCount(st) === outputCapacity(state, key) ? "Output full" : `${outputCount(st)} ready`;
+    }
+    const active = state.market.active;
+    SPOTS.sell.el.lastElementChild.textContent = active ? `Job ${active.part + 1}/${CONTRACTS[active.id].stages.length}` :
+      state.order ? "Bulk order" : "Jobs & sales";
+    const current = active ? marketTargets(state).find(t => t.id === "contract") : null;
+    const focus = $("jobStatus");
+    focus.hidden = !current;
+    if (current) {
+      const remaining = Object.keys(current.goods).flatMap(k => neededFor(current, k) ? [[k, neededFor(current, k)]] : []);
+      focus.textContent = `${current.name} · Need ${listedGoods(Object.fromEntries(remaining))}`;
     }
     $("saveStatus").textContent = saveError ? " · Save unavailable" : "";
     let title = "Choose a destination",
@@ -449,33 +564,28 @@ if (renderer) {
           GOODS.filter((g) => state.stash[g])
             .map(
               (g) =>
-                `<button class="action" data-get="${g}" ${count(b) >= capacity(state) ? "disabled" : ""}>Take ${NAMES[g]} (${state.stash[g]})</button>`,
+                `<button class="action" data-get="${g}" ${unavailable(roomFor(state, state.player, g) <= 0)}>Take ${NAMES[g]} (${state.stash[g]})</button>`,
             )
             .join("") +
           "</div>" +
-          state.workers
-            .map(
-              (w, i) =>
-                `<div class="helper">Helper ${i + 1}: ${Object.entries(JOBS).map(([job, name]) => `<button data-worker="${i}" data-job="${job}" aria-pressed="${w.job === job}" class="${w.job === job ? "active" : ""}">${name}</button>`).join("")}</div>`,
-            )
-            .join("");
+          cartControls() + state.workers.map(helperControls).join("");
       } else if (k === "sell") {
         title = "Market counter";
         content = marketControls(b);
-        hint = "Sell goods or deliver a bulk order.";
+        hint = "Take a job, pack an order, or sell your goods.";
       } else {
         const key = k.startsWith("saw") ? "saw" : "grill", st = state.stations[key];
         const [basic, premium] = LINES[key].goods;
         title = key === "saw" ? "Sawmill" : "Grill";
         content = `<p class="station-details"><strong>${stationStatus(state, key)}</strong> ·
-          Input ${st.input}/${inputCapacity(state, key)} · Output ${outputCount(st)}/${outputCapacity(state, key)}
+          Input ${inputCount(state, key)}/${inputCapacity(state, key)} · Output ${outputCount(st)}/${outputCapacity(state, key)}
           ${st.output || st.premium ? `· ${st.output} ${NAMES[basic]}, ${st.premium} ${NAMES[premium]}` : ""}
           ${st.jobs.length ? `· ${st.jobs.map(job => NAMES[job.good]).join(" + ")} underway` : ""}</p>
           <div class="actions" aria-label="Next jobs">${recipeButtons(key, st)}</div>
-          ${equipmentControls(key, st)}`;
-        hint = k.endsWith("In")
-          ? "Raw goods unload automatically."
-          : "Finished goods load automatically if your backpack has room.";
+          ${stationControls(key, st, k.endsWith("In"))}`;
+        hint = st.manual ? "Manual handling. Use the load controls." : k.endsWith("In")
+          ? "Matching raw goods unload automatically."
+          : "Finished goods fill your available load.";
       }
     }
     $("hint").textContent = hint;
@@ -483,19 +593,25 @@ if (renderer) {
     $("panelIcon").textContent = icon;
     if (content !== lastPanel) {
       const panel = $("panelContent");
-      const wasOpen = panel.querySelector("details")?.open && panel.dataset.title === title;
-      const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+      const samePlace = panel.dataset.title === title;
+      const opened = samePlace ? [...panel.querySelectorAll("details[open]")].map(el => el.dataset.section) : [];
+      const focused = samePlace && panel.contains(document.activeElement) ? document.activeElement : null;
+      const panelScroll = $("panel");
+      const scrollTop = samePlace ? panelScroll.scrollTop : 0;
       panel.innerHTML = content;
       panel.dataset.title = title;
-      if (wasOpen && panel.querySelector("details")) panel.querySelector("details").open = true;
+      for (const section of panel.querySelectorAll("details")) section.open = opened.includes(section.dataset.section);
       if (focused) {
+        const original = JSON.stringify({ ...focused.dataset });
         const replacement = [...panel.querySelectorAll(focused.tagName)].find(el =>
-          el.textContent.trim() === focused.textContent.trim() && !el.disabled);
+          JSON.stringify({ ...el.dataset }) === original && el.parentElement?.dataset.section === focused.parentElement?.dataset.section && !el.disabled);
         replacement?.focus({ preventScroll: true });
       }
+      panelScroll.scrollTop = scrollTop;
       lastPanel = content;
     }
   }
+  $("jobStatus").onclick = () => { destination = { ...SPOTS.sell }; };
   $("panelContent").addEventListener("click", (e) => {
     let t = e.target.closest("button");
     if (!t) return;
@@ -506,9 +622,24 @@ if (renderer) {
     if (t.dataset.job) assign(state, +t.dataset.worker, t.dataset.job);
     if (t.dataset.recipe) selectRecipe(state, t.dataset.station, t.dataset.recipe);
     if (t.dataset.install) install(state, t.dataset.station, t.dataset.install);
+    if (t.dataset.market) marketAction(state, t.dataset.market, t.dataset.id);
+    if (t.dataset.cartRack) cartRack(state, t.dataset.cartRack);
+    if (t.dataset.project) buildProject(state, t.dataset.project, t.dataset.station);
+    if (t.dataset.load) handleLoad(state, t.dataset.station, t.dataset.load);
+    if (t.dataset.sort) sortTimber(state, Number(t.dataset.sort));
     if (t.dataset.bulk === "accept") acceptBulk(state);
     if (t.dataset.bulk === "deliver") deliverBulk(state);
     if (t.dataset.bulk === "cancel") cancelBulk(state);
+    lastPanel = "";
+    updateUI();
+    save();
+  });
+  $("panelContent").addEventListener("change", e => {
+    const { dataset: d, value } = e.target;
+    const converted = value === "true" || value === "false" ? value === "true" : /^\d+$/.test(value) ? Number(value) : value;
+    if (d.route) setWorkerRoute(state, Number(d.worker), d.route, converted);
+    else if (d.stationField) setStation(state, d.station, d.stationField, converted);
+    else return;
     lastPanel = "";
     updateUI();
     save();
@@ -563,17 +694,28 @@ if (renderer) {
       const p = state.player;
       cart.position.set(p.x - 1.7 * Math.sin(heading), 0, p.z - 1.7 * Math.cos(heading));
       cart.rotation.y = heading;
-      const bagGoods = GOODS.flatMap(k => Array(p.bag[k]).fill(k));
-      const load = bagGoods.slice(UPGRADES.pack.values[state.levels.pack]);
+      const load = cartLoad(state);
+      for (const rail of rackRails) {
+        rail.visible = state.cartRack !== "mixed";
+        rail.material = mat(state.cartRack === "timber" ? 0xa26d47 : 0x39766e);
+      }
       cartGoods.forEach((item, i) => {
         item.visible = i < load.length;
         if (item.visible) item.material = mat(goodsColors[load[i]]);
       });
     }
     cart.visible = state.cart;
+    bay.visible = state.market.bay;
+    const active = state.market.active;
+    const packed = active ? Object.values(active.packed).reduce((sum, n) => sum + n, 0) : 0;
+    packedCrates.forEach((crate, i) => { crate.visible = i < Math.ceil(packed / 3); });
     for (const [key, kit] of Object.entries(fixtures)) {
       const st = state.stations[key];
       for (const part of Object.keys(EQUIPMENT)) kit[part].visible = st.equipment === part;
+      kit.supply.visible = st.bin || st.staging > 0;
+      kit.staged.forEach((item, i) => { item.visible = i < st.staging; });
+      kit.rebuild.visible = !!st.layout;
+      if (st.layout) kit.beam.material = mat({ fast: 0xbe8c37, finish: 0x567da0, freight: 0x508e77 }[st.layout]);
       if (kit.blade && st.jobs.length > 1) kit.blade.rotateY(.13);
       if (kit.flame) kit.flame.visible = st.jobs.length > 1;
     }

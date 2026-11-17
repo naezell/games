@@ -1,3 +1,6 @@
+import { createMarket, marketIsValid, marketDay, marketAdvance, shipAccounts, marketTargets, marketNeed,
+  packGoods, contractAction, accountAction, closeMarketJob, BAY } from "./market.mjs";
+
 export const GOODS = ["logs", "boards", "lumber", "meat", "steaks", "trays"];
 export const NAMES = { logs: "logs", boards: "boards", lumber: "finished lumber", meat: "meat", steaks: "steaks", trays: "steak trays" };
 export const PRICES = { boards: 4, lumber: 12, steaks: 5, trays: 20 };
@@ -34,9 +37,25 @@ export const EQUIPMENT = {
 };
 export const CART_PRICE = 55;
 export const CART_SLOTS = 5;
+export const CART_RACKS = {
+  mixed: { name: "Mixed bed", slots: CART_SLOTS, cash: 0 },
+  timber: { name: "Timber rack", slots: 8, cash: 38, goods: ["logs", "boards", "lumber"] },
+  food: { name: "Food rack", slots: 8, cash: 38, goods: ["meat", "steaks", "trays"] },
+};
+export const BIN_COST = { cash: 54, lumber: 2 };
+export const REBUILDS = {
+  fast: { name: "Quick batch", cash: 145, lumber: 5, effect: "Quick recipes run 40% faster" },
+  finish: { name: "Premium workshop", cash: 165, lumber: 5, effect: "Premium recipes run 40% faster" },
+  freight: { name: "Easy loading", cash: 150, lumber: 5, effect: "+8 input and output slots · feeds from staging" },
+};
+export const TARGETS = [0, 4, 8, 12, 16];
+export const ROUTE_PRIORITIES = { supply: "Supply first", pickup: "Pickup first" };
+export const FUEL_CAP = 16;
+const stationExtras = () => ({ staging: 0, bin: false, layout: null, target: 0, manual: false });
+const routeDefaults = () => ({ line: "saw", min: 2, priority: "supply", reserve: false });
 export const JOBS = {
   lumber: "Supply sawmill", meat: "Supply grill", haul: "Haul finished goods",
-  clear: "Clear full outputs first", split: "Split gathering",
+  clear: "Clear full outputs first", split: "Split gathering", route: "Run a route",
 };
 export const BULK = { boards: 8, steaks: 8, reward: 92 };
 const stationKeys = Object.keys(LINES);
@@ -55,36 +74,95 @@ function animate(person, kind, good, duration = .65) {
 
 export function createState() {
   return {
-    version: 2,
+    version: 3,
     cash: 0,
     levels: { pack: 0, saw: 0, grill: 0, storage: 0 },
     player: { x: 0, z: 7, bag: empty(), gather: 0, sell: 0 },
     stations: Object.fromEntries(stationKeys.map(key => [key, {
-      input: 0, output: 0, premium: 0, recipe: LINES[key].goods[0], equipment: null, jobs: [],
+      input: 0, output: 0, premium: 0, recipe: LINES[key].goods[0], equipment: null, jobs: [], ...stationExtras(),
     }])),
     workers: [],
     stash: empty(),
     sources: { forest: { remaining: 6, regrow: 0 }, boars: { remaining: 6, regrow: 0 } },
     sold: 0,
     cart: false,
+    cartRack: "mixed",
+    ownedRacks: { timber: false, food: false },
     order: null,
+    market: createMarket(),
+    timberSorted: 0,
+    fuel: 0,
+    doubles: false,
   };
 }
 
-export const capacity = s => UPGRADES.pack.values[s.levels.pack] + (s.cart ? CART_SLOTS : 0);
+export const packCapacity = s => UPGRADES.pack.values[s.levels.pack];
+export const capacity = s => packCapacity(s) + (s.cart ? CART_RACKS[s.cartRack].slots : 0);
+const mixFits = (s, rack, bag) => {
+  const { goods, slots } = CART_RACKS[rack];
+  const load = count(bag);
+  return load <= packCapacity(s) + slots &&
+    (!goods || load - goods.reduce((n, k) => n + bag[k], 0) <= packCapacity(s));
+};
+export function roomFor(s, person, good) {
+  const load = count(person.bag);
+  if (person !== s.player) return 3 - load;
+  const room = capacity(s) - load;
+  const { goods } = CART_RACKS[s.cartRack];
+  if (!goods || goods.includes(good)) return room;
+  return Math.min(room, packCapacity(s) - load + goods.reduce((n, k) => n + person.bag[k], 0));
+}
+export function cartLoad(s) {
+  const { bag } = s.player;
+  const rackGoods = CART_RACKS[s.cartRack].goods ?? GOODS;
+  return goodsList(bag, GOODS.filter(k => !rackGoods.includes(k)).concat(rackGoods)).slice(packCapacity(s));
+}
+const goodsList = (bag, keys) => keys.flatMap(k => Array(bag[k]).fill(k));
+
 export const storage = s => UPGRADES.storage.values[s.levels.storage];
-export const inputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "rack" ? 4 : 0);
-export const outputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "bench" ? 4 : 0);
+export const inputCount = (s, key) => s.stations[key].input + (key === "saw" ? s.timberSorted : 0);
+const freight = (s, key) => s.stations[key].layout === "freight";
+export const inputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "rack" ? 4 : 0) + (freight(s, key) ? 8 : 0);
+export const outputCapacity = (s, key) => storage(s) + (s.stations[key].equipment === "bench" ? 4 : 0) + (freight(s, key) ? 8 : 0);
+export const stageCapacity = (s, key) => (s.stations[key].bin ? 12 : 4) + (freight(s, key) ? 4 : 0);
+const inputRoom = (s, key) => inputCapacity(s, key) - inputCount(s, key);
 export const outputCount = st => st.output + st.premium;
 const slots = st => st.equipment === "machine" ? 2 : 1;
-const outputRoom = (s, key) => outputCapacity(s, key) - outputCount(s.stations[key]) - s.stations[key].jobs.length;
+const outputRoom = (s, key) => outputCapacity(s, key) - outputCount(s.stations[key]) -
+  s.stations[key].jobs.reduce((n, job) => n + job.units, 0);
 
+export function onHand(s, good) {
+  const field = stationKeys.find(key => LINES[key].goods.includes(good));
+  const station = field ? s.stations[field] : null;
+  const waiting = !station ? 0 : good === LINES[field].goods[0] ? station.output : station.premium;
+  return s.player.bag[good] + s.stash[good] + waiting + (s.market.stock[good] ?? 0) +
+    s.workers.reduce((n, w) => n + w.bag[good], 0);
+}
+function nextGood(s, key) {
+  const st = s.stations[key], basic = LINES[key].goods[0];
+  const scheduled = st.jobs.reduce((n, job) => n + (job.good === basic ? job.units : 0), 0);
+  return onHand(s, basic) + scheduled < st.target ? basic : st.recipe;
+}
+export function recipeSeconds(s, key, good) {
+  const st = s.stations[key], basic = good === LINES[key].goods[0];
+  const accelerated = st.layout === (basic ? "fast" : "finish");
+  return UPGRADES[key].values[s.levels[key]] * LINES[key].recipes[good].time * (accelerated ? .6 : 1);
+}
+function batch(s, key) {
+  const st = s.stations[key], good = nextGood(s, key);
+  const recipe = LINES[key].recipes[good];
+  const selected = key === "saw" && good === "lumber" ? Math.min(s.timberSorted, recipe.input) : 0;
+  const boosted = key === "grill" && good === "trays" && s.doubles && s.fuel > 0 &&
+    inputCapacity(s, key) >= 5 && outputRoom(s, key) >= 2;
+  return { good, selected, raw: boosted ? 5 : recipe.input - selected, units: boosted ? 2 : 1,
+    left: recipeSeconds(s, key, good) * (boosted ? 1.25 : 1 - .2 * selected) };
+}
 export function stationStatus(s, key) {
   const st = s.stations[key];
   if (st.jobs.length) return "Processing";
   if (outputRoom(s, key) <= 0) return "Output full";
-  const needed = LINES[key].recipes[st.recipe].input;
-  if (st.input < needed) return needed === 1 ? `Waiting for ${LINES[key].raw}` : `Needs ${needed} ${LINES[key].raw}`;
+  const next = batch(s, key);
+  if (st.input < next.raw) return next.raw === 1 ? `Waiting for ${LINES[key].raw}` : `Needs ${next.raw} ${LINES[key].raw}`;
   return "Ready";
 }
 
@@ -103,6 +181,154 @@ export function install(s, key, part) {
   return true;
 }
 
+export const projectReady = (s, cost) => s.cash >= cost.cash && s.player.bag.lumber + s.stash.lumber >= cost.lumber;
+function payProject(s, cost) {
+  if (!projectReady(s, cost)) return false;
+  const carried = Math.min(cost.lumber, s.player.bag.lumber);
+  s.player.bag.lumber -= carried;
+  s.stash.lumber -= cost.lumber - carried;
+  s.cash -= cost.cash;
+  return true;
+}
+
+export function buildProject(s, project, key) {
+  if (project === "bay") {
+    if (!near(s.player, SPOTS.sell) || s.market.bay || !payProject(s, BAY)) return false;
+    s.market.bay = true;
+    return true;
+  }
+  if (!stationKeys.includes(key) || stationAt(s.player) !== key) return false;
+  const st = s.stations[key];
+  if (project === "bin") {
+    if (st.bin || !payProject(s, BIN_COST)) return false;
+    st.bin = true;
+    return true;
+  }
+  if (st.layout || !Object.hasOwn(REBUILDS, project) || !payProject(s, REBUILDS[project])) return false;
+  st.layout = project;
+  return true;
+}
+
+export const rackFits = (s, rack) => Object.hasOwn(CART_RACKS, rack) && mixFits(s, rack, s.player.bag);
+
+export function cartRack(s, rack) {
+  if (!s.cart || !near(s.player, SPOTS.build) || !rackFits(s, rack)) return false;
+  if (rack !== "mixed" && !s.ownedRacks[rack]) {
+    if (s.cash < CART_RACKS[rack].cash) return false;
+    s.cash -= CART_RACKS[rack].cash;
+    s.ownedRacks[rack] = true;
+  }
+  s.cartRack = rack;
+  return true;
+}
+
+export function setWorkerRoute(s, index, field, value) {
+  const w = s.workers[index];
+  if (!w || !near(s.player, SPOTS.build)) return false;
+  const values = { line: stationKeys, min: [1, 2, 3], priority: Object.keys(ROUTE_PRIORITIES), reserve: [true, false] };
+  if (!Object.hasOwn(values, field) || !values[field].includes(value)) return false;
+  w.route[field] = value;
+  return true;
+}
+
+export function setStation(s, key, field, value) {
+  if (!stationKeys.includes(key) || stationAt(s.player) !== key) return false;
+  if (field === "target" && TARGETS.includes(value)) s.stations[key].target = value;
+  else if (field === "manual" && typeof value === "boolean") s.stations[key].manual = value;
+  else if (key === "grill" && field === "doubles" && typeof value === "boolean") s.doubles = value;
+  else return false;
+  return true;
+}
+
+export function sortTimber(s, amount) {
+  if (stationAt(s.player) !== "saw" || !Number.isSafeInteger(amount)) return false;
+  const st = s.stations.saw;
+  const change = Math.max(-s.timberSorted, Math.min(st.input, amount));
+  s.timberSorted += change;
+  st.input -= change;
+  return change !== 0;
+}
+
+function stagingToInput(s, key, amount) {
+  const st = s.stations[key];
+  const n = Math.min(st.staging, inputRoom(s, key), amount);
+  st.staging -= n;
+  st.input += n;
+  return n;
+}
+function unload(s, person, key, bin = false) {
+  const st = s.stations[key], raw = LINES[key].raw;
+  const field = bin ? "staging" : "input";
+  const n = Math.min(person.bag[raw], bin ? stageCapacity(s, key) - st.staging : inputRoom(s, key));
+  if (!n) return 0;
+  person.bag[raw] -= n;
+  st[field] += n;
+  animate(person, "load", raw);
+  if (person !== s.player && !person.bag[raw]) person.nextLine = other(key);
+  return n;
+}
+function pickup(s, person, key) {
+  const st = s.stations[key];
+  let loaded = 0;
+  for (const [i, field] of ["output", "premium"].entries()) {
+    const good = LINES[key].goods[i];
+    const n = Math.min(st[field], roomFor(s, person, good));
+    if (!n) continue;
+    person.bag[good] += n;
+    st[field] -= n;
+    loaded += n;
+    animate(person, "stack", good);
+  }
+  return loaded;
+}
+export const nextBatchNeeds = (s, key) => Math.max(0, batch(s, key).raw - s.stations[key].input);
+
+export function handleLoad(s, key, action) {
+  if (!stationKeys.includes(key)) return false;
+  if (action === "pickup") return near(s.player, SPOTS[key + "Out"]) && pickup(s, s.player, key) > 0;
+  if (!near(s.player, SPOTS[key + "In"])) return false;
+  if (action === "unload") return unload(s, s.player, key) > 0;
+  if (action === "stage") return unload(s, s.player, key, true) > 0;
+  if (action === "queue") {
+    if (!stagingToInput(s, key, nextBatchNeeds(s, key))) return false;
+    animate(s.player, "load", LINES[key].raw);
+    return true;
+  }
+  return false;
+}
+
+export function marketAction(s, action, id) {
+  if (!near(s.player, SPOTS.sell)) return false;
+  if (action === "accept") return contractAction(s, id);
+  if (action === "account") return accountAction(s, id);
+  if (action === "close") return closeMarketJob(s, id, PRICES);
+  if (action === "pack") {
+    return packAtCounter(s, id, s.player, true);
+  }
+  if (action === "withdraw" && Object.hasOwn(s.market.stock, id)) {
+    const n = Math.min(s.market.stock[id], roomFor(s, s.player, id));
+    if (!n) return false;
+    s.market.stock[id] -= n;
+    s.player.bag[id] += n;
+    s.market.autoSale = false;
+    s.player.sell = 0;
+    return true;
+  }
+  if (action === "autosale") {
+    s.market.autoSale = !s.market.autoSale;
+    s.player.sell = 0;
+    return true;
+  }
+  if (action === "sell") {
+    // A manual sale is intentional even when an order still needs these goods.
+    const good = saleGoods.find(k => s.player.bag[k]);
+    if (!good) return false;
+    sellOne(s, s.player, good);
+    return true;
+  }
+  return false;
+}
+
 export function purchase(s, key) {
   if (key === "cart") {
     if (s.cart || s.cash < CART_PRICE) return false;
@@ -115,7 +341,7 @@ export function purchase(s, key) {
     const price = [35, 80][s.workers.length];
     if (s.cash < price) return false;
     s.cash -= price;
-    s.workers.push({ x: -8, z: 7, bag: empty(), job: "lumber", nextLine: "saw", gather: 0, sell: 0 });
+    s.workers.push({ x: -8, z: 7, bag: empty(), job: "lumber", nextLine: "saw", route: routeDefaults(), gather: 0, sell: 0 });
     return true;
   }
   if (!Object.hasOwn(UPGRADES, key)) return false;
@@ -133,21 +359,21 @@ export function assign(s, i, job) {
 }
 
 export function acceptBulk(s) {
-  if (s.order || !near(s.player, SPOTS.sell)) return false;
+  if (s.order || s.market.active || !near(s.player, SPOTS.sell)) return false;
   s.order = newOrder();
   s.player.sell = 0;
   return true;
 }
 
 export const bulkRemaining = (s, k) => s.order && bulkGoods.includes(k) ? BULK[k] - s.order[k] : 0;
-export function deliverBulk(s) {
-  if (!s.order || !near(s.player, SPOTS.sell)) return false;
+export function deliverBulk(s, person = s.player) {
+  if (!s.order || !near(person, SPOTS.sell)) return false;
   let delivered = 0;
   for (const k of bulkGoods) {
-    const n = Math.min(s.player.bag[k], bulkRemaining(s, k));
-    s.player.bag[k] -= n;
+    const n = Math.min(person.bag[k], bulkRemaining(s, k));
+    person.bag[k] -= n;
     s.order[k] += n;
-    if (n) animate(s.player, "stack", k);
+    if (n) animate(person, "stack", k);
     delivered += n;
   }
   if (bulkGoods.every(k => !bulkRemaining(s, k))) {
@@ -180,8 +406,8 @@ function move(person, target, dt) {
 }
 
 const other = key => key === "saw" ? "grill" : "saw";
-function collect(person, source, good, cap, dt) {
-  if (!source.remaining || count(person.bag) >= cap) {
+function collect(person, source, good, room, dt) {
+  if (!source.remaining || room <= 0) {
     person.gather = 0;
     return;
   }
@@ -194,50 +420,81 @@ function collect(person, source, good, cap, dt) {
   if (--source.remaining === 0) source.regrow = 8;
 }
 
+function packAtCounter(s, id, person, useStock) {
+  const bag = person.bag;
+  const stock = s.market.stock;
+  const combined = useStock ? Object.fromEntries(saleGoods.map(k => [k, bag[k] + (stock[k] ?? 0)])) : bag;
+  const good = packGoods(s, id, combined);
+  if (!good) return false;
+  if (useStock) {
+    for (const k of saleGoods) {
+      const n = bag[k] + (stock[k] ?? 0) - combined[k];
+      const carried = Math.min(n, bag[k]);
+      bag[k] -= carried;
+      if (n > carried) stock[k] -= n - carried;
+    }
+  }
+  animate(person, "stack", good);
+  return true;
+}
+
+function topUpStock(s, person, hasOrders) {
+  for (const key of stationKeys) {
+    const good = LINES[key].goods[0], stock = s.market.stock;
+    const spare = person.bag[good] - (hasOrders ? marketNeed(s, good) + bulkRemaining(s, good) : 0);
+    const n = Math.max(0, Math.min(spare, s.stations[key].target - stock[good]));
+    if (!n) continue;
+    person.bag[good] -= n;
+    stock[good] += n;
+    animate(person, "stack", good);
+  }
+}
+
+function sellOne(s, person, good) {
+  person.sell = 0;
+  person.bag[good]--;
+  s.cash += PRICES[good];
+  s.sold++;
+  animate(person, "stack", good);
+}
+
 export function interact(s, person = s.player, dt = .1) {
   const b = person.bag, manual = person === s.player;
-  const cap = manual ? capacity(s) : 3;
   const active = motions.get(person);
   if (active && (active.left -= dt) <= 0) motions.delete(person);
   const source = stationKeys.find(key => near(person, SPOTS[LINES[key].source]));
-  if (source) collect(person, s.sources[LINES[source].source], LINES[source].raw, cap, dt);
-  else {
+  if (source) {
+    const good = LINES[source].raw;
+    collect(person, s.sources[LINES[source].source], good, roomFor(s, person, good), dt);
+  } else {
     person.gather = 0;
     if (active?.kind === "chop" || active?.kind === "gather") motions.delete(person);
   }
-
   for (const key of stationKeys) {
-    const st = s.stations[key], { raw, goods } = LINES[key];
+    const st = s.stations[key];
+    if (manual && st.manual) continue;
     if (near(person, SPOTS[key + "In"])) {
-      const n = Math.min(b[raw], inputCapacity(s, key) - st.input);
-      if (n) {
-        b[raw] -= n;
-        st.input += n;
-        animate(person, "load", raw);
-        if (!manual && !b[raw]) person.nextLine = other(key);
+      if (st.bin || freight(s, key)) unload(s, person, key, true);
+      else if (!manual && person.job === "route" && person.route.line === key) {
+        stagingToInput(s, key, inputRoom(s, key));
+        unload(s, person, key);
+        unload(s, person, key, true);
       }
+      unload(s, person, key);
     }
-    if (near(person, SPOTS[key + "Out"])) {
-      for (const [i, field] of ["output", "premium"].entries()) {
-        const n = Math.min(st[field], cap - count(b));
-        if (!n) continue;
-        const good = goods[i];
-        b[good] += n;
-        st[field] -= n;
-        animate(person, "stack", good);
-      }
-    }
+    if (near(person, SPOTS[key + "Out"])) pickup(s, person, key);
   }
 
-  const good = near(person, SPOTS.sell) && saleGoods.find(k => b[k] > (manual ? bulkRemaining(s, k) : 0));
-  person.sell = good ? (person.sell || 0) + dt : 0;
-  if (person.sell + 1e-9 >= .6) {
-    person.sell = 0;
-    b[good]--;
-    s.cash += PRICES[good];
-    s.sold++;
-    animate(person, "stack", good);
+  const atCounter = near(person, SPOTS.sell);
+  if (atCounter && !manual && person.route.reserve && saleGoods.some(k => b[k])) {
+    if (s.order) deliverBulk(s, person);
+    for (const t of marketTargets(s)) packAtCounter(s, t.id, person, true);
   }
+  if (atCounter && (!manual || s.market.autoSale) && (b.boards || b.steaks)) topUpStock(s, person, manual);
+  const good = atCounter && (!manual || s.market.autoSale) && saleGoods.find(k =>
+    b[k] > 0 && b[k] > (manual ? bulkRemaining(s, k) + marketNeed(s, k) : 0));
+  person.sell = good ? (person.sell || 0) + dt : 0;
+  if (person.sell + 1e-9 >= .6) sellOne(s, person, good);
 }
 
 export function stashAll(s) {
@@ -253,7 +510,7 @@ export function returnRaw(s, k) {
 }
 export function retrieve(s, k) {
   if (!GOODS.includes(k)) return;
-  const n = Math.min(s.stash[k], capacity(s) - count(s.player.bag));
+  const n = Math.min(s.stash[k], roomFor(s, s.player, k));
   s.stash[k] -= n;
   s.player.bag[k] += n;
 }
@@ -261,10 +518,14 @@ export function retrieve(s, k) {
 function workerTarget(s, w) {
   const b = w.bag;
   if (saleGoods.some(k => b[k])) return SPOTS.sell;
-  const supply = w.job === "lumber" ? ["saw"] : w.job === "meat" ? ["grill"] :
+  const route = w.job === "route" ? w.route : null;
+  const supply = route ? [route.line] : w.job === "lumber" ? ["saw"] : w.job === "meat" ? ["grill"] :
     w.job === "haul" ? [] : [w.nextLine, other(w.nextLine)];
-  const inputRoom = key => s.stations[key].input < inputCapacity(s, key);
-  const gatherable = key => inputRoom(key) && s.sources[LINES[key].source].remaining > 0;
+  const gatherable = key => (inputRoom(s, key) > 0 ||
+    ((s.stations[key].bin || freight(s, key)) && s.stations[key].staging < stageCapacity(s, key))) &&
+    s.sources[LINES[key].source].remaining > 0;
+  const routePickup = route && count(b) < 3 && outputCount(s.stations[route.line]) > 0;
+  if (routePickup && (route.priority === "pickup" || outputRoom(s, route.line) === 0)) return SPOTS[route.line + "Out"];
   const load = stationKeys.find(key => b[LINES[key].raw]);
   if ((w.job === "haul" || w.job === "clear") && count(b) < 3) {
     const bySpace = stationKeys.filter(key => outputCount(s.stations[key]) &&
@@ -276,28 +537,40 @@ function workerTarget(s, w) {
     if (bySpace.length) return SPOTS[bySpace[0] + "Out"];
   }
   if (load) {
-    const batch = w.job === "clear" ? 2 : 3;
+    const batch = route ? route.min : w.job === "clear" ? 2 : 3;
     if (supply.includes(load) && count(b) < batch && gatherable(load)) return SPOTS[LINES[load].source];
     return SPOTS[load + "In"];
   }
+  if (route && s.stations[route.line].staging && inputRoom(s, route.line) > 0) return SPOTS[route.line + "In"];
   const next = supply.find(gatherable);
-  return next ? SPOTS[LINES[next].source] : null;
+  if (next) return SPOTS[LINES[next].source];
+  return routePickup ? SPOTS[route.line + "Out"] : null;
 }
 
 function runStation(s, key, dt) {
-  const st = s.stations[key], line = LINES[key], recipe = line.recipes[st.recipe];
+  const st = s.stations[key], line = LINES[key];
   for (const job of st.jobs) {
     job.left -= dt;
-    if (job.left <= 1e-9) st[job.good === line.goods[0] ? "output" : "premium"]++;
+    if (job.left > 1e-9) continue;
+    st[job.good === line.goods[0] ? "output" : "premium"] += job.units;
+    if (key === "saw") s.fuel = Math.min(FUEL_CAP, s.fuel + 1);
   }
   st.jobs = st.jobs.filter(job => job.left > 1e-9);
-  while (st.jobs.length < slots(st) && st.input >= recipe.input && outputRoom(s, key) > 0) {
-    st.input -= recipe.input;
-    st.jobs.push({ good: st.recipe, left: UPGRADES[key].values[s.levels[key]] * recipe.time });
+  if (st.bin || freight(s, key)) stagingToInput(s, key, inputRoom(s, key));
+  while (st.jobs.length < slots(st) && outputRoom(s, key) > 0) {
+    const plan = batch(s, key);
+    if (st.input < plan.raw) break;
+    st.input -= plan.raw;
+    s.timberSorted -= plan.selected;
+    if (plan.units === 2) s.fuel--;
+    st.jobs.push({ good: plan.good, units: plan.units, left: plan.left });
   }
 }
 
 export function tick(s, dt = .1) {
+  const day = marketDay(s);
+  marketAdvance(s, dt);
+  if (marketDay(s) > day) shipAccounts(s);
   for (const source of Object.values(s.sources)) {
     if (!source.remaining) {
       source.regrow = Math.max(0, source.regrow - dt);
@@ -355,24 +628,50 @@ function migrate(s) {
   return true;
 }
 
+function migrateOperations(s) {
+  const defaults = createState();
+  for (const key of ["cartRack", "ownedRacks", "market", "timberSorted", "fuel", "doubles"]) s[key] = defaults[key];
+  for (const key of stationKeys) {
+    const st = s.stations?.[key];
+    if (!st || !Array.isArray(st.jobs)) return false;
+    Object.assign(st, stationExtras());
+    for (const job of st.jobs) job.units = 1;
+  }
+  if (!Array.isArray(s.workers)) return false;
+  for (const worker of s.workers) worker.route = routeDefaults();
+  s.version = 3;
+  return true;
+}
+
+const isRoute = route => route && stationKeys.includes(route.line) && [1, 2, 3].includes(route.min) &&
+  Object.hasOwn(ROUTE_PRIORITIES, route.priority) && typeof route.reserve === "boolean";
+
 export function deserialize(text) {
   try {
     const s = JSON.parse(text);
-    if (!s || ![1, 2].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
+    if (!s || ![1, 2, 3].includes(s.version) || !integer(s.cash) || !integer(s.sold) ||
         !Object.keys(UPGRADES).every(k => integer(s.levels?.[k], 3))) return null;
     if (s.version === 1 && !migrate(s)) return null;
-    if (typeof s.cart !== "boolean" || !validPerson(s.player) || count(s.player.bag) > capacity(s) ||
+    if (s.version === 2 && !migrateOperations(s)) return null;
+    if (!marketIsValid(s.market) || (s.order && s.market.active) || !integer(s.timberSorted, 30) ||
+        !integer(s.fuel, FUEL_CAP) || typeof s.doubles !== "boolean" || !Object.hasOwn(CART_RACKS, s.cartRack) ||
+        typeof s.ownedRacks?.timber !== "boolean" || typeof s.ownedRacks?.food !== "boolean" ||
+        (s.cartRack !== "mixed" && (!s.cart || !s.ownedRacks[s.cartRack]))) return null;
+    if (typeof s.cart !== "boolean" || !validPerson(s.player) || count(s.player.bag) > capacity(s) || (s.cart && !mixFits(s, s.cartRack, s.player.bag)) ||
         !validBag(s.stash) || count(s.stash) > 16 || !Array.isArray(s.workers) || s.workers.length > 2 ||
-        !s.workers.every(w => validPerson(w) && count(w.bag) <= 3 && Object.hasOwn(JOBS, w.job) && stationKeys.includes(w.nextLine)) ||
+        !s.workers.every(w => validPerson(w) && count(w.bag) <= 3 && Object.hasOwn(JOBS, w.job) && stationKeys.includes(w.nextLine) && isRoute(w.route)) ||
         !["forest", "boars"].every(k => integer(s.sources?.[k]?.remaining, 6) && number(s.sources[k].regrow, 8)) ||
         (s.order !== null && (!s.order || !bulkGoods.every(k => integer(s.order[k], BULK[k])) ||
           bulkGoods.every(k => s.order[k] === BULK[k])))) return null;
     for (const key of stationKeys) {
       const st = s.stations?.[key], { goods } = LINES[key];
       if (!st || !goods.includes(st.recipe) || (st.equipment !== null && !Object.hasOwn(EQUIPMENT, st.equipment)) ||
-          !integer(st.input, inputCapacity(s, key)) || !integer(st.output) || !integer(st.premium) ||
-          !Array.isArray(st.jobs) || st.jobs.length > slots(st) || outputRoom(s, key) < 0 ||
-          !st.jobs.every(job => job && goods.includes(job.good) && job.left > 0 && number(job.left, 14))) return null;
+          (st.layout !== null && !Object.hasOwn(REBUILDS, st.layout)) || typeof st.bin !== "boolean" ||
+          typeof st.manual !== "boolean" || !TARGETS.includes(st.target) || !integer(st.staging, stageCapacity(s, key)) ||
+          !integer(st.input) || inputCount(s, key) > inputCapacity(s, key) || !integer(st.output) || !integer(st.premium) ||
+          !Array.isArray(st.jobs) || st.jobs.length > slots(st) ||
+          !st.jobs.every(job => job && goods.includes(job.good) && job.left > 0 && number(job.left, 17.5) &&
+            (job.units === 1 || (job.units === 2 && job.good === "trays"))) || outputRoom(s, key) < 0) return null;
     }
     return s;
   } catch {
