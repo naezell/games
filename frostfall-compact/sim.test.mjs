@@ -25,7 +25,10 @@ import {
   cancelBulk,
   activity,
   BULK,
+  buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand,
 } from "./sim.mjs";
+import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
 const at = (p, k) => Object.assign(p, { x: SPOTS[k].x, z: SPOTS[k].z });
 const advance = (s, seconds) => {
   for (let i = 0; i < seconds * 10; i++) tick(s, 0.1);
@@ -263,7 +266,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 2);
+  assert.equal(s.version, 3);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -273,4 +276,200 @@ test("a published v1 save carries over inventory, workers and partially processe
   assert.equal(s.stations.saw.output, 2);
   s.stations.saw.premium = 999;
   assert.equal(deserialize(serialize(s)), null);
+});
+
+test("jobs pay per installment and accounts ship again after their next pickup", () => {
+  let s = createState();
+  at(s.player, "sell");
+  assert.deepEqual(marketOffers(s), ["builder", "supper", "outfitter"]);
+  assert.equal(marketAction(s, "account", "carpenter"), false);
+  assert.equal(marketAction(s, "accept", "caravan"), false);
+  assert.ok(marketAction(s, "accept", "builder"));
+  for (let i = 0; i < 2; i++) {
+    s.player.bag.boards = 6;
+    assert.ok(marketAction(s, "pack", "contract"));
+    assert.equal(s.player.bag.boards, 0);
+  }
+  assert.equal(s.cash, 56);
+  assert.equal(marketTargets(s)[0].part, 1);
+  s.player.bag.lumber = 6;
+  tick(s);
+  assert.equal(s.player.bag.lumber, 6);
+  assert.ok(marketAction(s, "pack", "contract"));
+  assert.equal(s.market.completed, 1);
+  assert.equal(s.cash, 144);
+  assert.ok(marketAction(s, "account", "carpenter"));
+  s.stations.saw.target = 8; // Reserve held at the counter comes from earlier sales.
+  s.market.stock.boards = 6;
+  s.player.bag.lumber = 2;
+  assert.ok(marketAction(s, "pack", "carpenter"));
+  assert.equal(s.market.stock.boards, 0);
+  assert.equal(s.cash, 144);
+  s = deserialize(serialize(s));
+  tick(s, DAY_SECONDS * 2);
+  assert.equal(s.market.recurring, 1);
+  assert.equal(s.cash, 205);
+  s.player.bag.boards = 6;
+  marketAction(s, "pack", "carpenter");
+  s.player.bag.lumber = 2;
+  marketAction(s, "pack", "carpenter");
+  tick(s, DAY_SECONDS * 2);
+  assert.equal(s.market.recurring, 2);
+});
+
+test("loading bay opens large jobs and closing a partially packed job pays spot prices", () => {
+  const s = createState();
+  at(s.player, "sell");
+  s.cash = 250;
+  s.stash.lumber = 4;
+  s.player.bag.lumber = 2;
+  assert.ok(buildProject(s, "bay"));
+  assert.equal(s.cash, 35);
+  assert.equal(s.stash.lumber, 0);
+  assert.equal(s.player.bag.lumber, 0);
+  assert.ok(marketOffers(s).includes("lodge"));
+  assert.ok(marketAction(s, "accept", "lodge"));
+  s.player.bag.boards = 4;
+  assert.ok(marketAction(s, "pack", "contract"));
+  assert.ok(marketAction(s, "close", "contract"));
+  assert.equal(s.cash, 51);
+  assert.equal(s.market.completed, 0);
+  assert.ok(marketAction(s, "accept", "lodge"));
+  for (const { goods, reward } of CONTRACTS.lodge.stages) {
+    const before = s.cash;
+    for (const [good, units] of Object.entries(goods)) {
+      for (let left = units; left > 0; left -= 6) {
+        s.player.bag[good] = Math.min(6, left);
+        assert.ok(marketAction(s, "pack", "contract"));
+      }
+    }
+    assert.equal(s.cash, before + reward);
+  }
+  assert.equal(s.market.shipments, 1);
+  assert.ok(marketOffers(s).includes("caravan"));
+});
+
+test("timber grading preserves mass and offcuts fuel double batches without overflowing output", () => {
+  const s = createState();
+  at(s.player, "sawIn");
+  s.stations.saw.input = 4;
+  assert.ok(sortTimber(s, 2));
+  assert.equal(inputCount(s, "saw"), 4);
+  assert.ok(selectRecipe(s, "saw", "lumber"));
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].left, 6.6);
+  assert.equal(inputCount(s, "saw"), 2);
+  assert.equal(s.timberSorted, 0);
+  advance(s, 6.6);
+  assert.equal(s.fuel, 1);
+  assert.equal(s.stations.saw.premium, 1);
+  at(s.player, "grillIn");
+  assert.ok(setStation(s, "grill", "doubles", true));
+  assert.ok(selectRecipe(s, "grill", "trays"));
+  s.stations.grill.input = 3;
+  tick(s);
+  assert.equal(s.stations.grill.jobs.length, 0);
+  s.stations.grill.input += 2;
+  tick(s);
+  assert.equal(s.stations.grill.jobs[0].units, 2);
+  assert.equal(s.fuel, 0);
+  assert.ok(deserialize(serialize(s)));
+  advance(s, 17.5);
+  assert.equal(s.stations.grill.premium, 2);
+});
+
+test("manual staging, a drop-off bin and an easy-loading rebuild all move real inventory", () => {
+  const s = createState();
+  at(s.player, "sawIn");
+  assert.ok(setStation(s, "saw", "manual", true));
+  s.player.bag.logs = 6;
+  tick(s);
+  assert.equal(s.player.bag.logs, 6);
+  assert.ok(handleLoad(s, "saw", "stage"));
+  assert.equal(s.stations.saw.staging, 4);
+  assert.ok(handleLoad(s, "saw", "queue"));
+  assert.equal(s.stations.saw.input, 1);
+  assert.ok(handleLoad(s, "saw", "unload"));
+  assert.equal(s.stations.saw.input, 3);
+  s.cash = 230;
+  s.stash.lumber = 7;
+  assert.ok(buildProject(s, "bin", "saw"));
+  assert.ok(buildProject(s, "freight", "saw"));
+  assert.equal(stageCapacity(s, "saw"), 16);
+  assert.equal(inputCapacity(s, "saw"), 13);
+  assert.equal(outputCapacity(s, "saw"), 13);
+  assert.equal(s.stash.lumber, 0);
+  assert.equal(buildProject(s, "fast", "saw"), false);
+  tick(s);
+  assert.equal(s.stations.saw.staging, 0);
+  assert.equal(s.stations.saw.input, 5);
+  advance(s, 4);
+  at(s.player, "sawOut");
+  tick(s);
+  assert.equal(s.player.bag.boards, 0);
+  assert.ok(handleLoad(s, "saw", "pickup"));
+  assert.equal(s.player.bag.boards, 1);
+});
+
+test("cart rack specialization never accepts incompatible overflow or loses any load", () => {
+  const s = createState();
+  at(s.player, "build");
+  s.cash = 200;
+  purchase(s, "cart");
+  assert.ok(cartRack(s, "timber"));
+  assert.equal(capacity(s), 14);
+  s.player.bag.meat = 6;
+  s.player.bag.logs = 8;
+  assert.equal(roomFor(s, s.player, "meat"), 0);
+  assert.deepEqual(cartLoad(s), Array(8).fill("logs"));
+  assert.equal(cartRack(s, "food"), false);
+  assert.equal(cartRack(s, "mixed"), false);
+  assert.ok(deserialize(serialize(s)));
+  s.player.bag.logs = 0;
+  assert.ok(cartRack(s, "food"));
+  const cash = s.cash;
+  assert.ok(cartRack(s, "timber"));
+  assert.equal(s.cash, cash);
+});
+
+test("stock targets switch output to premium and route helpers pack jobs and sell surplus", () => {
+  const s = createState();
+  s.cash = 145;
+  at(s.player, "sawIn");
+  assert.ok(selectRecipe(s, "saw", "lumber"));
+  assert.ok(setStation(s, "saw", "target", 4));
+  s.stations.saw.input = 5;
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].good, "boards");
+  s.market.stock.boards = 4;
+  assert.equal(onHand(s, "boards"), 4);
+  advance(s, 4);
+  assert.equal(s.stations.saw.jobs[0].good, "lumber");
+  at(s.player, "sell");
+  assert.ok(marketAction(s, "accept", "builder"));
+  assert.ok(marketAction(s, "pack", "contract"));
+  at(s.player, "build");
+  assert.ok(purchase(s, "helper"));
+  assert.ok(assign(s, 0, "route"));
+  assert.ok(setWorkerRoute(s, 0, "min", 1));
+  assert.ok(setWorkerRoute(s, 0, "priority", "pickup"));
+  assert.ok(setWorkerRoute(s, 0, "reserve", true));
+  advance(s, 330);
+  assert.ok(s.market.completed > 0);
+  assert.ok(s.sold > 18);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("version 2 active bulk orders, stock and in-flight jobs survive migration", () => {
+  const old = createState();
+  old.version = 2;
+  old.order = { boards: 4, steaks: 2 };
+  old.stations.saw.jobs.push({ good: "boards", left: 2.8 });
+  old.player.bag.lumber = 4;
+  delete old.market;
+  const s = deserialize(serialize(old));
+  assert.equal(s.version, 3);
+  assert.deepEqual(s.order, { boards: 4, steaks: 2 });
+  assert.equal(s.player.bag.lumber, 4);
+  assert.equal(s.stations.saw.jobs[0].units, 1);
 });
