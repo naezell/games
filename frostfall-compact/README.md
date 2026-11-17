@@ -34,6 +34,8 @@ Tap **Build** in the header to see eight permanent structures. Open a plan to ma
 
 The yard and cold store improve gathering and unlock the workshop extensions. Build a storehouse to enlarge the camp crate, then choose more cart capacity, a third helper position, or better spot prices. Existing equipment, shop upgrades, and helpers are available from **Buy equipment & hire helpers** or the improvement pad.
 
+Every structure has two optional upgrade levels at its original plot. Higher levels expand what the building can hold or improve the work it supports. The Dispatch Cabin adds faster walking and a five-item helper pack. Use the gear button to pause building upgrades, individual buildings, or whole systems. The Simple Camp preset leaves the gather, process, and sell loop enabled, and you can change each switch independently.
+
 Pause with the pause button. The camp is saved automatically to the browser's local storage under `frostfall-compact-v1`, separate from the original game. Older Compact saves load automatically, including work already underway and accepted bulk orders. A save warning appears if storage is unavailable. Clearing browser storage deletes the save.
 
 ## Tests

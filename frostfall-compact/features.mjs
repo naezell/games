@@ -20,6 +20,7 @@ export const FEATURES = {
     cartRacks: ["Specialized cart racks", "Use the timber or food rack. When off, use the mixed bed."],
   },
   Buildings: {
+    buildingLevels: ["Building upgrades", "Use and expand the second and third levels of each structure."],
     buildYard: ["Timber yard", "Use the larger timber source and faster forest restock."],
     buildCold: ["Cold store", "Use the larger meat source and faster meadow restock."],
     buildStore: ["Camp storehouse", "Use the extra camp crate space."],
