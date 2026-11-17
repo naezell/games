@@ -1,3 +1,4 @@
+import { feature, setFeature, featurePreset } from "./features.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -26,7 +27,7 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS } from "./market.mjs";
 import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo } from "./construction.mjs";
@@ -267,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -469,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -558,4 +559,85 @@ test("new construction is initialized in existing saves and locked plots cannot 
   assert.equal(s.plan, null);
   s.construction.mill.left = 0;
   assert.equal(deserialize(serialize(s)), null);
+});
+
+test("simple mode can gather, load, collect and sell with every automatic action off", () => {
+  const s = createState();
+  assert.ok(featurePreset(s, "simple"));
+  assert.equal(feature(s, "premium"), false);
+  assert.equal(feature(s, "construction"), false);
+  assert.equal(feature(s, "battery"), true);
+  for (const id of ["autoGather", "autoHandling", "autoSell"]) setFeature(s, id, false);
+  at(s.player, "forest");
+  advance(s, 2);
+  assert.equal(s.player.bag.logs, 0);
+  assert.ok(gatherNow(s, "forest"));
+  at(s.player, "sawIn");
+  tick(s);
+  assert.equal(s.player.bag.logs, 1);
+  assert.ok(handleLoad(s, "saw", "unload"));
+  advance(s, 5);
+  at(s.player, "sawOut");
+  assert.ok(handleLoad(s, "saw", "pickup"));
+  at(s.player, "sell");
+  advance(s, 2);
+  assert.equal(s.cash, 0);
+  assert.ok(marketAction(s, "sell"));
+  assert.equal(s.cash, 4);
+  assert.ok(deserialize(serialize(s)));
+});
+
+test("disabled cart, station equipment and larger bags never destroy excess inventory", () => {
+  let s = createState();
+  s.cash = 500;
+  purchase(s, "cart");
+  purchase(s, "pack");
+  purchase(s, "storage");
+  s.player.bag.logs = 14;
+  s.stations.saw.input = 8;
+  s.stations.saw.output = 8;
+  for (const id of ["cart", "upgrades", "equipment"]) setFeature(s, id, false);
+  assert.equal(capacity(s), 6);
+  assert.equal(roomFor(s, s.player, "logs"), 0);
+  at(s.player, "sawIn");
+  advance(s, 2);
+  assert.equal(s.stations.saw.input, 8);
+  assert.equal(s.player.bag.logs, 14);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  setFeature(s, "cart", true);
+  setFeature(s, "upgrades", true);
+  assert.equal(capacity(s), 14);
+  assert.equal(s.stations.saw.output, 8);
+});
+
+test("switches pause individual buildings, helpers, contracts and account pickups", () => {
+  let s = createState();
+  s.cash = 300;
+  purchase(s, "helper");
+  const worker = s.workers[0];
+  setFeature(s, "helpers", false);
+  assert.ok(trackPlan(s, "yard"));
+  Object.assign(s.player, { x: BUILDINGS.yard.x, z: BUILDINGS.yard.z });
+  s.player.bag.boards = 2;
+  buildAtPlot(s, "yard", "supply");
+  buildAtPlot(s, "yard", "build");
+  setFeature(s, "buildYard", false);
+  at(s.player, "sell");
+  assert.ok(marketAction(s, "accept", "supper"));
+  setFeature(s, "contracts", false);
+  assert.ok(marketAction(s, "account", "carpenter"));
+  setFeature(s, "accounts", false);
+  advance(s, 8);
+  assert.equal(s.construction.yard.left, 4);
+  assert.equal(worker.x, -8);
+  assert.equal(s.market.elapsed, 0);
+  assert.deepEqual(marketTargets(s), []);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  for (const id of ["helpers", "contracts", "accounts", "buildYard"]) setFeature(s, id, true);
+  advance(s, 4);
+  assert.ok(built(s, "yard"));
+  assert.notEqual(s.workers[0].z, 7);
+  assert.equal(marketTargets(s).length, 2);
 });

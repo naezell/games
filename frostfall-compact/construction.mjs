@@ -1,3 +1,5 @@
+import { feature } from "./features.mjs";
+
 export const BUILDINGS = {
   yard: { name: "Timber yard", area: "Forest edge", x: -4.8, z: -7.5, cash: 12, goods: { boards: 2 }, seconds: 4,
     effect: "Gather up to 9 logs before the forest rests. Restock in 6 seconds." },
@@ -19,15 +21,17 @@ export const BUILDINGS = {
 
 export const newConstruction = () => Object.fromEntries(Object.keys(BUILDINGS).map(id => [id, { delivered: {}, left: null }]));
 export const built = (s, id) => s.construction?.[id]?.left === 0;
+export const buildingEnabled = (s, id) => feature(s, "construction") && feature(s, "build" + id[0].toUpperCase() + id.slice(1));
+export const workingBuilding = (s, id, owned = false) => built(s, id) && (owned || buildingEnabled(s, id));
 export const unlocked = (s, id) => Object.hasOwn(BUILDINGS, id) && (!BUILDINGS[id].after || built(s, BUILDINGS[id].after));
 export function trackPlan(s, id) {
-  if (id !== null && (!Object.hasOwn(BUILDINGS, id) || built(s, id))) return false;
+  if (id !== null && (!feature(s, "construction") || !Object.hasOwn(BUILDINGS, id) || built(s, id))) return false;
   s.plan = id;
   return true;
 }
 
 export function reservedForPlan(s, good) {
-  if (!s.plan || !unlocked(s, s.plan) || s.construction[s.plan].left !== null) return 0;
+  if (!s.plan || !buildingEnabled(s, s.plan) || !unlocked(s, s.plan) || s.construction[s.plan].left !== null) return 0;
   return Math.max(0, (BUILDINGS[s.plan].goods[good] ?? 0) - (s.construction[s.plan].delivered[good] ?? 0) - s.stash[good]);
 }
 
@@ -41,7 +45,7 @@ export function plotInfo(s, id) {
 }
 
 export function buildAtPlot(s, id, action) {
-  if (!unlocked(s, id) || !atPlot(s, id) || s.construction[id].left !== null) return false;
+  if (!unlocked(s, id) || !buildingEnabled(s, id) || !atPlot(s, id) || s.construction[id].left !== null) return false;
   const site = s.construction[id];
   const plan = BUILDINGS[id];
   const info = plotInfo(s, id);
@@ -65,8 +69,9 @@ export function buildAtPlot(s, id, action) {
 }
 
 export function advanceConstruction(s, dt) {
-  for (const site of Object.values(s.construction)) {
-    if (site.left > 0) site.left = site.left <= dt + 1e-9 ? 0 : site.left - dt;
+  if (!feature(s, "construction")) return;
+  for (const [id, site] of Object.entries(s.construction)) {
+    if (site.left > 0 && buildingEnabled(s, id)) site.left = site.left <= dt + 1e-9 ? 0 : site.left - dt;
   }
 }
 export function constructionIsValid(s) {

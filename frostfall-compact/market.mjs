@@ -1,3 +1,5 @@
+import { feature } from "./features.mjs";
+
 const stage = (reward, goods) => ({ goods, reward });
 export const CONTRACTS = {
   builder: { name: "Builder’s pickup", stages: [stage(56, { boards: 12 }), stage(88, { lumber: 6 })] },
@@ -5,6 +7,9 @@ export const CONTRACTS = {
   outfitter: { name: "Outfitter’s restock", stages: [
     stage(66, { boards: 8, steaks: 6 }), stage(108, { lumber: 4, trays: 2 }), stage(140, { lumber: 4, trays: 4 }),
   ] },
+  boards: { name: "Board shop supply", stages: [stage(35, { boards: 7 }), stage(53, { boards: 10 })] },
+  steaks: { name: "Canteen restock", stages: [stage(37, { steaks: 6 }), stage(54, { steaks: 9 })] },
+  mixed: { name: "Camp provisions", stages: [stage(52, { boards: 5, steaks: 5 }), stage(72, { boards: 8, steaks: 6 })] },
   lodge: { name: "Lodge expansion", stages: [
     stage(128, { boards: 24 }), stage(166, { lumber: 11 }), stage(110, { boards: 10, lumber: 4 }),
   ] },
@@ -31,9 +36,13 @@ export function createMarket() {
 const smallOffers = ["builder", "supper", "outfitter"];
 const largeOffers = ["lodge", "festival", "caravan"];
 export const marketDay = s => 1 + Math.floor(s.market.elapsed / DAY_SECONDS);
-export const accountUnlocked = s => s.market.completed > 0;
+export const accountUnlocked = s => s.market.completed > 0 || !feature(s, "contracts");
+export const contractRunning = s => !!s.market.active && feature(s, "contracts") &&
+  (feature(s, "loadingBay") || !largeOffers.includes(s.market.active.id));
 export function marketOffers(s) {
-  if (!s.market.bay) return smallOffers;
+  if (!feature(s, "contracts")) return [];
+  if (!feature(s, "premium")) return ["boards", "steaks", "mixed"];
+  if (!s.market.bay || !feature(s, "loadingBay")) return smallOffers;
   const offset = s.market.nextOffer % smallOffers.length;
   return [smallOffers[offset], largeOffers[offset], largeOffers[(offset + 1) % largeOffers.length]];
 }
@@ -41,11 +50,12 @@ export function marketOffers(s) {
 const currentStage = active => CONTRACTS[active.id].stages[active.part];
 export function marketTargets(s) {
   const { active, accounts } = s.market;
-  const targets = active ? [{
+  const targets = contractRunning(s) ? [{
     id: "contract", name: CONTRACTS[active.id].name, packed: active.packed,
     ...currentStage(active), ready: true, part: active.part, total: CONTRACTS[active.id].stages.length,
   }] : [];
   for (const [id, account] of Object.entries(accounts)) {
+    if (!feature(s, "accounts")) break;
     if (account) targets.push({ ...ACCOUNTS[id], id, packed: account.packed,
       ready: marketDay(s) >= account.due, due: account.due });
   }
@@ -55,7 +65,7 @@ export function marketTargets(s) {
 export const neededFor = (target, good) => Math.max(0, (target.goods[good] ?? 0) - (target.packed[good] ?? 0));
 export const marketNeed = (s, good) => marketTargets(s).reduce((n, t) => n + neededFor(t, good), 0);
 export const canPack = (bag, target) => Object.keys(target.goods).some(k => bag[k] > 0 && neededFor(target, k) > 0);
-export const marketAdvance = (s, dt) => { s.market.elapsed += dt; };
+export const marketAdvance = (s, dt) => { if (feature(s, "accounts")) s.market.elapsed += dt; };
 
 function paid(s, target) {
   s.cash += target.reward;
@@ -100,13 +110,13 @@ export function packGoods(s, id, bag) {
 }
 
 export function contractAction(s, id) {
-  if (s.order || s.market.active || !marketOffers(s).includes(id)) return false;
+  if (s.market.active || !marketOffers(s).includes(id)) return false;
   s.market.active = { id, part: 0, packed: {} };
   return true;
 }
 
 export function accountAction(s, id) {
-  if (!accountUnlocked(s) || !Object.hasOwn(ACCOUNTS, id) || s.market.accounts[id]) return false;
+  if (!feature(s, "accounts") || !accountUnlocked(s) || !Object.hasOwn(ACCOUNTS, id) || s.market.accounts[id]) return false;
   s.market.accounts[id] = { due: marketDay(s) + ACCOUNT_DAYS, packed: {} };
   return true;
 }

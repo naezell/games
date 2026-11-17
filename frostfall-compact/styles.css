@@ -33,3 +33,11 @@ header{padding-left:max(11px,env(safe-area-inset-left));padding-right:max(11px,e
 .blueprint-card progress{width:min(100%,190px);height:12px;accent-color:#548977}
 .build-list .operation-card{margin:0}
 @media(max-width:420px){header{gap:7px}.cash{padding-inline:6px}#pause{width:32px}#buildMenu{padding-inline:7px}header h1{font-size:17px}}
+
+#settingsMenu{width:36px;height:38px;flex:none;border:1px solid #b0cbbd;border-radius:10px;background:#f0f5e9;color:#315d59;font-size:20px;font-weight:800;padding:0}
+#settingsMenu[aria-pressed=true]{background:#366f69;color:white}
+.feature-choice{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;border-top:1px solid #d5e9df;padding:6px 3px;color:#315d59}
+.feature-choice span{display:grid;gap:3px}.feature-choice small{font:inherit;color:#55756c}
+.feature-choice input{width:19px;height:19px;accent-color:#366f69;flex:none}
+.feature-list{margin-top:5px}
+@media(max-width:370px){header{gap:5px}header h1{font-size:15px}.cash small{display:none}#settingsMenu{width:32px}#buildMenu{font-size:12px}}
