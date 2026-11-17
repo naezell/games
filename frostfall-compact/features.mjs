@@ -4,6 +4,7 @@ export const FEATURES = {
     autoHandling: ["Automatic station handling", "Load or collect by standing at a station. Manual buttons always work."],
     autoSell: ["Automatic spot sales", "Sell surplus at the Market. The manual sale button always works."],
     premium: ["Premium recipes", "Produce finished lumber and steak trays. Existing goods remain usable."],
+    schedules: ["Production schedules", "Queue exact quantities at a workshop and choose when it can start new batches."],
     demandRecipes: ["Demand-based recipes", "Let stations make whichever goods a pinned plan or current order still needs."],
     stockTargets: ["Stock targets", "Make basics first and keep spare stock at the counter."],
     sorting: ["Timber sorting", "Sort logs for faster finishing. Existing selected logs can still be recovered."],

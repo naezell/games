@@ -27,7 +27,7 @@ import {
   activity,
   BULK,
   buildProject, marketAction, handleLoad, setStation, setWorkerRoute, sortTimber,
-  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, buySupplies, quotedSpotPrice, changeAttachment, activeAttachment, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
+  cartRack, cartLoad, inputCount, stageCapacity, roomFor, onHand, gatherNow, workerCapacity, nextGood, buySupplies, quotedSpotPrice, changeAttachment, activeAttachment, changeSchedule, activeOrder, stashCapacity, helperLimit, spotPrice, sourceCapacity, recipeSeconds,
 } from "./sim.mjs";
 import { marketTargets, marketOffers, DAY_SECONDS, CONTRACTS, quickOffers } from "./market.mjs";
 import { BUILDINGS, built, trackPlan, buildAtPlot, plotInfo, buildingLevel, nextLevel, reservedForPlan } from "./construction.mjs";
@@ -268,7 +268,7 @@ test("a published v1 save carries over inventory, workers and partially processe
   delete old.cart;
   delete old.order;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.equal(s.cash, old.cash);
   assert.equal(s.workers[0].job, "lumber");
   assert.equal(s.player.bag.boards, 2);
@@ -470,7 +470,7 @@ test("version 2 active bulk orders, stock and in-flight jobs survive migration",
   old.player.bag.lumber = 4;
   delete old.market;
   const s = deserialize(serialize(old));
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.deepEqual(s.order, { boards: 4, steaks: 2 });
   assert.equal(s.player.bag.lumber, 4);
   assert.equal(s.stations.saw.jobs[0].units, 1);
@@ -935,4 +935,71 @@ test("a previous Simple Camp save keeps the new systems off", () => {
   assert.ok(restored);
   assert.equal(feature(restored, "quickJobs"), false);
   assert.equal(feature(restored, "gangSaw"), false);
+});
+
+test("FIFO work orders cap larger batches and stop exactly at their requested quantities", () => {
+  let s = createState();
+  s.cash = 50;
+  at(s.player, "sawIn");
+  assert.ok(changeAttachment(s, "saw", "gangSaw"));
+  assert.ok(changeSchedule(s, "saw", "holdAfter", true));
+  assert.equal(changeSchedule(s, "saw", "enqueue", { good: "steaks", quantity: 4 }), false);
+  assert.equal(changeSchedule(s, "saw", "enqueue", { good: "boards", quantity: 25 }), false);
+  assert.ok(changeSchedule(s, "saw", "enqueue", { good: "boards", quantity: 4 }));
+  assert.ok(changeSchedule(s, "saw", "enqueue", { good: "lumber", quantity: 1 }));
+  s.stations.saw.input = 5;
+  tick(s);
+  assert.equal(s.stations.saw.jobs[0].units, 3);
+  assert.equal(activeOrder(s, "saw").remaining, 1);
+  s = deserialize(serialize(s));
+  assert.ok(s);
+  advance(s, 6.2);
+  assert.equal(s.stations.saw.jobs[0].good, "boards");
+  assert.equal(s.stations.saw.jobs[0].units, 1);
+  advance(s, 4);
+  assert.equal(s.stations.saw.jobs[0].good, "lumber");
+  advance(s, 11);
+  assert.equal(s.stations.saw.output, 4);
+  assert.equal(s.stations.saw.premium, 1);
+  assert.equal(activeOrder(s, "saw"), null);
+  s.stations.saw.input = 1;
+  at(s.player, "sawOut");
+  advance(s, 6);
+  assert.equal(s.stations.saw.input, 1);
+  assert.equal(stationStatus(s, "saw"), "Waiting for a work order");
+});
+
+test("production pause finishes work already started, and switching schedules off preserves queued quantities", () => {
+  const s = createState();
+  at(s.player, "grillIn");
+  assert.ok(changeSchedule(s, "grill", "enqueue", { good: "steaks", quantity: 3 }));
+  s.stations.grill.input = 3;
+  tick(s);
+  assert.ok(changeSchedule(s, "grill", "paused", true));
+  advance(s, 6);
+  assert.equal(s.stations.grill.output, 1);
+  assert.equal(stationStatus(s, "grill"), "New batches paused");
+  assert.equal(activeOrder(s, "grill").remaining, 2);
+  setFeature(s, "schedules", false);
+  advance(s, 6);
+  assert.equal(s.stations.grill.output, 2);
+  assert.equal(s.schedules.grill.orders[0].remaining, 2);
+  setFeature(s, "schedules", true);
+  assert.ok(changeSchedule(s, "grill", "remove", 0));
+  assert.equal(s.schedules.grill.orders.length, 0);
+});
+
+test("a queued premium recipe pauses safely until its switch is restored", () => {
+  const s = createState();
+  at(s.player, "sawOut");
+  assert.ok(changeSchedule(s, "saw", "enqueue", { good: "lumber", quantity: 2 }));
+  setFeature(s, "premium", false);
+  s.stations.saw.input = 4;
+  advance(s, 10);
+  assert.equal(activeOrder(s, "saw").remaining, 2);
+  assert.equal(s.stations.saw.output, 0);
+  assert.match(stationStatus(s, "saw"), /premium/);
+  setFeature(s, "premium", true);
+  advance(s, 23);
+  assert.equal(s.player.bag.lumber, 2);
 });

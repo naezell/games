@@ -44,3 +44,5 @@ header{padding-left:max(11px,env(safe-area-inset-left));padding-right:max(11px,e
 .camp-stock{width:100%;margin:6px 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .camp-stock th,.camp-stock td{padding:5px 4px;border-bottom:1px solid #d5e9df;text-align:right}
 .camp-stock th:first-child{text-align:left;color:#315d59}
+
+.work-queue{margin:5px 0;padding-left:1.4em}.work-queue li{margin:3px 0}.work-queue .action{margin-left:8px}

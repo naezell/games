@@ -38,7 +38,7 @@ import {
   cartRack, cartLoad, projectReady, buildProject, setWorkerRoute, setStation, sortTimber,
   handleLoad, marketAction, stageCapacity, inputCount, roomFor, onHand, recipeSeconds, rackFits, nextBatchNeeds,
   rackSlots, stashCapacity, helperLimit, helperPrice, sourceCapacity, spotPrice, gatherNow, cartActive, activeRack, workerActive, workerCapacity, nextGood, buySupplies, merchantAvailable,
-  ATTACHMENTS, activeAttachment, changeAttachment,
+  ATTACHMENTS, activeAttachment, changeAttachment, changeSchedule, ORDER_LIMIT, ORDER_MAX,
 } from "./sim.mjs";
 import { BUILDINGS, built, trackPlan, plotInfo, unlocked, atPlot, buildAtPlot, buildingEnabled, buildingLevel, nextLevel, sitePhase, phaseEnabled, pinnedProject } from "./construction.mjs";
 import { CONTRACTS, ACCOUNTS, BAY, marketDay, marketOffers, marketTargets, accountUnlocked, canPack, neededFor, QUICK_JOBS, quickOffers, marketJobName } from "./market.mjs";
@@ -511,6 +511,29 @@ if (renderer) {
     return `<details data-section="equipment"><summary>Choose this station’s one equipment upgrade</summary><div class="actions">${Object.entries(EQUIPMENT).map(([part, e]) =>
       `<button class="action" data-install="${part}" data-station="${key}" ${unavailable(state.cash < e.price)}>${e.name} · ${e.price} coins<br><small>${e.effect}</small></button>`).join("")}</div></details>`;
   }
+  const orderDrafts = { saw: { good: "boards", quantity: 4 }, grill: { good: "steaks", quantity: 4 } };
+  const orderSizes = Object.fromEntries(Array.from({ length: ORDER_MAX }, (_, i) => [i + 1, i + 1]));
+  function scheduleControls(key) {
+    if (!enabled("schedules")) return "";
+    const schedule = state.schedules[key], draft = orderDrafts[key];
+    const goodOptions = Object.fromEntries(LINES[key].goods
+      .filter((good, i) => !i || enabled("premium")).map(good => [good, NAMES[good]]));
+    const station = `data-station="${key}"`;
+    const queued = schedule.orders.map(({ good, remaining }, i) => `<li>
+      <span>${remaining} ${NAMES[good]} left to start</span>
+      <button class="action" data-schedule="remove" data-index="${i}" ${station}
+        aria-label="Remove queued ${NAMES[good]}">Remove</button></li>`).join("");
+    const after = select("After the queue", `data-schedule-after="true" ${station}`, schedule.holdAfter,
+      { false: "Return to normal production", true: "Wait for more orders" });
+    const queuedList = queued ? `<ol class="work-queue">${queued}</ol>` : "<p>No batches queued.</p>";
+    const summary = schedule.paused ? "Production schedule · paused" : schedule.orders.length ?
+      `Production schedule · ${schedule.orders.length} queued` : "Production schedule";
+    return details("schedule", summary, `<p>Queued orders make exact quantities. Batches already running finish as normal.</p>${queuedList}
+      <div class="fields">${select("Product", `data-schedule-draft="good" ${station}`, draft.good, goodOptions)}
+        ${select("Quantity", `data-schedule-draft="quantity" ${station}`, draft.quantity, orderSizes)}${after}</div>
+      <div class="actions">${action("Add work order", `data-schedule="enqueue" ${station}`, schedule.orders.length >= ORDER_LIMIT)}
+      ${action(schedule.paused ? "Resume production" : "Pause new batches", `data-schedule="toggle" ${station}`)}</div>`);
+  }
   function attachmentControls(key) {
     const choices = Object.entries(ATTACHMENTS).filter(([id, part]) => part.station === key && enabled(id));
     if (!choices.length) return "";
@@ -586,7 +609,7 @@ if (renderer) {
         Object.entries(REBUILDS).map(([id, layout]) => action(`${layout.name}<br><small>${projectLabel(layout)} · ${layout.effect}</small>`,
           `data-project="${id}" ${stage}`, !projectReady(state, layout))).join("")}</div>`;
     return loading + (handling || timber ? details("production", "Stock targets, handling & batches", handling + timber) : "") +
-      attachmentControls(key) + (enabled("equipment") ? equipmentControls(key, st) : "") +
+      scheduleControls(key) + attachmentControls(key) + (enabled("equipment") ? equipmentControls(key, st) : "") +
       (enabled("stationProjects") ? details("projects", "Drop-off bin & permanent rebuild", projects) : "");
   }
   const listedGoods = goods => Object.entries(goods).map(([good, qty]) => `${qty} ${NAMES[good]}`).join(" + ");
@@ -916,6 +939,16 @@ if (renderer) {
     if (t.dataset.return) returnRaw(state, t.dataset.return);
     if (t.dataset.job) assign(state, +t.dataset.worker, t.dataset.job);
     if (t.dataset.recipe) selectRecipe(state, t.dataset.station, t.dataset.recipe);
+    if (t.dataset.schedule) {
+      const key = t.dataset.station, kind = t.dataset.schedule;
+      if (kind === "enqueue") {
+        const draft = orderDrafts[key];
+        const good = enabled("premium") ? draft.good : LINES[key].goods[0];
+        changeSchedule(state, key, kind, { ...draft, good });
+      }
+      if (kind === "remove") changeSchedule(state, key, kind, Number(t.dataset.index));
+      if (kind === "toggle") changeSchedule(state, key, "paused", !state.schedules[key].paused);
+    }
     if (t.dataset.attachment) changeAttachment(state, t.dataset.station, t.dataset.attachment);
     if (t.dataset.install) install(state, t.dataset.station, t.dataset.install);
     if (t.dataset.merchant) buySupplies(state, t.dataset.merchant, t.dataset.fill === "true");
@@ -938,6 +971,12 @@ if (renderer) {
       setFeature(state, d.feature, e.target.checked);
       if (d.feature === "battery") { setGraphicsQuality(); resize(); }
     }
+    else if (d.scheduleDraft) {
+      if (d.scheduleDraft === "good" && LINES[d.station].goods.includes(value)) orderDrafts[d.station].good = value;
+      if (d.scheduleDraft === "quantity" && Number.isSafeInteger(converted) && converted >= 1 && converted <= ORDER_MAX)
+        orderDrafts[d.station].quantity = converted;
+    }
+    else if (d.scheduleAfter) changeSchedule(state, d.station, "holdAfter", converted);
     else if (d.route) setWorkerRoute(state, Number(d.worker), d.route, converted);
     else if (d.stationField) setStation(state, d.station, d.stationField, converted);
     else return;
