@@ -54,10 +54,13 @@ try {
   saveError = true;
 }
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb9e0e8);
-const camera = new THREE.OrthographicCamera(-16, 16, 16, -16, 0.1, 100);
-camera.position.set(0, 30, 24);
-camera.lookAt(0, 0, 0);
+scene.background = new THREE.Color(0xdbe7f2);
+scene.fog = new THREE.Fog(0xdbe7f2, 29, 66);
+const followCamera = new THREE.PerspectiveCamera(48, 1, .1, 110);
+const overviewCamera = new THREE.OrthographicCamera(-16, 16, 16, -16, .1, 100);
+overviewCamera.position.set(0, 31, 25);
+overviewCamera.lookAt(0, 0, 0);
+let camera = followCamera;
 let renderer;
 try {
   renderer = new THREE.WebGLRenderer({
@@ -68,18 +71,18 @@ try {
 } catch (e) {
   $("world").innerHTML =
     '<div class="webgl-error"><strong>Frostfall needs WebGL</strong><p>Your browser could not start the 3D scene. Enable hardware acceleration or try another browser, then reload.</p><button onclick="location.reload()">Try again</button></div>';
-  $("panelTitle").textContent = "Unable to start the clearing";
-  $("panelContent").textContent = "Your saved camp has not been changed.";
+  document.querySelector("header").hidden = true;
+  document.querySelector(".status").hidden = true;
 }
 if (renderer) {
   const enabled = id => feature(state, id);
   function setGraphicsQuality() {
-    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, enabled("battery") ? .8 : 1.25));
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, enabled("battery") ? .75 : window.innerWidth < 700 ? 1 : 1.25));
   }
   setGraphicsQuality();
   renderer.outputEncoding = THREE.sRGBEncoding;
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x94b6b5, 1));
-  const light = new THREE.DirectionalLight(0xfff8e8, 0.65);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xc4d4e6, 1.05));
+  const light = new THREE.DirectionalLight(0xfff6e8, 0.62);
   light.position.set(-8, 20, 10);
   scene.add(light);
   const mats = {};
@@ -112,20 +115,22 @@ if (renderer) {
     scene.add(g);
     return g;
   }
-  box(24, 0.7, 24, 0x93c6ce, 0, -0.55, 0);
-  box(24, 0.22, 24, 0xf0faf4, 0, -0.08, 0);
+  box(115, .22, 115, 0xf3f7fb, 0, -.16, 0);
+  box(24, .04, 24, 0xe7eff6, 0, -.045, 0);
+  box(19, .06, 6.4, 0xc99a6c, 0, -.023, -1.6);
+  box(3.4, .04, 8, 0xddceb8, .9, -.012, 4.2);
   for (let i = 0; i < 14; i++) {
     let x = ((i * 37) % 220) / 10 - 11,
       z = ((i * 71) % 220) / 10 - 11;
-    cyl(0.35, 0.5, 0.12, 0xd3eeed, x, 0.08, z);
+    cyl(0.35, 0.5, 0.12, 0xdce8f3, x, 0.063, z);
   }
   function tree(x, z, s = 1) {
     let g = group(x, z);
     g.scale.setScalar(s);
     cyl(0.19, 0.25, 1, 0x856047, 0, 0.5, 0, g);
-    cyl(0, 1.05, 1.5, 0x3e8587, 0, 1.45, 0, g);
-    cyl(0, 0.85, 1.35, 0x59a4a1, 0, 2.05, 0, g);
-    cyl(0, 0.58, 1, 0x79bdb5, 0, 2.6, 0, g);
+    cyl(0, 1.05, 1.5, 0x3c78b8, 0, 1.45, 0, g);
+    cyl(0, 0.85, 1.35, 0x4b8ccc, 0, 2.05, 0, g);
+    cyl(0, 0.58, 1, 0x5c9fdc, 0, 2.6, 0, g);
     cyl(0, 0.3, 0.5, 0xf8fffa, 0, 2.94, 0, g);
     return g;
   }
@@ -146,12 +151,22 @@ if (renderer) {
     const t = tree(...p, 0.75 + (i % 3) * 0.12);
     if (i < 4) forestTrees.push(t);
   });
+  // Frame the playable clearing with scenery while keeping the same movement bounds.
+  for (const [x, z, scale] of [[-15, -13, 1.2], [-17, -5, 1.35], [-16, 5, 1.1], [-12, 15, 1.18],
+    [16, -12, 1.35], [17, -2, 1.1], [16, 9, 1.24], [13, 15, 1.35], [-7, -16, 1.2], [5, -16, 1.26]]) tree(x, z, scale);
+  const shadowGeo = new THREE.CircleGeometry(.56, 12);
+  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x26394d, transparent: true, opacity: .19, depthWrite: false });
   function person(color, x, z, scale = 1) {
     let g = group(x, z);
     g.scale.setScalar(scale);
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = .065;
+    g.add(shadow);
     let l = box(0.2, 0.45, 0.22, 0x34485a, -0.14, 0.23, 0, g),
       r = box(0.2, 0.45, 0.22, 0x34485a, 0.14, 0.23, 0, g);
     cyl(0.31, 0.4, 0.75, color, 0, 0.82, 0, g, 10);
+    ball(.27, 0xf6f6f6, 0, 1.18, .01, g).scale.y = .38;
     ball(0.34, color, 0, 1.47, -0.06, g);
     ball(0.265, 0xf2c9a9, 0, 1.46, 0.12, g);
     ball(0.035, 0x243542, -0.09, 1.5, 0.36, g);
@@ -182,9 +197,9 @@ if (renderer) {
   }
   function boar(x, z) {
     let g = group(x, z);
-    ball(0.68, 0x926247, 0, 0.55, 0, g).scale.set(1.35, 0.75, 0.7);
-    ball(0.42, 0xa37452, 0.85, 0.65, 0, g);
-    ball(0.22, 0xd3aa8b, 1.15, 0.55, 0, g);
+    ball(0.68, 0xeef1f6, 0, 0.55, 0, g).scale.set(1.35, 0.75, 0.7);
+    ball(0.42, 0xe1e6ef, 0.85, 0.65, 0, g);
+    ball(0.22, 0xe9a3a3, 1.15, 0.55, 0, g);
     for (let a of [-0.55, 0.55])
       for (let b of [-0.35, 0.35]) box(0.15, 0.35, 0.15, 0x57443c, a, 0.17, b, g);
     return g;
@@ -197,7 +212,7 @@ if (renderer) {
   let blade = cyl(0.48, 0.48, 0.08, 0xcbdce0, 0, 1.1, 0, saw, 16);
   blade.rotation.x = Math.PI / 2;
   for (let x of [-1, 1]) box(0.13, 1.5, 0.13, 0x795238, x, 1.55, -0.55, saw);
-  box(2.5, 0.14, 1, 0x5f9ba2, 0, 2.25, -0.35, saw);
+  box(2.5, 0.14, 1, 0x3f6f9f, 0, 2.25, -0.35, saw);
   box(2.5, 0.07, 0.85, 0xf8fffa, 0, 2.35, -0.35, saw);
   let grill = group(5.5, -2);
   cyl(1.02, 1.1, 0.7, 0x7e8e91, 0, 0.35, 0, grill, 12);
@@ -212,7 +227,7 @@ if (renderer) {
   box(3, 0.85, 0.85, 0xa66f47, 0, 0.43, 0, counter);
   box(3.2, 0.12, 1.05, 0x795039, 0, 0.9, 0, counter);
   for (let x of [-1.4, 1.4]) box(0.12, 1.7, 0.12, 0x795039, x, 1.7, 0, counter);
-  box(3.3, 0.17, 1.2, 0xdd7862, 0, 2.5, 0, counter);
+  box(3.3, 0.17, 1.2, 0xd84a3a, 0, 2.5, 0, counter);
   box(3.3, 0.08, 0.85, 0xfffcf2, 0, 2.62, -0.08, counter);
   const bay = group(3.25, 6.85);
   box(2.15, .2, 1.95, 0xb58154, 0, .13, 0, bay);
@@ -323,7 +338,7 @@ if (renderer) {
   box(1.25, 0.68, 0.14, 0xf5dfae, 0, 1.35, 0, build);
   box(0.7, 0.08, 0.05, 0x9a7653, 0, 1.4, 0.1, build);
   box(0.08, 0.45, 0.05, 0x9a7653, 0, 1.4, 0.1, build);
-  const player = person(0xd85f50, state.player.x, state.player.z);
+  const player = person(0x2f78d6, state.player.x, state.player.z);
   let workerModels = [];
   function syncWorkers() {
     while (workerModels.length < state.workers.length)
@@ -341,32 +356,51 @@ if (renderer) {
   const labels = [
     ["forest", "FOREST", "Gather logs"],
     ["boars", "BOARS", "Gather meat"],
-    ["sawIn", "SAWMILL IN", "Waiting for logs"],
-    ["sawOut", "SAWMILL OUT", "0 ready"],
+    ["sawIn", "MILL IN", "Waiting for logs"],
+    ["sawOut", "MILL OUT", "0 ready"],
     ["grillIn", "GRILL IN", "Waiting for meat"],
     ["grillOut", "GRILL OUT", "0 ready"],
     ["sell", "MARKET", "Sell goods"],
     ["build", "IMPROVE", "Upgrades & helpers"],
   ];
   let destination = null;
+  let mapView = false;
+  let stationPanel = null;
+  let nearbyStation = null;
   let buildMenu = false;
   let settingsMenu = false;
   let ledgerMenu = false;
   let catalog = false;
   let inspectedBuild = null;
   const tmp = new THREE.Vector3();
+  const focusPoint = new THREE.Vector3(state.player.x, .55, state.player.z);
+  const cameraOffset = new THREE.Vector3(5.2, 10.8, 9);
+  const heading = Math.atan2(cameraOffset.x, cameraOffset.z);
+  const screenRight = Math.cos(heading);
+  const screenForward = Math.sin(heading);
+  const ray = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const point = new THREE.Vector3();
+  function closeMenus() {
+    stationPanel = null;
+    buildMenu = false;
+    settingsMenu = false;
+    ledgerMenu = false;
+  }
+  function travelTo(target) {
+    closeMenus();
+    destination = target;
+    updateUI();
+  }
   for (const [key, title, sub] of labels) {
     const el = document.createElement("button");
     el.className = "place";
+    el.type = "button";
+    el.hidden = true;
     el.innerHTML = `${title}<span>${sub}</span>`;
     el.addEventListener("pointerdown", (e) => e.stopPropagation());
-    el.onclick = () => {
-      buildMenu = false;
-      settingsMenu = false;
-      ledgerMenu = false;
-      destination = { ...SPOTS[key] };
-      updateUI();
-    };
+    el.onclick = () => travelTo(SPOTS[key]);
     $("labels").appendChild(el);
     SPOTS[key].el = el;
   }
@@ -377,45 +411,60 @@ if (renderer) {
   plotMarker.addEventListener("pointerdown", e => e.stopPropagation());
   plotMarker.onclick = () => {
     if (!state.plan) return;
+    closeMenus();
     buildMenu = true;
-    settingsMenu = false;
-    ledgerMenu = false;
     catalog = false;
     inspectedBuild = null;
     destination = BUILDINGS[state.plan];
     updateUI();
   };
   $("labels").appendChild(plotMarker);
+  function projectMarker(el, x, y, z) {
+    tmp.set(x, y, z).project(camera);
+    const visible = tmp.z >= -1 && tmp.z <= 1 && Math.abs(tmp.x) <= .93 && Math.abs(tmp.y) <= .86;
+    el.style.visibility = visible ? "" : "hidden";
+    if (!visible) return;
+    el.style.left = `${(tmp.x + 1) * 50}%`;
+    el.style.top = `${(1 - tmp.y) * 50}%`;
+  }
   function positionPlotMarker() {
     const plan = state.plan && BUILDINGS[state.plan];
-    if (!plan || !unlocked(state, state.plan)) return;
-    tmp.set(plan.x, 1.15, plan.z).project(camera);
-    plotMarker.style.left = `${(tmp.x + 1) * 50}%`;
-    plotMarker.style.top = `${(1 - tmp.y) * 50}%`;
+    if (plan && !plotMarker.hidden) projectMarker(plotMarker, plan.x, 1.15, plan.z);
   }
-  function resize() {
-    let w = $("world").clientWidth,
-      h = $("world").clientHeight;
-    renderer.setSize(w, h, false);
-    const aspect = w / h;
-    let vertical = Math.max(31, 25 / aspect);
-    camera.left = (-vertical * aspect) / 2;
-    camera.right = (vertical * aspect) / 2;
-    camera.top = vertical / 2;
-    camera.bottom = -vertical / 2;
-    camera.updateProjectionMatrix();
-    // Project labels correctly before the renderer's first camera update.
-    camera.updateMatrixWorld(true);
-    for (const [k] of labels) {
-      let p = SPOTS[k];
-      tmp.set(p.x, 0, p.z).project(camera);
-      p.el.style.left = `${(tmp.x + 1) * 50}%`;
-      p.el.style.top = `${(1 - tmp.y) * 50}%`;
+  function positionCamera(dt = 0) {
+    if (mapView) {
+      for (const [k] of labels) {
+        const p = SPOTS[k];
+        if (!p.el.hidden) projectMarker(p.el, p.x, 0, p.z);
+      }
+    } else {
+      const mix = dt ? 1 - Math.exp(-dt * 10) : 1;
+      focusPoint.x += (state.player.x - focusPoint.x) * mix;
+      focusPoint.z += (state.player.z - focusPoint.z) * mix;
+      followCamera.position.copy(focusPoint).add(cameraOffset);
+      followCamera.lookAt(focusPoint);
+      followCamera.updateMatrixWorld();
     }
     positionPlotMarker();
   }
+  function resize() {
+    const { clientWidth: w, clientHeight: h } = $("world");
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    const aspect = w / h;
+    followCamera.aspect = aspect;
+    followCamera.fov = aspect < .8 ? 55 : 43;
+    followCamera.updateProjectionMatrix();
+    const vertical = Math.max(27, 26 / aspect);
+    overviewCamera.left = -vertical * aspect / 2;
+    overviewCamera.right = vertical * aspect / 2;
+    overviewCamera.top = vertical / 2;
+    overviewCamera.bottom = -vertical / 2;
+    overviewCamera.updateProjectionMatrix();
+    overviewCamera.updateMatrixWorld();
+    positionCamera();
+  }
   window.addEventListener("resize", resize);
-  // Opening the improvement panel changes the available world height too.
   new ResizeObserver(resize).observe($("world"));
   resize();
   let paused = false,
@@ -423,6 +472,12 @@ if (renderer) {
     joy = { x: 0, z: 0 },
     drag = null;
   window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeMenus();
+      updateUI();
+      return;
+    }
+    if (["SELECT", "INPUT", "TEXTAREA"].includes(e.target?.tagName)) return;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(e.key)) {
       keys[e.key] = true;
       destination = null;
@@ -437,6 +492,8 @@ if (renderer) {
   $("pause").onclick = () => {
     paused = !paused;
     $("pause").textContent = paused ? "▶" : "Ⅱ";
+    $("pause").setAttribute("aria-pressed", String(paused));
+    $("pause").setAttribute("aria-label", paused ? "Resume game" : "Pause game");
     $("paused").hidden = !paused;
     if (paused) stopLoop();
     else startLoop();
@@ -454,6 +511,8 @@ if (renderer) {
   }
   $("stick").addEventListener("pointerdown", (e) => {
     e.stopPropagation();
+    closeMenus();
+    updateUI();
     $("stick").setPointerCapture(e.pointerId);
     stickUpdate(e);
   });
@@ -468,14 +527,19 @@ if (renderer) {
   $("stick").addEventListener("pointercancel", resetStick);
   $("world").addEventListener("pointerdown", (e) => {
     if (e.target !== $("canvas")) return;
-    drag = { x: e.clientX, y: e.clientY };
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
     $("world").setPointerCapture(e.pointerId);
   });
   $("world").addEventListener("pointermove", (e) => {
-    if (!drag) return;
+    if (!drag || e.pointerId !== drag.id) return;
     let dx = e.clientX - drag.x,
       dy = e.clientY - drag.y;
-    if (Math.hypot(dx, dy) > 8) {
+    if (Math.hypot(dx, dy) > 8 || drag.moved) {
+      if (!drag.moved) {
+        drag.moved = true;
+        closeMenus();
+        updateUI();
+      }
       let d = Math.max(35, Math.hypot(dx, dy));
       joy.x = dx / d;
       joy.z = dy / d;
@@ -486,8 +550,22 @@ if (renderer) {
     drag = null;
     joy.x = joy.z = 0;
   }
-  $("world").addEventListener("pointerup", endDrag);
-  $("world").addEventListener("pointercancel", endDrag);
+  $("world").addEventListener("pointerup", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved) {
+      const rect = $("world").getBoundingClientRect();
+      pointer.set((e.clientX - rect.left) / rect.width * 2 - 1, 1 - (e.clientY - rect.top) / rect.height * 2);
+      ray.setFromCamera(pointer, camera);
+      if (ray.ray.intersectPlane(ground, point)) {
+        const station = labels.find(([k]) => near(point, SPOTS[k], .85));
+        const withinCamp = value => Math.max(-10.7, Math.min(10.7, value));
+        travelTo(station ? SPOTS[station[0]] : { x: withinCamp(point.x), z: withinCamp(point.z) });
+      }
+    }
+    endDrag();
+  });
+  $("world").addEventListener("pointercancel", e => { if (e.pointerId === drag?.id) endDrag(); });
+  $("world").addEventListener("lostpointercapture", e => { if (e.pointerId === drag?.id) endDrag(); });
   function save() {
     try {
       localStorage.setItem(KEY, serialize(state));
@@ -767,6 +845,20 @@ if (renderer) {
             <input type="checkbox" data-feature="${id}" ${enabled(id) ? "checked" : ""}></label>`).join(""))
       ).join("")}</div>`;
   }
+  const stationNames = {
+    forest: "Forest", boars: "Boar meadow", sawIn: "Sawmill", sawOut: "Sawmill",
+    grillIn: "Grill", grillOut: "Grill", sell: "Market", build: "Improvements",
+  };
+  function currentStation() {
+    return labels.find(([key]) => near(state.player, SPOTS[key]))?.[0] ?? null;
+  }
+  function toggleStation() {
+    const key = currentStation();
+    const wasOpen = stationPanel === key;
+    closeMenus();
+    if (key && !wasOpen) stationPanel = key;
+    updateUI();
+  }
   function updateUI() {
     const p = state.player,
       b = p.bag;
@@ -774,7 +866,17 @@ if (renderer) {
     $("buildMenu").setAttribute("aria-pressed", String(buildMenu));
     $("buildMenu").hidden = !enabled("construction");
     $("settingsMenu").setAttribute("aria-pressed", String(settingsMenu));
-    for (const [key] of labels) SPOTS[key].el.hidden = !enabled("markers");
+    for (const [key] of labels) SPOTS[key].el.hidden = !mapView || !enabled("markers");
+    nearbyStation = currentStation();
+    if (stationPanel !== nearbyStation) stationPanel = null;
+    const panelOpen = !!stationPanel || (buildMenu && enabled("construction")) || settingsMenu || (ledgerMenu && enabled("campBoard"));
+    $("panel").hidden = !panelOpen;
+    $("stationHud").hidden = panelOpen || !nearbyStation;
+    const stationButton = $("stationMenu");
+    stationButton.textContent = nearbyStation ? `Open ${stationNames[nearbyStation]}` : "";
+    stationButton.setAttribute("aria-expanded", String(!!stationPanel));
+    $("mapMenu").textContent = mapView ? "Follow" : "Map";
+    $("mapMenu").setAttribute("aria-pressed", String(mapView));
     plotMarker.hidden = !state.plan || !phaseEnabled(state, state.plan, state.planLevel) ||
       !unlocked(state, state.plan, state.planLevel) || sitePhase(state, state.plan, state.planLevel).left === 0;
     if (!plotMarker.hidden) {
@@ -804,13 +906,13 @@ if (renderer) {
       focus.textContent = `${current.name} · Need ${listedGoods(Object.fromEntries(remaining))}`;
     }
     $("saveStatus").textContent = saveError ? " · Save unavailable" : "";
-    let title = "Choose a destination",
-      content = "Gather logs and meat, process them, then sell the finished goods at the counter.",
-      hint = "Walk to the forest or boars to gather.",
-      icon = "✳";
-    let station = Object.entries(SPOTS).find(([k, v]) => near(p, v));
-    if (station) {
-      let k = station[0];
+    const line = nearbyStation?.startsWith("saw") ? "saw" : nearbyStation?.startsWith("grill") ? "grill" : null;
+    $("hint").textContent = line ? stationStatus(state, line) : "";
+    $("hint").hidden = !line;
+    if (!panelOpen) return;
+    let title = "", content = "";
+    if (stationPanel) {
+      const k = stationPanel;
       if (k === "forest" || k === "boars") {
         title = k === "forest" ? "Forest edge" : "Boar meadow";
         const raw = k === "forest" ? "logs" : "meat";
@@ -819,12 +921,9 @@ if (renderer) {
         content = `<p>${remaining ? `${remaining}/${Math.max(remaining, sourceCapacity(state, k))} ready` : `Restocking in ${Math.ceil(regrow)}s`}</p>
           <div class="actions">${!enabled("autoGather") ? action(`Gather 1 ${raw === "logs" ? "log" : "meat"}`, `data-gather="${k}"`, !remaining || !room) : ""}
           ${action(`Return ${raw}`, `data-return="${raw}"`, !b[raw])}</div>`;
-        hint = !room ? "Load full. Deliver goods or set them down at the improvement pad." : enabled("autoGather") ?
-          "Stay nearby to gather." : "Gather by tapping the button.";
+        if (!room) content += "<p>Load full. Deliver goods or set them down at Improvements.</p>";
       } else if (k === "build") {
         title = "Camp improvements";
-        icon = "⌂";
-        hint = "Choose an improvement or set down your load.";
         content =
           '<div class="actions">' +
           (enabled("upgrades") ? Object.entries(UPGRADES) : [])
@@ -849,7 +948,6 @@ if (renderer) {
       } else if (k === "sell") {
         title = "Market counter";
         content = marketControls(b);
-        hint = "Take a job, pack an order, or sell your goods.";
       } else {
         const key = k.startsWith("saw") ? "saw" : "grill", st = state.stations[key];
         const [basic, premium] = LINES[key].goods;
@@ -860,32 +958,22 @@ if (renderer) {
           ${st.jobs.length ? `· ${st.jobs.map(job => NAMES[job.good]).join(" + ")} underway` : ""}</p>
           ${enabled("premium") ? `<div class="actions" aria-label="Next jobs">${recipeButtons(key, st)}</div>` : ""}
           ${stationControls(key, st, k.endsWith("In"))}`;
-        hint = st.manual || !enabled("autoHandling") ? "Manual handling. Use the load controls." : k.endsWith("In")
-          ? "Matching raw goods unload automatically."
-          : "Finished goods fill your available load.";
+
       }
     }
     if (buildMenu && enabled("construction")) {
       title = "Camp construction";
-      icon = "⌂";
       content = constructionControls();
-      hint = "Deliver finished goods and fund a structure at its marked plot.";
     }
     if (settingsMenu) {
       title = "Settings";
-      icon = "⚙";
       content = settingsControls();
-      hint = "Your choices are saved with this camp.";
     }
     if (ledgerMenu && enabled("campBoard")) {
       title = "Camp board";
-      icon = "▦";
       content = campBoard();
-      hint = "Check what is on hand and what still needs making.";
     }
-    $("hint").textContent = hint;
     $("panelTitle").textContent = title;
-    $("panelIcon").textContent = icon;
     if (content !== lastPanel) {
       const panel = $("panelContent");
       const samePlace = panel.dataset.title === title;
@@ -906,16 +994,45 @@ if (renderer) {
       lastPanel = content;
     }
   }
-  $("jobStatus").onclick = () => { buildMenu = false; settingsMenu = false; ledgerMenu = false; destination = { ...SPOTS.sell }; updateUI(); };
-  $("settingsMenu").onclick = () => { settingsMenu = !settingsMenu; buildMenu = false; ledgerMenu = false; updateUI(); };
-  $("buildMenu").onclick = () => { settingsMenu = false; ledgerMenu = false; buildMenu = !buildMenu; catalog = false; inspectedBuild = null; updateUI(); };
+  $("stationMenu").onclick = toggleStation;
+  $("closePanel").onclick = () => {
+    closeMenus();
+    updateUI();
+    if (nearbyStation) $("stationMenu").focus();
+  };
+  $("mapMenu").onclick = () => {
+    mapView = !mapView;
+    camera = mapView ? overviewCamera : followCamera;
+    closeMenus();
+    updateUI();
+    positionCamera();
+    renderer.render(scene, camera);
+  };
+  $("jobStatus").onclick = () => {
+    if (currentStation() === "sell") toggleStation();
+    else travelTo(SPOTS.sell);
+  };
+  $("settingsMenu").onclick = () => {
+    const opening = !settingsMenu;
+    closeMenus();
+    settingsMenu = opening;
+    updateUI();
+  };
+  $("buildMenu").onclick = () => {
+    const opening = !buildMenu;
+    closeMenus();
+    buildMenu = opening;
+    catalog = false;
+    inspectedBuild = null;
+    updateUI();
+  };
   $("panelContent").addEventListener("click", (e) => {
     let t = e.target.closest("button");
     if (!t) return;
-    if (t.dataset.ledger === "open") { ledgerMenu = true; settingsMenu = false; buildMenu = false; }
+    if (t.dataset.ledger === "open") { closeMenus(); ledgerMenu = true; }
     if (t.dataset.ledger === "close") ledgerMenu = false;
     if (t.dataset.ledger === "plan") { ledgerMenu = false; buildMenu = true; catalog = false; inspectedBuild = null; }
-    if (Object.hasOwn(SPOTS, t.dataset.visit)) { ledgerMenu = false; destination = SPOTS[t.dataset.visit]; }
+    if (Object.hasOwn(SPOTS, t.dataset.visit)) travelTo(SPOTS[t.dataset.visit]);
     if (t.dataset.preset && featurePreset(state, t.dataset.preset)) {
       setGraphicsQuality();
       resize();
@@ -929,7 +1046,7 @@ if (renderer) {
     if (t.dataset.construction === "unpin") { trackPlan(state, null); catalog = true; }
     if (t.dataset.construction === "walk" && state.plan) destination = BUILDINGS[state.plan];
     if (t.dataset.construction === "exit") buildMenu = false;
-    if (t.dataset.construction === "shop") { buildMenu = false; destination = SPOTS.build; }
+    if (t.dataset.construction === "shop") travelTo(SPOTS.build);
     if (t.dataset.construction === "supply" || t.dataset.construction === "build")
       buildAtPlot(state, state.plan, t.dataset.construction, state.planLevel);
     if (t.dataset.buildPlan || t.dataset.construction === "list" || t.dataset.construction === "unpin") $("panel").scrollTop = 0;
@@ -1106,6 +1223,9 @@ if (renderer) {
     while (acc >= 0.1) {
       let dx = joy.x + (keys.d || keys.ArrowRight ? 1 : 0) - (keys.a || keys.ArrowLeft ? 1 : 0),
         dz = joy.z + (keys.s || keys.ArrowDown ? 1 : 0) - (keys.w || keys.ArrowUp ? 1 : 0);
+      if (!mapView && (dx || dz)) {
+        [dx, dz] = [dx * screenRight + dz * screenForward, dz * screenRight - dx * screenForward];
+      }
       if (!dx && !dz && destination) {
         dx = destination.x - state.player.x;
         dz = destination.z - state.player.z;
@@ -1137,6 +1257,7 @@ if (renderer) {
     forestTrees.forEach((m, i) => {
       m.visible = state.sources.forest.remaining > i * 1.5;
     });
+    positionCamera(dt);
     renderer.render(scene, camera);
     ui += dt;
     saveTimer += dt;
